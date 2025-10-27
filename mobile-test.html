@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>yDance Events</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#007bff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="yDance">
+</head>
+<body>
+    <div class="events-container" id="events-container">
+        <!-- Sample events for mobile testing -->
+        <div class="event-card">
+            <h2>Techno Night</h2>
+            <p class="date">Friday, Nov 1st</p>
+            <p class="location">Club Underground</p>
+            <p class="type">Electronic</p>
+            <p class="music">Techno</p>
+            <p class="dj">DJ Shadow</p>
+            <button class="learn-more">Learn More</button>
+        </div>
+        
+        <div class="event-card">
+            <h2>House Vibes</h2>
+            <p class="date">Saturday, Nov 2nd</p>
+            <p class="location">The Warehouse</p>
+            <p class="type">Electronic</p>
+            <p class="music">House</p>
+            <p class="dj">DJ Luna</p>
+            <button class="learn-more">Learn More</button>
+        </div>
+        
+        <div class="event-card">
+            <h2>Deep House Session</h2>
+            <p class="date">Sunday, Nov 3rd</p>
+            <p class="location">Sunset Lounge</p>
+            <p class="type">Electronic</p>
+            <p class="music">Deep House</p>
+            <p class="dj">DJ Nova</p>
+            <button class="learn-more">Learn More</button>
+        </div>
+    </div>
+    
+    <script>
+        // Simple button functionality for testing
+        document.querySelectorAll('.learn-more').forEach(button => {
+            button.addEventListener('click', function() {
+                const eventTitle = this.parentElement.querySelector('h2').textContent;
+                alert(`Welcome to ${eventTitle}! 🎵\n\nGet ready for an amazing night!`);
+            });
+        });
+    </script>
+</body>
+</html>

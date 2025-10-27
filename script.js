@@ -1,0 +1,112 @@
+// Wait for Supabase to fully load
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if Supabase is available
+    if (typeof supabase === 'undefined') {
+        console.error('Supabase library not loaded');
+        document.getElementById('events-container').innerHTML = '<p>Supabase library failed to load</p>';
+        return;
+    }
+    
+    // Supabase configuration
+    const supabaseUrl = 'https://rymcfymmigomaytblqml.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5bWNmeW1taWdvbWF5dGJscW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0MjcxNzEsImV4cCI6MjA3NzAwMzE3MX0.gjjBPhgNap7VsjZ-SFInVLGzPbPcZC-UEF5F7pQ8-tg';
+    
+    console.log('Creating Supabase client...');
+    console.log('URL:', supabaseUrl);
+    console.log('Key:', supabaseKey.substring(0, 20) + '...');
+    
+    try {
+        // Create Supabase client
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+        console.log('Supabase client created successfully');
+        
+        // Load events
+        loadEvents(supabaseClient);
+        
+    } catch (error) {
+        console.error('Error creating Supabase client:', error);
+        document.getElementById('events-container').innerHTML = '<p>Error connecting to database</p>';
+    }
+});
+
+// Function to create an event card
+function createEventCard(event) {
+    return `
+        <div class="event-card">
+            <h2>${event.title}</h2>
+            <p class="date">${event.date}</p>
+            <p class="location">${event.location}</p>
+            <p class="type">${event.type}</p>
+            <p class="music">${event.music}</p>
+            <p class="dj">${event.dj}</p>
+            <button class="learn-more">Learn More</button>
+        </div>
+    `
+}
+
+// Function to load events from database
+async function loadEvents(supabaseClient) {
+    console.log('Loading events from database...');
+    
+    try {
+        // Try different table names
+        let events = null;
+        let error = null;
+        
+        // First try 'Events' (capital E)
+        console.log('Trying Events table...');
+        const result1 = await supabaseClient.from('Events').select('*').order('date', { ascending: true });
+        
+        if (result1.error) {
+            console.log('Events table failed:', result1.error.message);
+            
+            // Try 'events' (lowercase)
+            console.log('Trying events table...');
+            const result2 = await supabaseClient.from('events').select('*').order('date', { ascending: true });
+            
+            if (result2.error) {
+                console.log('events table failed:', result2.error.message);
+                error = result2.error;
+            } else {
+                events = result2.data;
+                console.log('Found events in lowercase table:', events.length);
+            }
+        } else {
+            events = result1.data;
+            console.log('Found events in capital table:', events.length);
+        }
+        
+        console.log('Final events:', events);
+        console.log('Final error:', error);
+        
+        if (error) {
+            console.error('Error loading events:', error);
+            document.getElementById('events-container').innerHTML = '<p>Error: ' + error.message + '</p>';
+            return;
+        }
+        
+        if (!events || events.length === 0) {
+            console.log('No events found');
+            document.getElementById('events-container').innerHTML = '<p>No events found in database.</p>';
+            return;
+        }
+        
+        // Clear container and add events
+        const container = document.getElementById('events-container');
+        container.innerHTML = events.map(createEventCard).join('');
+        
+        // Add event listeners to all buttons
+        document.querySelectorAll('.learn-more').forEach(button => {
+            button.addEventListener('click', function() {
+                const eventTitle = this.parentElement.querySelector('h2').textContent;
+                alert(`Welcome to ${eventTitle}! 🎵\n\nGet ready for an amazing night!`);
+            });
+        });
+        
+        console.log('Events loaded successfully!');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('events-container').innerHTML = '<p>Error loading events. Check console for details.</p>';
+    }
+}

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head><title>yDance1 Debug Test</title></head>
+<body>
+    <h1>yDance1 Debug Test</h1>
+    <div id="results"></div>
+    
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script>
+        const results = document.getElementById('results');
+        
+        // Test 1: Check if Supabase loads
+        results.innerHTML += '<h3>Test 1: Supabase Library</h3>';
+        if (typeof supabase !== 'undefined') {
+            results.innerHTML += '<p>✅ Supabase library loaded</p>';
+        } else {
+            results.innerHTML += '<p>❌ Supabase library failed to load</p>';
+        }
+        
+        // Test 2: Try legacy API key
+        results.innerHTML += '<h3>Test 2: Legacy API Connection</h3>';
+        const supabaseUrl = 'https://rymcfymmigomaytblqml.supabase.co';
+        const legacyKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5bWNmeW1taWdvbWF5dGJscW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0MjcxNzEsImV4cCI6MjA3NzAwMzE3MX0.gjjBPhgNap7VsjZ-SFInVLGzPbPcZC-UEF5F7pQ8-tg';
+        
+        try {
+            const supabase = supabase.createClient(supabaseUrl, legacyKey);
+            results.innerHTML += '<p>✅ Supabase client created with legacy key</p>';
+            
+            // Test 3: Try different table names
+            results.innerHTML += '<h3>Test 3: Table Access</h3>';
+            
+            // Try 'Events' (capital E)
+            supabase.from('Events').select('*').then(({data, error}) => {
+                if (error) {
+                    results.innerHTML += '<p>❌ Events table error: ' + error.message + '</p>';
+                } else {
+                    results.innerHTML += '<p>✅ Events table: Found ' + data.length + ' records</p>';
+                }
+            });
+            
+            // Try 'events' (lowercase)
+            supabase.from('events').select('*').then(({data, error}) => {
+                if (error) {
+                    results.innerHTML += '<p>❌ events table error: ' + error.message + '</p>';
+                } else {
+                    results.innerHTML += '<p>✅ events table: Found ' + data.length + ' records</p>';
+                }
+            });
+            
+        } catch (err) {
+            results.innerHTML += '<p>❌ Error creating client: ' + err.message + '</p>';
+        }
+        
+        // Test 4: Direct REST API test
+        results.innerHTML += '<h3>Test 4: Direct REST API</h3>';
+        fetch('https://rymcfymmigomaytblqml.supabase.co/rest/v1/Events', {
+            headers: {
+                'apikey': legacyKey,
+                'Authorization': 'Bearer ' + legacyKey
+            }
+        })
+        .then(response => {
+            results.innerHTML += '<p>REST API Status: ' + response.status + '</p>';
+            return response.json();
+        })
+        .then(data => {
+            results.innerHTML += '<p>REST API Data: ' + JSON.stringify(data).substring(0, 200) + '...</p>';
+        })
+        .catch(err => {
+            results.innerHTML += '<p>❌ REST API Error: ' + err.message + '</p>';
+        });
+        
+    </script>
+</body>
+</html>
