@@ -4,8 +4,8 @@
   "description": "Electronic music event listings with DJ profiles",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1a1a1a",
-  "theme_color": "#ffd700",
+  "background_color": "#f0f0f0",
+  "theme_color": "#007bff",
   "orientation": "portrait-primary",
   "icons": [
     {
