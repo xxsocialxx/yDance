@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load events
         loadEvents(supabaseClient);
         
+        // Create DJ profiles from existing events
+        createDJProfilesFromEvents(supabaseClient);
+        
         // Test DJ profiles loading
         loadDJProfiles(supabaseClient);
         
@@ -131,6 +134,69 @@ async function loadDJProfiles(supabaseClient) {
         
         console.log('DJ Profiles loaded:', profiles);
         return profiles;
+        
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+// Function to extract unique DJ names from events and create profiles
+async function createDJProfilesFromEvents(supabaseClient) {
+    console.log('Extracting DJ names from events...');
+    
+    try {
+        // Get all events
+        const { data: events, error: eventsError } = await supabaseClient
+            .from('Events')
+            .select('dj')
+            .not('dj', 'is', null);
+        
+        if (eventsError) {
+            console.error('Error loading events:', eventsError);
+            return;
+        }
+        
+        // Extract unique DJ names
+        const uniqueDJNames = [...new Set(events.map(event => event.dj))];
+        console.log('Unique DJ names found:', uniqueDJNames);
+        
+        // Check which DJs already exist in profiles
+        const { data: existingProfiles, error: profilesError } = await supabaseClient
+            .from('dj_profiles')
+            .select('name');
+        
+        if (profilesError) {
+            console.error('Error loading existing profiles:', profilesError);
+            return;
+        }
+        
+        const existingNames = existingProfiles.map(profile => profile.name);
+        const newDJNames = uniqueDJNames.filter(name => !existingNames.includes(name));
+        
+        console.log('New DJ names to create:', newDJNames);
+        
+        // Create profiles for new DJs
+        if (newDJNames.length > 0) {
+            const newProfiles = newDJNames.map((name, index) => ({
+                pubkey: `npub1${name.toLowerCase().replace(/\s+/g, '')}${index + 100}`,
+                name: name,
+                about: `${name} - Electronic music artist`,
+                picture: `${name.toLowerCase().replace(/\s+/g, '')}.jpg`,
+                soundcloud: `${name.toLowerCase().replace(/\s+/g, '')}-official`,
+                instagram: `@${name.toLowerCase().replace(/\s+/g, '')}`
+            }));
+            
+            const { data: insertedProfiles, error: insertError } = await supabaseClient
+                .from('dj_profiles')
+                .insert(newProfiles)
+                .select();
+            
+            if (insertError) {
+                console.error('Error inserting new profiles:', insertError);
+            } else {
+                console.log('New DJ profiles created:', insertedProfiles);
+            }
+        }
         
     } catch (error) {
         console.error('Error:', error);
