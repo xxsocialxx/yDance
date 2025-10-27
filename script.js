@@ -29,6 +29,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Test DJ profiles loading
         loadDJProfiles(supabaseClient);
         
+        // Fetch DJ names from Events table
+        fetchDJNamesFromEvents(supabaseClient);
+        
     } catch (error) {
         console.error('Error creating Supabase client:', error);
         document.getElementById('events-container').innerHTML = '<p>Error connecting to database</p>';
