@@ -133,11 +133,69 @@ async function loadDJProfiles(supabaseClient) {
         }
         
         console.log('DJ Profiles loaded:', profiles);
+        
+        // Display the profiles on the page
+        displayDJProfiles(profiles);
+        
         return profiles;
         
     } catch (error) {
         console.error('Error:', error);
     }
+}
+
+// Function to display DJ profiles on the page
+function displayDJProfiles(profiles) {
+    if (!profiles || profiles.length === 0) {
+        console.log('No DJ profiles to display');
+        return;
+    }
+    
+    console.log('Displaying DJ profiles:', profiles);
+    
+    // Create a simple table display
+    let tableHTML = `
+        <div style="margin-top: 30px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h3 style="color: #333; margin-top: 0;">DJ Profiles Table</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f5f5f5;">
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">ID</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Pubkey</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Name</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">About</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">SoundCloud</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Instagram</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    profiles.forEach(profile => {
+        tableHTML += `
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;">${profile.id}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 12px;">${profile.pubkey}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">${profile.name}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${profile.about || 'N/A'}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${profile.soundcloud || 'N/A'}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${profile.instagram || 'N/A'}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+                </tbody>
+            </table>
+            <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                Total DJs: ${profiles.length}
+            </p>
+        </div>
+    `;
+    
+    // Add the table to the page
+    const container = document.getElementById('events-container');
+    container.insertAdjacentHTML('beforeend', tableHTML);
 }
 
 // Function to extract unique DJ names from events and create profiles
@@ -201,4 +259,58 @@ async function createDJProfilesFromEvents(supabaseClient) {
     } catch (error) {
         console.error('Error:', error);
     }
+}
+
+// Function to display DJ profiles on the page
+function displayDJProfiles(profiles) {
+    if (!profiles || profiles.length === 0) {
+        console.log('No DJ profiles to display');
+        return;
+    }
+    
+    console.log('Displaying DJ profiles:', profiles);
+    
+    // Create a simple table display
+    let tableHTML = `
+        <div style="margin-top: 30px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h3 style="color: #333; margin-top: 0;">DJ Profiles Table</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f5f5f5;">
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">ID</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Pubkey</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Name</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">About</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">SoundCloud</th>
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Instagram</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    profiles.forEach(profile => {
+        tableHTML += `
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;">${profile.id}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 12px;">${profile.pubkey}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">${profile.name}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${profile.about || 'N/A'}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${profile.soundcloud || 'N/A'}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${profile.instagram || 'N/A'}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+                </tbody>
+            </table>
+            <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                Total DJs: ${profiles.length}
+            </p>
+        </div>
+    `;
+    
+    // Add the table to the page
+    const container = document.getElementById('events-container');
+    container.insertAdjacentHTML('beforeend', tableHTML);
 }
