@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load events
         loadEvents(supabaseClient);
         
+        // Test DJ profiles loading
+        loadDJProfiles(supabaseClient);
+        
     } catch (error) {
         console.error('Error creating Supabase client:', error);
         document.getElementById('events-container').innerHTML = '<p>Error connecting to database</p>';
@@ -108,5 +111,28 @@ async function loadEvents(supabaseClient) {
     } catch (error) {
         console.error('Error:', error);
         document.getElementById('events-container').innerHTML = '<p>Error loading events. Check console for details.</p>';
+    }
+}
+
+// Function to load DJ profiles (for testing)
+async function loadDJProfiles(supabaseClient) {
+    console.log('Loading DJ profiles...');
+    
+    try {
+        const { data: profiles, error } = await supabaseClient
+            .from('dj_profiles')
+            .select('*')
+            .order('name', { ascending: true });
+        
+        if (error) {
+            console.error('Error loading DJ profiles:', error);
+            return;
+        }
+        
+        console.log('DJ Profiles loaded:', profiles);
+        return profiles;
+        
+    } catch (error) {
+        console.error('Error:', error);
     }
 }
