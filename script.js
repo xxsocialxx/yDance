@@ -1145,7 +1145,7 @@ const views = {
             <div class="social-message-card">
                 <div class="message-header">
                     <span class="message-author">${message.author || 'Anonymous'}</span>
-                    <span class="message-timestamp">${this.formatTimestamp(message.timestamp)}</span>
+                    <span class="message-timestamp">${views.formatTimestamp(message.timestamp)}</span>
                 </div>
                 <div class="message-content">${message.content}</div>
                 ${message.links && message.links.length > 0 ? `
