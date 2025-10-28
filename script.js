@@ -47,6 +47,7 @@ const state = {
     eventsData: [],
     djProfilesData: [],
     selectedDJ: null,
+    selectedEvent: null,
     currentDJProfile: null,
     venuesData: [],
     soundSystemsData: [],
@@ -843,7 +844,7 @@ const views = {
         document.querySelectorAll('.learn-more').forEach(button => {
             button.addEventListener('click', function() {
                 const eventTitle = this.parentElement.querySelector('h2').textContent;
-                alert(`Welcome to ${eventTitle}! 🎵\n\nGet ready for an amazing night!`);
+                router.showEventDetailsView(eventTitle);
             });
         });
         
@@ -1282,6 +1283,80 @@ const views = {
             console.error('Error rendering social mentions:', error);
             return '<p class="error-mentions">Error loading social mentions.</p>';
         }
+    },
+
+    renderEventDetails(event) {
+        console.log('Rendering event details for:', event.title);
+        
+        const container = document.getElementById('event-details-container');
+        if (!container) {
+            console.error('Event details container not found!');
+            return;
+        }
+
+        if (!event) {
+            container.innerHTML = '<p>Event details not found.</p>';
+            return;
+        }
+
+        // Create detailed event HTML
+        container.innerHTML = `
+            <div class="event-details-card">
+                <div class="event-details-header">
+                    <h1 class="event-details-title">🎵 ${event.title}</h1>
+                    <p class="event-details-date">📅 ${event.date}</p>
+                    <p class="event-details-location">📍 ${event.location}</p>
+                </div>
+                
+                <div class="event-details-content">
+                    <div class="event-details-info">
+                        <div class="event-info-item">
+                            <h4>Type</h4>
+                            <p>${event.type}</p>
+                        </div>
+                        <div class="event-info-item">
+                            <h4>Music Style</h4>
+                            <p>${event.music}</p>
+                        </div>
+                        <div class="event-info-item">
+                            <h4>Friends Going</h4>
+                            <p>👥 ${event.friendsGoing || 0}/${event.attending || 0}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="event-details-dj">
+                        <h4>🎧 Featured DJ</h4>
+                        <p><strong>${event.dj}</strong></p>
+                        <p>Click to view DJ profile: <a href="#" onclick="router.showDJProfileView('${event.dj}')">View ${event.dj}'s Profile</a></p>
+                    </div>
+                    
+                    <div class="event-details-description">
+                        <h3>About This Event</h3>
+                        <p>Join us for an incredible night of ${event.music.toLowerCase()} music featuring ${event.dj} at ${event.location}. This ${event.type.toLowerCase()} event promises to deliver an unforgettable experience with amazing sound and atmosphere.</p>
+                        <p>Don't miss out on this special ${event.music.toLowerCase()} showcase!</p>
+                    </div>
+                    
+                    <div class="event-details-social">
+                        <h3>Social Activity</h3>
+                        <p>Check out what people are saying about this event in our social feed!</p>
+                        <button class="event-action-button secondary" onclick="router.switchTab('social')">
+                            💬 View Social Feed
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="event-details-actions">
+                    <button class="event-action-button" onclick="alert('🎵 Welcome to ${event.title}!\\n\\nGet ready for an amazing night!')">
+                        🎵 I'm Going!
+                    </button>
+                    <button class="event-action-button secondary" onclick="router.switchTab('events')">
+                        ← Back to Events
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        console.log('Event details rendered successfully!');
     }
 };
 
@@ -1340,6 +1415,7 @@ const router = {
         document.getElementById('events-view').style.display = 'none';
         document.getElementById('dj-view').style.display = 'none';
         document.getElementById('dj-profile-view').style.display = 'block';
+        document.getElementById('event-details-view').style.display = 'none';
         
         // Update the title
         const titleElement = document.getElementById('dj-profile-title');
@@ -1357,6 +1433,32 @@ const router = {
         }
     },
 
+    async showEventDetailsView(eventTitle) {
+        console.log('Switching to event details view for:', eventTitle);
+        state.currentView = 'event-details';
+        state.selectedEvent = eventTitle;
+        
+        // Hide all other views
+        document.getElementById('events-view').style.display = 'none';
+        document.getElementById('dj-view').style.display = 'none';
+        document.getElementById('dj-profile-view').style.display = 'none';
+        document.getElementById('event-details-view').style.display = 'block';
+        
+        // Update the title
+        const titleElement = document.getElementById('event-details-title');
+        if (titleElement) {
+            titleElement.textContent = `${eventTitle} - Details`;
+        }
+        
+        // Find and render the event details
+        const event = state.eventsData.find(e => e.title === eventTitle);
+        if (event) {
+            views.renderEventDetails(event);
+        } else {
+            views.showError('event-details-container', 'Event not found');
+        }
+    },
+
     switchTab(tabName) {
         console.log('Switching to tab:', tabName);
         state.currentTab = tabName;
@@ -1371,6 +1473,7 @@ const router = {
         document.getElementById('events-view').style.display = 'none';
         document.getElementById('dj-view').style.display = 'none';
         document.getElementById('dj-profile-view').style.display = 'none';
+        document.getElementById('event-details-view').style.display = 'none';
         document.getElementById('venue-details-view').style.display = 'none';
         document.getElementById('venues-view').style.display = 'none';
         document.getElementById('sound-system-details-view').style.display = 'none';
@@ -1628,6 +1731,12 @@ const router = {
         const backToDJListButton = document.getElementById('back-to-dj-list');
         if (backToDJListButton) {
             backToDJListButton.addEventListener('click', () => this.showDJView());
+        }
+        
+        // Back to events list button
+        const backToEventsListButton = document.getElementById('back-to-events-list');
+        if (backToEventsListButton) {
+            backToEventsListButton.addEventListener('click', () => this.showEventsView());
         }
         
         // Back to venues button
