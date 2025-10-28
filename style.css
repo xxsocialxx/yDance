@@ -941,6 +941,180 @@ h2 {
     font-weight: 500;
 }
 
+/* Social View */
+.social-view {
+    width: 100%;
+    min-height: 100vh;
+}
+
+/* Message Input Container */
+.message-input-container {
+    background: white;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Message Input Textarea */
+#message-input {
+    width: 100%;
+    min-height: 60px;
+    padding: 12px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 16px;
+    font-family: Arial, sans-serif;
+    resize: vertical;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+
+#message-input:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+#message-input::placeholder {
+    color: #888;
+    font-style: italic;
+}
+
+/* Send Button */
+.send-button {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    min-height: 44px;
+    transition: background-color 0.2s ease;
+    align-self: flex-end;
+}
+
+.send-button:hover {
+    background: #0056b3;
+}
+
+.send-button:active {
+    background: #004085;
+    transform: scale(0.98);
+}
+
+/* Social Feed Container */
+.social-feed-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Social Message Card */
+.social-message-card {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+    border-left: 4px solid #007bff;
+}
+
+.social-message-card:hover {
+    transform: translateY(-2px);
+}
+
+/* Message Header */
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.message-author {
+    font-weight: bold;
+    color: #333;
+    font-size: 0.9rem;
+}
+
+.message-timestamp {
+    color: #888;
+    font-size: 0.8rem;
+}
+
+/* Message Content */
+.message-content {
+    color: #555;
+    line-height: 1.4;
+    margin-bottom: 10px;
+}
+
+/* Message Links */
+.message-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.message-link {
+    display: inline-block;
+    padding: 4px 8px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    color: #007bff;
+    text-decoration: none;
+    border: 1px solid #e9ecef;
+}
+
+.message-link:hover {
+    background: #e9ecef;
+    text-decoration: none;
+}
+
+.message-link.dj-link {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.message-link.venue-link {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+/* Message Status */
+.message-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #28a745;
+}
+
+.status-indicator.pending {
+    background: #ffc107;
+}
+
+.status-indicator.error {
+    background: #dc3545;
+}
+
 /* Mobile responsive */
 @media (min-width: 768px) {
     .view-header {
@@ -1014,5 +1188,30 @@ h2 {
     .social-links {
         flex-direction: row;
         flex-wrap: wrap;
+    }
+    
+    /* Desktop Social Styling */
+    .message-input-container {
+        padding: 20px;
+        flex-direction: row;
+        align-items: flex-end;
+    }
+    
+    #message-input {
+        flex: 1;
+        margin-right: 15px;
+    }
+    
+    .send-button {
+        align-self: flex-end;
+    }
+    
+    .social-feed-container {
+        padding: 0 20px;
+        gap: 20px;
+    }
+    
+    .social-message-card {
+        padding: 20px;
     }
 }

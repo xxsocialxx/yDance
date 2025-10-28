@@ -959,6 +959,64 @@ const views = {
         `;
         
         console.log('Friend profile rendered successfully!');
+    },
+
+    createSocialMessageCard(message) {
+        return `
+            <div class="social-message-card">
+                <div class="message-header">
+                    <span class="message-author">${message.author || 'Anonymous'}</span>
+                    <span class="message-timestamp">${this.formatTimestamp(message.timestamp)}</span>
+                </div>
+                <div class="message-content">${message.content}</div>
+                ${message.links && message.links.length > 0 ? `
+                    <div class="message-links">
+                        ${message.links.map(link => `
+                            <span class="message-link ${link.type}-link">${link.text}</span>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                <div class="message-status">
+                    <span class="status-indicator ${message.status || 'pending'}"></span>
+                    <span>${message.status || 'Processing...'}</span>
+                </div>
+            </div>
+        `;
+    },
+
+    renderSocialFeed(messages) {
+        const container = document.getElementById('social-feed-container');
+        if (!container) {
+            console.error('Social feed container not found!');
+            return;
+        }
+
+        if (!messages || messages.length === 0) {
+            container.innerHTML = '<p class="coming-soon">No messages yet. Be the first to share!</p>';
+            return;
+        }
+
+        // Create message cards
+        const cardsHTML = messages.map(this.createSocialMessageCard).join('');
+        container.innerHTML = cardsHTML;
+        
+        console.log('Social feed rendered successfully!');
+    },
+
+    formatTimestamp(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        
+        return date.toLocaleDateString();
     }
 };
 
@@ -1054,6 +1112,7 @@ const router = {
         document.getElementById('sound-systems-view').style.display = 'none';
         document.getElementById('friend-profile-view').style.display = 'none';
         document.getElementById('friends-view').style.display = 'none';
+        document.getElementById('social-view').style.display = 'none';
         
         // Show the selected tab's view
         switch(tabName) {
@@ -1119,6 +1178,21 @@ const router = {
                     });
                 } else {
                     views.renderFriends(state.friendsData);
+                }
+                break;
+            case 'social':
+                document.getElementById('social-view').style.display = 'block';
+                state.currentView = 'social';
+                // Load social feed if not already loaded
+                if (state.socialFeed.length === 0) {
+                    views.showLoading('social-feed-container');
+                    social.fetchSocialFeed().then(messages => {
+                        views.renderSocialFeed(messages);
+                    }).catch(error => {
+                        views.showError('social-feed-container', error.message);
+                    });
+                } else {
+                    views.renderSocialFeed(state.socialFeed);
                 }
                 break;
         }
@@ -1211,6 +1285,64 @@ const router = {
         }
     },
 
+    async handleSendMessage(messageText) {
+        console.log('Handling send message:', messageText);
+        
+        try {
+            // Process message through social layer
+            const processedMessage = await social.processMessage(messageText);
+            
+            // Create message object for display
+            const message = {
+                id: Date.now(),
+                content: messageText,
+                author: 'You',
+                timestamp: new Date().toISOString(),
+                status: 'processed',
+                links: []
+            };
+            
+            // Add links if attributes were found
+            if (processedMessage.linkedDJ) {
+                message.links.push({
+                    type: 'dj',
+                    text: `🎧 ${processedMessage.linkedDJ.name}`
+                });
+            }
+            
+            if (processedMessage.linkedVenue) {
+                message.links.push({
+                    type: 'venue',
+                    text: `🏢 ${processedMessage.linkedVenue.name}`
+                });
+            }
+            
+            // Add to social feed
+            state.socialFeed.unshift(message);
+            
+            // Re-render social feed
+            views.renderSocialFeed(state.socialFeed);
+            
+            console.log('Message processed and added to feed');
+            
+        } catch (error) {
+            console.error('Error processing message:', error);
+            
+            // Show error message
+            const errorMessage = {
+                id: Date.now(),
+                content: messageText,
+                author: 'You',
+                timestamp: new Date().toISOString(),
+                status: 'error',
+                links: []
+            };
+            
+            state.socialFeed.unshift(errorMessage);
+            views.renderSocialFeed(state.socialFeed);
+        }
+    },
+
     init() {
         console.log('Setting up navigation...');
         
@@ -1251,6 +1383,31 @@ const router = {
                 this.switchTab(tabName);
             });
         });
+        
+        // Social message input event listeners
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-message');
+        
+        if (messageInput && sendButton) {
+            sendButton.addEventListener('click', () => {
+                const messageText = messageInput.value.trim();
+                if (messageText) {
+                    this.handleSendMessage(messageText);
+                    messageInput.value = '';
+                }
+            });
+            
+            messageInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const messageText = messageInput.value.trim();
+                    if (messageText) {
+                        this.handleSendMessage(messageText);
+                        messageInput.value = '';
+                    }
+                }
+            });
+        }
         
         console.log('Navigation setup complete');
     }
