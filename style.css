@@ -76,6 +76,13 @@ h2 {
     margin: 5px 0;
 }
 
+.friends-attending {
+    color: #28a745;
+    font-weight: bold;
+    margin: 10px 0;
+    font-size: 0.9rem;
+}
+
 .learn-more {
     background-color: #007bff;
     color: white;
@@ -99,4 +106,913 @@ h2 {
 .learn-more:active {
     background-color: #004085;
     transform: scale(0.98);
+}
+
+/* Hide DJ table by default */
+.dj-profiles-table {
+    display: none;
+}
+
+/* Show DJ table when needed */
+.dj-profiles-table.show {
+    display: block;
+}
+
+/* SPA View Management */
+#app {
+    min-height: 100vh;
+}
+
+.events-view, .dj-view {
+    width: 100%;
+    min-height: 100vh;
+}
+
+/* View Header */
+.view-header {
+    background: white;
+    padding: 15px 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.back-button {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    min-height: 44px;
+    transition: background-color 0.2s ease;
+}
+
+.back-button:hover {
+    background: #0056b3;
+}
+
+.back-button:active {
+    background: #004085;
+    transform: scale(0.98);
+}
+
+.browse-button {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    min-height: 44px;
+    transition: background-color 0.2s ease;
+}
+
+.browse-button:hover {
+    background: #218838;
+}
+
+.browse-button:active {
+    background: #1e7e34;
+    transform: scale(0.98);
+}
+
+.view-header h2 {
+    margin: 0;
+    color: #333;
+    font-size: 1.5rem;
+}
+
+/* DJ Profiles Container */
+.dj-profiles-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 10px;
+    display: grid;
+    grid-template-columns: 1fr; /* Single column on mobile */
+    gap: 15px; /* Smaller gap on mobile */
+}
+
+/* Tablet and desktop grid for DJ cards */
+@media (min-width: 768px) {
+    .dj-profiles-container {
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+    }
+}
+
+/* DJ Card Styling */
+.dj-card {
+    background: white;
+    border-radius: 8px;
+    padding: 15px; /* Smaller padding on mobile */
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+}
+
+/* Larger padding on desktop */
+@media (min-width: 768px) {
+    .dj-card {
+        padding: 20px;
+    }
+}
+
+.dj-card:hover {
+    transform: translateY(-2px);
+}
+
+.dj-name {
+    color: #333;
+    margin-top: 0;
+    font-size: 1.25rem; /* Responsive font size */
+    line-height: 1.3;
+    font-weight: bold;
+}
+
+/* Larger heading on desktop */
+@media (min-width: 768px) {
+    .dj-name {
+        font-size: 1.5rem;
+    }
+}
+
+.dj-pubkey {
+    color: #666;
+    font-family: monospace;
+    font-size: 0.8rem;
+    word-break: break-all;
+    margin: 5px 0;
+}
+
+.dj-about {
+    color: #555;
+    margin: 10px 0;
+    line-height: 1.4;
+}
+
+.dj-social {
+    color: #888;
+    margin: 5px 0;
+    font-size: 0.9rem;
+}
+
+.dj-social a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.dj-social a:hover {
+    text-decoration: underline;
+}
+
+/* DJ Profile View */
+.dj-profile-view {
+    width: 100%;
+    min-height: 100vh;
+}
+
+.dj-profile-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 10px;
+}
+
+.dj-profile-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.dj-profile-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.dj-profile-name {
+    color: #333;
+    font-size: 2rem;
+    margin: 0 0 10px 0;
+    font-weight: bold;
+}
+
+.dj-profile-pubkey {
+    color: #666;
+    font-family: monospace;
+    font-size: 0.9rem;
+    word-break: break-all;
+    margin: 0;
+}
+
+.dj-profile-content {
+    display: grid;
+    gap: 25px;
+}
+
+.dj-profile-content h3 {
+    color: #333;
+    font-size: 1.2rem;
+    margin: 0 0 10px 0;
+    font-weight: 600;
+}
+
+.dj-profile-content p {
+    color: #555;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.social-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.social-link {
+    display: inline-block;
+    padding: 10px 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #007bff;
+    transition: background-color 0.2s ease;
+    border: 1px solid #e9ecef;
+}
+
+.social-link:hover {
+    background: #e9ecef;
+    text-decoration: none;
+}
+
+.social-link.soundcloud {
+    color: #ff8800;
+}
+
+.social-link.instagram {
+    color: #e4405f;
+}
+
+.badges-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #007bff;
+    color: white;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.badge.nostr-ready {
+    background: #28a745;
+}
+
+.click-hint {
+    color: #888;
+    font-size: 0.8rem;
+    font-style: italic;
+    margin-top: 10px;
+    text-align: center;
+}
+
+/* Tab Navigation */
+.tab-navigation {
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.tab-container {
+    display: flex;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 10px;
+}
+
+.tab-button {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 15px 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s ease;
+    border-bottom: 3px solid transparent;
+    min-height: 60px;
+}
+
+.tab-button:hover {
+    background: #f8f9fa;
+}
+
+.tab-button.active {
+    background: #f8f9fa;
+    border-bottom-color: #007bff;
+    color: #007bff;
+}
+
+.tab-icon {
+    font-size: 1.2rem;
+}
+
+.tab-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Coming Soon Styling */
+.coming-soon {
+    text-align: center;
+    color: #888;
+    font-style: italic;
+    padding: 40px 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin: 20px;
+}
+
+/* Mobile responsive tabs */
+@media (max-width: 768px) {
+    .tab-container {
+        padding: 0 5px;
+    }
+    
+    .tab-button {
+        padding: 12px 5px;
+        min-height: 50px;
+    }
+    
+    .tab-icon {
+        font-size: 1rem;
+    }
+    
+    .tab-label {
+        font-size: 0.7rem;
+    }
+}
+
+/* Venues View */
+.venues-view {
+    width: 100%;
+    min-height: 100vh;
+}
+
+.venues-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 10px;
+    display: grid;
+    grid-template-columns: 1fr; /* Single column on mobile */
+    gap: 15px; /* Smaller gap on mobile */
+}
+
+/* Tablet and desktop grid for venue cards */
+@media (min-width: 768px) {
+    .venues-container {
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+    }
+}
+
+/* Venue Card Styling */
+.venue-card {
+    background: white;
+    border-radius: 8px;
+    padding: 15px; /* Smaller padding on mobile */
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+}
+
+/* Larger padding on desktop */
+@media (min-width: 768px) {
+    .venue-card {
+        padding: 20px;
+    }
+}
+
+.venue-card:hover {
+    transform: translateY(-2px);
+}
+
+.venue-name {
+    color: #333;
+    margin-top: 0;
+    font-size: 1.25rem; /* Responsive font size */
+    line-height: 1.3;
+    font-weight: bold;
+}
+
+/* Larger heading on desktop */
+@media (min-width: 768px) {
+    .venue-name {
+        font-size: 1.5rem;
+    }
+}
+
+.venue-location {
+    color: #666;
+    font-weight: bold;
+    margin: 5px 0;
+}
+
+.venue-capacity {
+    color: #888;
+    margin: 5px 0;
+}
+
+.venue-sound {
+    color: #555;
+    margin: 5px 0;
+}
+
+.venue-about {
+    color: #555;
+    margin: 10px 0;
+    line-height: 1.4;
+}
+
+/* Venue Details View */
+.venue-details-view {
+    width: 100%;
+    min-height: 100vh;
+}
+
+.venue-details-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 10px;
+}
+
+.venue-details-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.venue-details-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.venue-details-name {
+    color: #333;
+    font-size: 2rem;
+    margin: 0 0 10px 0;
+    font-weight: bold;
+}
+
+.venue-details-location {
+    color: #666;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.venue-details-content {
+    display: grid;
+    gap: 25px;
+}
+
+.venue-details-content h3 {
+    color: #333;
+    font-size: 1.2rem;
+    margin: 0 0 10px 0;
+    font-weight: 600;
+}
+
+.venue-details-content p {
+    color: #555;
+    line-height: 1.6;
+    margin: 0 0 10px 0;
+}
+
+.venue-website-link {
+    display: inline-block;
+    padding: 10px 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #007bff;
+    transition: background-color 0.2s ease;
+    border: 1px solid #e9ecef;
+}
+
+.venue-website-link:hover {
+    background: #e9ecef;
+    text-decoration: none;
+}
+
+/* Sound Systems View */
+.sound-systems-view {
+    width: 100%;
+    min-height: 100vh;
+}
+
+.sound-systems-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 10px;
+    display: grid;
+    grid-template-columns: 1fr; /* Single column on mobile */
+    gap: 15px; /* Smaller gap on mobile */
+}
+
+/* Tablet and desktop grid for sound system cards */
+@media (min-width: 768px) {
+    .sound-systems-container {
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+    }
+}
+
+/* Sound System Card Styling */
+.sound-system-card {
+    background: white;
+    border-radius: 8px;
+    padding: 15px; /* Smaller padding on mobile */
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+}
+
+/* Larger padding on desktop */
+@media (min-width: 768px) {
+    .sound-system-card {
+        padding: 20px;
+    }
+}
+
+.sound-system-card:hover {
+    transform: translateY(-2px);
+}
+
+.sound-system-name {
+    color: #333;
+    margin-top: 0;
+    font-size: 1.25rem; /* Responsive font size */
+    line-height: 1.3;
+    font-weight: bold;
+}
+
+/* Larger heading on desktop */
+@media (min-width: 768px) {
+    .sound-system-name {
+        font-size: 1.5rem;
+    }
+}
+
+.sound-system-brand {
+    color: #666;
+    font-weight: bold;
+    margin: 5px 0;
+}
+
+.sound-system-power {
+    color: #888;
+    margin: 5px 0;
+}
+
+.sound-system-type {
+    color: #555;
+    margin: 5px 0;
+}
+
+.sound-system-about {
+    color: #555;
+    margin: 10px 0;
+    line-height: 1.4;
+}
+
+.sound-system-features {
+    color: #555;
+    margin: 10px 0;
+    font-size: 0.9rem;
+}
+
+/* Sound System Details View */
+.sound-system-details-view {
+    width: 100%;
+    min-height: 100vh;
+}
+
+.sound-system-details-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 10px;
+}
+
+.sound-system-details-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.sound-system-details-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.sound-system-details-name {
+    color: #333;
+    font-size: 2rem;
+    margin: 0 0 10px 0;
+    font-weight: bold;
+}
+
+.sound-system-details-brand {
+    color: #666;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.sound-system-details-content {
+    display: grid;
+    gap: 25px;
+}
+
+.sound-system-details-content h3 {
+    color: #333;
+    font-size: 1.2rem;
+    margin: 0 0 10px 0;
+    font-weight: 600;
+}
+
+.sound-system-details-content p {
+    color: #555;
+    line-height: 1.6;
+    margin: 0 0 10px 0;
+}
+
+.features-list {
+    color: #555;
+    margin: 0;
+    padding-left: 20px;
+}
+
+.features-list li {
+    margin: 5px 0;
+}
+
+.venues-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.venue-tag {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #e9ecef;
+    color: #495057;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* Friends View */
+.friends-view {
+    width: 100%;
+    min-height: 100vh;
+}
+
+.friends-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 10px;
+    display: grid;
+    grid-template-columns: 1fr; /* Single column on mobile */
+    gap: 15px; /* Smaller gap on mobile */
+}
+
+/* Tablet and desktop grid for friend cards */
+@media (min-width: 768px) {
+    .friends-container {
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+    }
+}
+
+/* Friend Card Styling */
+.friend-card {
+    background: white;
+    border-radius: 8px;
+    padding: 15px; /* Smaller padding on mobile */
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+    text-align: center;
+}
+
+/* Larger padding on desktop */
+@media (min-width: 768px) {
+    .friend-card {
+        padding: 20px;
+    }
+}
+
+.friend-card:hover {
+    transform: translateY(-2px);
+}
+
+.friend-avatar {
+    font-size: 3rem;
+    margin-bottom: 10px;
+}
+
+.friend-name {
+    color: #333;
+    margin: 0 0 5px 0;
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+.friend-username {
+    color: #666;
+    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+}
+
+.friend-events, .friend-genres, .friend-mutual, .friend-active {
+    color: #555;
+    margin: 5px 0;
+    font-size: 0.9rem;
+}
+
+/* Friend Profile View */
+.friend-profile-view {
+    width: 100%;
+    min-height: 100vh;
+}
+
+.friend-profile-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 10px;
+}
+
+.friend-profile-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.friend-profile-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.friend-profile-avatar {
+    font-size: 4rem;
+    margin-bottom: 15px;
+}
+
+.friend-profile-name {
+    color: #333;
+    font-size: 2rem;
+    margin: 0 0 10px 0;
+    font-weight: bold;
+}
+
+.friend-profile-username {
+    color: #666;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.friend-profile-content {
+    display: grid;
+    gap: 25px;
+}
+
+.friend-profile-content h3 {
+    color: #333;
+    font-size: 1.2rem;
+    margin: 0 0 10px 0;
+    font-weight: 600;
+}
+
+.friend-profile-content p {
+    color: #555;
+    line-height: 1.6;
+    margin: 0 0 10px 0;
+}
+
+.genres-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.genre-tag {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #e3f2fd;
+    color: #1976d2;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* Mobile responsive */
+@media (min-width: 768px) {
+    .view-header {
+        padding: 20px;
+    }
+    
+    .dj-profiles-container {
+        padding: 0 20px;
+    }
+    
+    .dj-profile-container {
+        padding: 0 20px;
+    }
+    
+    .venues-container {
+        padding: 0 20px;
+    }
+    
+    .venue-details-container {
+        padding: 0 20px;
+    }
+    
+    .venue-details-card {
+        padding: 30px;
+    }
+    
+    .venue-details-name {
+        font-size: 2.5rem;
+    }
+    
+    .sound-systems-container {
+        padding: 0 20px;
+    }
+    
+    .sound-system-details-container {
+        padding: 0 20px;
+    }
+    
+    .sound-system-details-card {
+        padding: 30px;
+    }
+    
+    .sound-system-details-name {
+        font-size: 2.5rem;
+    }
+    
+    .friends-container {
+        padding: 0 20px;
+    }
+    
+    .friend-profile-container {
+        padding: 0 20px;
+    }
+    
+    .friend-profile-card {
+        padding: 30px;
+    }
+    
+    .friend-profile-name {
+        font-size: 2.5rem;
+    }
+    
+    .dj-profile-card {
+        padding: 30px;
+    }
+    
+    .dj-profile-name {
+        font-size: 2.5rem;
+    }
+    
+    .social-links {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
 }

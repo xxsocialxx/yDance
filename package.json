@@ -1,0 +1,17 @@
+{
+  "name": "ydance-events",
+  "version": "1.0.0",
+  "description": "Electronic music event listings with DJ profiles",
+  "main": "script.js",
+  "scripts": {
+    "lint": "eslint script.js",
+    "lint:fix": "eslint script.js --fix",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0"
+  },
+  "keywords": ["music", "events", "dj", "pwa"],
+  "author": "",
+  "license": "MIT"
+}

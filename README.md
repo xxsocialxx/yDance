@@ -1,135 +1,172 @@
-# yDance Event Listing Website
+# yDance Events
 
-## Project Overview
-A mobile-first Progressive Web App (PWA) for electronic music event listings, featuring DJ profiles and social connectivity. Built with vanilla HTML/CSS/JavaScript and Supabase backend, designed for ADHD-friendly learning with incremental achievements.
+Electronic music event discovery platform with equal-value tabs for Events, DJs, Venues, Sound Systems, and Friends - a Progressive Web App built with vanilla JavaScript and Supabase.
 
-## User Profile & Learning Approach
-- **User has ADHD** - needs small, achievable milestones
-- **Learning focused** - wants to understand the code being generated
-- **Prefers minimal complexity** - "can we achieve a little less but with much less complexity?"
-- **Needs encouragement** - small wins and positive reinforcement
-- **Progressive learning** - build understanding step by step
+## 🚨 For AI Agents
 
-## Technical Stack
-- **Frontend**: Pure HTML, CSS, JavaScript (no frameworks)
-- **Backend**: Supabase (handles database, APIs, auth)
-- **Database**: MongoDB via Supabase
-- **Deployment**: GitHub Pages (live at https://xxsocialxx.github.io/yDance)
-- **Mobile**: PWA with responsive design and touch-friendly interface
+**BEFORE MAKING ANY CHANGES**, please read: [`AI_DEVELOPMENT_GUIDELINES.md`](./AI_DEVELOPMENT_GUIDELINES.md)
 
-## Project Status: ✅ LIVE & MOBILE-OPTIMIZED
-- ✅ Database connection established
-- ✅ Events load dynamically from Supabase
-- ✅ Mobile-first responsive design
-- ✅ Touch-friendly interface (44px minimum touch targets)
-- ✅ PWA capabilities (installable from browser)
-- ✅ Live deployment on GitHub Pages
-- ✅ Professional foundation ready for DJ profiles
+This project uses a strict modular architecture to prevent code duplication and maintainability issues.
 
-## File Structure
+## 🏗️ Architecture
+
+The codebase follows a **6-layer modular architecture** designed for safe, incremental updates:
+
+```
+CONFIG → STATE → API → VIEWS → ROUTER → INIT
+```
+
+- **CONFIG**: App settings and constants (safe to add new config)
+- **STATE**: Single source of truth for all data (safe to add new properties)
+- **API**: Database/network calls (safe to add new methods following templates)
+- **VIEWS**: HTML rendering and DOM manipulation (safe to add new rendering functions)
+- **ROUTER**: Navigation and event handling (safe to add new routes)
+- **INIT**: Application startup (protected - do not modify)
+
+### 🛡️ Safe Update Strategy
+
+The architecture is designed for **zero-breaking-changes** development:
+
+- ✅ **Add new properties** to existing objects
+- ✅ **Add new methods** following established templates
+- ✅ **Add new views** using existing patterns
+- ✅ **Add new CSS classes** without modifying existing ones
+- ✅ **Add new HTML elements** without touching existing structure
+
+**Never modify existing method signatures, CSS class names, HTML IDs, or state property names.**
+
+## 🚀 Getting Started
+
+1. **Install dependencies** (optional, for linting):
+   ```bash
+   npm install
+   ```
+
+2. **Start development server**:
+   ```bash
+   npm run serve
+   # or
+   python3 -m http.server 8000
+   ```
+
+3. **Open in browser**:
+   ```
+   http://localhost:8000
+   ```
+
+## 🛠️ Development
+
+### **Adding New Features Safely**
+
+1. **Follow the Module Structure**:
+   ```javascript
+   // 1. Add to CONFIG (if needed)
+   const CONFIG = { newSetting: 'value' };
+   
+   // 2. Add to STATE (if needed)
+   const state = { newData: [] };
+   
+   // 3. Add to API (following template)
+   const api = { fetchNewData() { /* template pattern */ } };
+   
+   // 4. Add to VIEWS (following template)
+   const views = { renderNewData() { /* template pattern */ } };
+   
+   // 5. Add to ROUTER (following template)
+   const router = { showNewView() { /* template pattern */ } };
+   ```
+
+2. **Use Existing Templates**:
+   - Copy patterns from existing methods
+   - Follow the same error handling
+   - Use the same naming conventions
+   - Maintain the same structure
+
+3. **Test Incrementally**:
+   - Test each addition before moving to the next
+   - Verify existing functionality still works
+   - Check for linter errors
+
+### **Development Commands**
+- **Lint code**: `npm run lint`
+- **Fix linting**: `npm run lint:fix`
+- **Serve locally**: `npm run serve`
+
+## 📁 Project Structure
+
 ```
 yDance/
-├── index.html          # Main website with PWA features
-├── script.js          # JavaScript with Supabase connection
-├── style.css          # Mobile-first responsive CSS
-├── manifest.json      # PWA manifest for app-like experience
-├── mobile-test.html   # Offline testing version with sample events
-├── debug-test.html    # Connection debugging tool
-├── simple-test.html   # Network testing tool
-└── test.html          # Basic Supabase test
+├── index.html              # Main HTML structure
+├── style.css              # Styling and responsive design
+├── script.js              # Application logic (modular architecture)
+├── manifest.json          # PWA configuration
+├── AI_DEVELOPMENT_GUIDELINES.md  # Rules for AI agents
+├── .eslintrc.json         # Linting configuration
+└── package.json           # Project dependencies
 ```
 
-## Database Configuration
-- **Project**: yDance1
-- **URL**: https://rymcfymmigomaytblqml.supabase.co
-- **API Key**: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5bWNmeW1taWdvbWF5dGJscW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0MjcxNzEsImV4cCI6MjA3NzAwMzE3MX0.gjjBPhgNap7VsjZ-SFInVLGzPbPcZC-UEF5F7pQ8-tg
-- **Table**: Events (case-sensitive)
-- **RLS**: Disabled (for learning purposes)
+## 🎯 Features
 
-## Current Features
-- ✅ Dynamic event loading from database
-- ✅ Mobile-first responsive design (single column on mobile)
-- ✅ Touch-friendly buttons (44px minimum touch targets)
-- ✅ PWA capabilities (installable, works offline)
-- ✅ Interactive "Learn More" buttons
-- ✅ Real-time database connection
-- ✅ Error handling and debugging
-- ✅ Live deployment on GitHub Pages
+### **Tab-Based Discovery System**
+- **Events Tab**: Browse upcoming electronic music events (cluster hub with shortcuts to all elements)
+- **DJs Tab**: Discover DJs with detailed profiles and social links
+- **Venues Tab**: Explore venues with capacity, sound systems, and details
+- **Sound Systems Tab**: Coming soon - discover events by sound quality
+- **Friends Tab**: Coming soon - social discovery and friend-based recommendations
 
-## How to Access
-**Live Site:** https://xxsocialxx.github.io/yDance
+### **Event Cards (Cluster Hub)**
+- **Clickable Elements**: DJ names, venue names, sound systems all link to detailed views
+- **Social Integration**: Shows friend attendance ratios (e.g., "3/24 friends going")
+- **Complete Information**: Date, location, type, music style, DJ, venue, sound system
 
-**Local Development:**
-1. Navigate to project folder: `cd /Users/601ere/yDance`
-2. Start local server: `python3 -m http.server 8000`
-3. Open in browser: `http://localhost:8000`
+### **Detailed Views**
+- **DJ Profile Pages**: Individual DJ details with social links and badges
+- **Venue Detail Pages**: Complete venue information with sound system details
+- **Future**: Sound system details, friend profiles, event details
 
-**Mobile Testing:**
-- Use the live GitHub Pages URL on your phone
-- Add to Home Screen for app-like experience
-- Test touch interactions and responsive design
+### **Technical Features**
+- **PWA Support**: Installable on mobile devices
+- **Responsive Design**: Works on mobile and desktop
+- **Real-time Data**: Powered by Supabase
+- **Modular Architecture**: Safe, incremental updates
 
-## Learning Achievements Completed
-1. **HTML Structure** - Clean, semantic markup with PWA meta tags
-2. **CSS Styling** - Mobile-first responsive design with touch-friendly interface
-3. **JavaScript Logic** - Database connection and dynamic content
-4. **Database Integration** - Real Supabase connection with error handling
-5. **Mobile Optimization** - Touch targets, responsive grid, PWA features
-6. **Deployment** - GitHub Pages setup and live hosting
-7. **PWA Development** - Progressive Web App with manifest and installability
-8. **Project Organization** - Clean file structure and version control
+## 🔧 Technology Stack
 
-## Next Development Opportunities
-- **DJ Profiles** - Clickable DJ names leading to biography pages
-- **Audio Clips** - Short 30-60 second previews for each DJ
-- **Social Links** - Instagram, SoundCloud, Spotify integration
-- **Event Filtering** - Search and filter by DJ, date, location, music type
-- **User Authentication** - Login/register functionality
-- **Event Management** - Add/edit/delete events from website
-- **Real-time Updates** - Live event updates without refresh
-- **Enhanced Mobile Features** - Push notifications, offline caching
+- **Frontend**: Vanilla JavaScript, HTML5, CSS3
+- **Backend**: Supabase (PostgreSQL)
+- **PWA**: Service Worker ready
+- **Styling**: CSS Grid, Flexbox, Mobile-first
 
-## Technical Notes
-- **Mobile-First Design**: Single column layout on mobile, responsive grid on desktop
-- **Touch Targets**: All interactive elements meet 44px minimum size requirement
-- **PWA Features**: Installable from browser, works offline, app-like experience
-- **GitHub Pages**: Free hosting with automatic deployments on git push
-- **VPN Compatibility**: Live site works regardless of VPN settings
-- **Database**: Supabase handles backend, case-sensitive table names
-- **Performance**: Optimized for mobile data usage and fast loading
+## 📱 PWA Features
 
-## Code Architecture
-- **Single Page Application** approach
-- **Component-based structure** (each card is a component)
-- **Async/await** for database operations
-- **Event delegation** for dynamic button handling
-- **Progressive enhancement** (works without JavaScript)
+- Installable on mobile devices
+- Offline-ready architecture
+- App-like experience
+- Responsive design
 
-## Learning Philosophy
-- Start simple, add complexity gradually
-- Focus on understanding over features
-- Celebrate small wins
-- Build on solid foundations
-- Real-world patterns and practices
+## 📊 Implementation Status
 
-## Support Information
-- User prefers step-by-step explanations
-- Needs to understand "why" not just "how"
-- Benefits from visual progress indicators
-- Appreciates encouragement and positive reinforcement
-- Learns best through hands-on building
+### **Completed Features**
+- ✅ **Tab Navigation System**: Equal-value tabs with smooth switching
+- ✅ **Events Tab**: Full event discovery with clickable elements
+- ✅ **DJs Tab**: DJ profiles with detailed views and social links
+- ✅ **Venues Tab**: Venue discovery with detailed venue pages
+- ✅ **Modular Architecture**: Clean, maintainable code structure
+- ✅ **Responsive Design**: Mobile-first approach
+- ✅ **PWA Foundation**: Ready for offline functionality
 
-## Project Vision
-**"DJs are the heart and soul of electronic music events"** - This project focuses on making DJs the central element, with clickable profiles, audio previews, and social connectivity. The target audience consists of quality die-hard electronic music fans who make their event choices first and foremost based on the DJ.
+### **In Development**
+- 🚧 **Sound Systems Tab**: Placeholder ready for implementation
+- 🚧 **Friends Tab**: Placeholder ready for social features
+- 🚧 **Event Card Integration**: Clickable venue/sound system names in events
+- 🚧 **Social Features**: Friend attendance ratios in event cards
 
-## Key Insights from Development
-- **Mobile-first approach** was essential - most users discover events on their phones
-- **Touch-friendly interface** dramatically improves user experience
-- **PWA capabilities** provide native app-like experience without app store complexity
-- **Simple, focused features** work better than complex feature sets
-- **Incremental development** keeps motivation high and learning manageable
+### **Future Enhancements**
+- 🔮 **User Authentication**: Login system for personalized experience
+- 🔮 **Real-time Updates**: Live event updates and notifications
+- 🔮 **Advanced Filtering**: Filter events by multiple criteria
+- 🔮 **Event Creation**: Allow users to create and manage events
 
 ---
-*Last updated: October 27, 2024*
-*Project status: Live, mobile-optimized, and ready for DJ profile development*
-*Live site: https://xxsocialxx.github.io/yDance*
+
+*Built with ❤️ for the electronic music community*

@@ -12,8 +12,130 @@
     <meta name="apple-mobile-web-app-title" content="yDance">
 </head>
 <body>
-    <div class="events-container" id="events-container">
-        <!-- Events will be loaded here dynamically -->
+    <div id="app">
+        <!-- Tab Navigation -->
+        <nav class="tab-navigation" id="tab-navigation">
+            <div class="tab-container">
+                <button class="tab-button active" data-tab="events" id="tab-events">
+                    <span class="tab-icon">🎵</span>
+                    <span class="tab-label">Events</span>
+                </button>
+                <button class="tab-button" data-tab="djs" id="tab-djs">
+                    <span class="tab-icon">🎧</span>
+                    <span class="tab-label">DJs</span>
+                </button>
+                <button class="tab-button" data-tab="venues" id="tab-venues">
+                    <span class="tab-icon">🏢</span>
+                    <span class="tab-label">Venues</span>
+                </button>
+                <button class="tab-button" data-tab="sound-systems" id="tab-sound-systems">
+                    <span class="tab-icon">🔊</span>
+                    <span class="tab-label">Sound Systems</span>
+                </button>
+                <button class="tab-button" data-tab="friends" id="tab-friends">
+                    <span class="tab-icon">👥</span>
+                    <span class="tab-label">Friends</span>
+                </button>
+            </div>
+        </nav>
+        
+        <!-- Events View -->
+        <div class="events-view" id="events-view">
+            <div class="view-header">
+                <h2>yDance Events</h2>
+            </div>
+            <div class="events-container" id="events-container">
+                <!-- Events will be loaded here dynamically -->
+            </div>
+        </div>
+        
+        <!-- DJ Profiles View -->
+        <div class="dj-view" id="dj-view" style="display: none;">
+            <div class="view-header">
+                <button id="back-to-events" class="back-button">← Back to Events</button>
+                <h2>DJ Profiles</h2>
+            </div>
+            <div class="dj-profiles-container" id="dj-profiles-container">
+                <!-- DJ profiles will be loaded here when needed -->
+            </div>
+        </div>
+        
+        <!-- Individual DJ Profile View -->
+        <div class="dj-profile-view" id="dj-profile-view" style="display: none;">
+            <div class="view-header">
+                <button id="back-to-dj-list" class="back-button">← Back to DJs</button>
+                <h2 id="dj-profile-title">DJ Profile</h2>
+            </div>
+            <div class="dj-profile-container" id="dj-profile-container">
+                <!-- Individual DJ profile will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Individual Venue Details View -->
+        <div class="venue-details-view" id="venue-details-view" style="display: none;">
+            <div class="view-header">
+                <button id="back-to-venues" class="back-button">← Back to Venues</button>
+                <h2 id="venue-details-title">Venue Details</h2>
+            </div>
+            <div class="venue-details-container" id="venue-details-container">
+                <!-- Individual venue details will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Individual Sound System Details View -->
+        <div class="sound-system-details-view" id="sound-system-details-view" style="display: none;">
+            <div class="view-header">
+                <button id="back-to-sound-systems" class="back-button">← Back to Sound Systems</button>
+                <h2 id="sound-system-details-title">Sound System Details</h2>
+            </div>
+            <div class="sound-system-details-container" id="sound-system-details-container">
+                <!-- Individual sound system details will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Individual Friend Profile View -->
+        <div class="friend-profile-view" id="friend-profile-view" style="display: none;">
+            <div class="view-header">
+                <button id="back-to-friends" class="back-button">← Back to Friends</button>
+                <h2 id="friend-profile-title">Friend Profile</h2>
+            </div>
+            <div class="friend-profile-container" id="friend-profile-container">
+                <!-- Individual friend profile will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Venues View -->
+        <div class="venues-view" id="venues-view" style="display: none;">
+            <div class="view-header">
+                <h2>Venues</h2>
+            </div>
+            <div class="venues-container" id="venues-container">
+                <!-- Venues will be loaded here when implemented -->
+                <p class="coming-soon">Coming Soon - Venue listings</p>
+            </div>
+        </div>
+        
+        <!-- Sound Systems View -->
+        <div class="sound-systems-view" id="sound-systems-view" style="display: none;">
+            <div class="view-header">
+                <h2>Sound Systems</h2>
+            </div>
+            <div class="sound-systems-container" id="sound-systems-container">
+                <!-- Sound systems will be loaded here when implemented -->
+                <p class="coming-soon">Coming Soon - Sound system listings</p>
+            </div>
+        </div>
+        
+        <!-- Friends View -->
+        <div class="friends-view" id="friends-view" style="display: none;">
+            <div class="view-header">
+                <h2>Friends</h2>
+            </div>
+            <div class="friends-container" id="friends-container">
+                <!-- Friends-based events will be loaded here when implemented -->
+                <p class="coming-soon">Coming Soon - Social event discovery</p>
+            </div>
+        </div>
     </div>
     
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
