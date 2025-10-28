@@ -866,6 +866,85 @@ const social = {
         }
     },
 
+    // Database Key Storage Methods
+    async storeKeysInDatabase(userId, encryptedKeys) {
+        console.log('Storing encrypted keys in Supabase database...');
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('user_nostr_keys')
+                .upsert({
+                    user_id: userId,
+                    encrypted_private_key: encryptedKeys,
+                    updated_at: new Date().toISOString()
+                });
+            
+            if (error) throw error;
+            
+            console.log('Keys stored in database successfully');
+            return { success: true, data };
+        } catch (error) {
+            console.error('Error storing keys in database:', error);
+            throw error;
+        }
+    },
+
+    async retrieveKeysFromDatabase(userId) {
+        console.log('Retrieving encrypted keys from Supabase database...');
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('user_nostr_keys')
+                .select('encrypted_private_key')
+                .eq('user_id', userId)
+                .single();
+            
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    console.log('No keys found in database for user');
+                    return null;
+                }
+                throw error;
+            }
+            
+            console.log('Keys retrieved from database successfully');
+            return data.encrypted_private_key;
+        } catch (error) {
+            console.error('Error retrieving keys from database:', error);
+            throw error;
+        }
+    },
+
+    async recoverKeysWithPassword(userId, password) {
+        console.log('Recovering keys with password...');
+        
+        try {
+            // Retrieve encrypted keys from database
+            const encryptedKeys = await this.retrieveKeysFromDatabase(userId);
+            
+            if (!encryptedKeys) {
+                throw new Error('No encrypted keys found for this user');
+            }
+            
+            // Decrypt keys with password
+            const decryptedPrivateKey = await keyEncryption.decryptData(encryptedKeys, password);
+            
+            // Reconstruct key pair
+            const keys = {
+                privateKey: decryptedPrivateKey,
+                publicKey: nostrKeys.decodePublicKey(nostrKeys.encodePublicKey(decryptedPrivateKey)),
+                npub: nostrKeys.encodePublicKey(nostrKeys.decodePublicKey(decryptedPrivateKey)),
+                nsec: nostrKeys.encodePrivateKey(decryptedPrivateKey)
+            };
+            
+            console.log('Keys recovered successfully');
+            return keys;
+        } catch (error) {
+            console.error('Error recovering keys with password:', error);
+            throw new Error('Failed to recover keys. Please check your password.');
+        }
+    },
+
     // Auth Methods
     async signUp(email, password) {
         console.log('Signing up user:', email);
@@ -883,7 +962,17 @@ const social = {
             if (error) throw error;
             
             // Store Nostr keys encrypted with password
-            const encryptedKeys = this.encryptKeys(keys, password);
+            const encryptedKeys = await this.encryptKeys(keys, password);
+            
+            // Store encrypted keys in Supabase database for recovery
+            await this.storeKeysInDatabase(data.user.id, encryptedKeys);
+            
+            // Also store in localStorage for immediate access
+            keyStorage.storeKeys(encryptedKeys, { 
+                email, 
+                publicKey: keys.publicKey,
+                userId: data.user.id 
+            });
             
             // Update state
             state.currentUser = data.user;
@@ -891,7 +980,7 @@ const social = {
             state.isAuthenticated = true;
             state.authSession = data.session;
             
-            console.log('User signed up successfully');
+            console.log('User signed up successfully with key recovery enabled');
             return { success: true, user: data.user, keys: keys };
             
         } catch (error) {
@@ -912,9 +1001,35 @@ const social = {
             
             if (error) throw error;
             
-            // TODO: Retrieve and decrypt Nostr keys from database
-            // For now, generate new keys (placeholder)
-            const keys = this.generateNostrKeys();
+            // Try to recover Nostr keys from database
+            let keys;
+            try {
+                keys = await this.recoverKeysWithPassword(data.user.id, password);
+                console.log('Keys recovered from database successfully');
+            } catch (recoveryError) {
+                console.warn('Key recovery failed, checking localStorage:', recoveryError.message);
+                
+                // Fallback: Try to recover from localStorage
+                const storedData = keyStorage.retrieveKeys();
+                if (storedData && storedData.metadata && storedData.metadata.userId === data.user.id) {
+                    try {
+                        const decryptedPrivateKey = await keyEncryption.decryptData(storedData.keys, password);
+                        keys = {
+                            privateKey: decryptedPrivateKey,
+                            publicKey: nostrKeys.decodePublicKey(nostrKeys.encodePublicKey(decryptedPrivateKey)),
+                            npub: nostrKeys.encodePublicKey(nostrKeys.decodePublicKey(decryptedPrivateKey)),
+                            nsec: nostrKeys.encodePrivateKey(decryptedPrivateKey)
+                        };
+                        console.log('Keys recovered from localStorage successfully');
+                    } catch (localError) {
+                        console.warn('localStorage recovery failed:', localError.message);
+                        throw new Error('Unable to recover your Nostr keys. Please contact support.');
+                    }
+                } else {
+                    console.warn('No keys found in localStorage for this user');
+                    throw new Error('No Nostr keys found for this account. Please sign up again or contact support.');
+                }
+            }
             
             // Update state
             state.currentUser = data.user;
@@ -922,7 +1037,7 @@ const social = {
             state.isAuthenticated = true;
             state.authSession = data.session;
             
-            console.log('User signed in successfully');
+            console.log('User signed in successfully with key recovery');
             return { success: true, user: data.user, keys: keys };
             
         } catch (error) {
@@ -1088,6 +1203,59 @@ const social = {
             };
         } catch (error) {
             console.error('Encryption integration test failed:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    },
+
+    // Test method for key recovery functionality
+    async testKeyRecovery() {
+        console.log('Testing key recovery functionality...');
+        
+        try {
+            const testEmail = 'test-recovery@example.com';
+            const testPassword = 'TestPassword123!';
+            
+            console.log('Test email:', testEmail);
+            console.log('Test password:', testPassword);
+            
+            // Test key generation
+            const testKeys = this.generateNostrKeys();
+            console.log('Generated test keys:', testKeys);
+            
+            // Test encryption
+            const encryptedKeys = await this.encryptKeys(testKeys, testPassword);
+            console.log('Encrypted keys:', encryptedKeys);
+            
+            // Test decryption
+            const decryptedPrivateKey = await keyEncryption.decryptData(encryptedKeys, testPassword);
+            console.log('Decrypted private key:', decryptedPrivateKey);
+            
+            // Test key reconstruction
+            const reconstructedKeys = {
+                privateKey: decryptedPrivateKey,
+                publicKey: nostrKeys.decodePublicKey(nostrKeys.encodePublicKey(decryptedPrivateKey)),
+                npub: nostrKeys.encodePublicKey(nostrKeys.decodePublicKey(decryptedPrivateKey)),
+                nsec: nostrKeys.encodePrivateKey(decryptedPrivateKey)
+            };
+            
+            console.log('Reconstructed keys:', reconstructedKeys);
+            
+            // Verify round trip
+            const roundTripSuccess = reconstructedKeys.privateKey === testKeys.privateKey;
+            console.log('Round trip test:', roundTripSuccess);
+            
+            return {
+                success: true,
+                originalKeys: testKeys,
+                encryptedKeys: encryptedKeys,
+                reconstructedKeys: reconstructedKeys,
+                roundTripSuccess: roundTripSuccess
+            };
+        } catch (error) {
+            console.error('Key recovery test failed:', error);
             return {
                 success: false,
                 error: error.message
