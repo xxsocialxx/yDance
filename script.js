@@ -1636,31 +1636,31 @@ const nostrKeys = {
 
     encodePublicKey(hexKey) {
         try {
-            if (typeof window !== 'undefined' && window.nostrTools) {
+            if (typeof window !== 'undefined' && window.nostrTools && window.nostrTools.nip19) {
                 const { nip19 } = window.nostrTools;
                 return nip19.npubEncode(hexKey);
             } else {
-                // Fallback encoding
-                return 'npub1' + hexKey.substring(0, 10);
+                // Fallback encoding - use full key length
+                return 'npub1' + hexKey;
             }
         } catch (error) {
             console.error('Error encoding public key:', error);
-            return 'npub1' + hexKey.substring(0, 10);
+            return 'npub1' + hexKey;
         }
     },
 
     encodePrivateKey(hexKey) {
         try {
-            if (typeof window !== 'undefined' && window.nostrTools) {
+            if (typeof window !== 'undefined' && window.nostrTools && window.nostrTools.nip19) {
                 const { nip19 } = window.nostrTools;
                 return nip19.nsecEncode(hexKey);
             } else {
-                // Fallback encoding
-                return 'nsec1' + hexKey.substring(0, 10);
+                // Fallback encoding - use full key length
+                return 'nsec1' + hexKey;
             }
         } catch (error) {
             console.error('Error encoding private key:', error);
-            return 'nsec1' + hexKey.substring(0, 10);
+            return 'nsec1' + hexKey;
         }
     },
 
