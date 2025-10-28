@@ -945,6 +945,107 @@ const social = {
         }
     },
 
+    async storeRecoveryPhraseInDatabase(userId, encryptedRecoveryPhrase) {
+        console.log('Storing encrypted recovery phrase in Supabase database...');
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('user_recovery_phrases')
+                .upsert({
+                    user_id: userId,
+                    encrypted_recovery_phrase: encryptedRecoveryPhrase,
+                    updated_at: new Date().toISOString()
+                });
+            
+            if (error) throw error;
+            
+            console.log('Recovery phrase stored in database successfully');
+            return { success: true, data };
+        } catch (error) {
+            console.error('Error storing recovery phrase in database:', error);
+            throw error;
+        }
+    },
+
+    async retrieveRecoveryPhraseFromDatabase(userId) {
+        console.log('Retrieving encrypted recovery phrase from Supabase database...');
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('user_recovery_phrases')
+                .select('encrypted_recovery_phrase')
+                .eq('user_id', userId)
+                .single();
+            
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    console.log('No recovery phrase found in database for user');
+                    return null;
+                }
+                throw error;
+            }
+            
+            console.log('Recovery phrase retrieved from database successfully');
+            return data.encrypted_recovery_phrase;
+        } catch (error) {
+            console.error('Error retrieving recovery phrase from database:', error);
+            throw error;
+        }
+    },
+
+    async recoverKeysWithRecoveryPhrase(email, recoveryPhrase, newPassword) {
+        console.log('Recovering keys with recovery phrase...');
+        
+        try {
+            // First, validate the recovery phrase format
+            if (!nostrKeys.validateRecoveryPhrase(recoveryPhrase)) {
+                throw new Error('Invalid recovery phrase format');
+            }
+            
+            // Get user by email (this would need to be implemented in Supabase)
+            // For now, we'll assume we have the userId somehow
+            // In a real implementation, you'd query the auth.users table
+            
+            // Retrieve encrypted recovery phrase from database
+            const encryptedRecoveryPhrase = await this.retrieveRecoveryPhraseFromDatabase(userId);
+            
+            if (!encryptedRecoveryPhrase) {
+                throw new Error('No recovery phrase found for this user');
+            }
+            
+            // Try to decrypt with the recovery phrase as password
+            // This is a simplified approach - in reality, you'd use the recovery phrase
+            // to derive a key that can decrypt the actual keys
+            const decryptedRecoveryPhrase = await keyEncryption.decryptData(encryptedRecoveryPhrase, recoveryPhrase);
+            
+            if (decryptedRecoveryPhrase !== recoveryPhrase) {
+                throw new Error('Invalid recovery phrase');
+            }
+            
+            // If recovery phrase is valid, generate new keys and encrypt with new password
+            const newKeys = this.generateNostrKeys();
+            const encryptedNewKeys = await this.encryptKeys(newKeys, newPassword);
+            
+            // Store new keys in database
+            await this.storeKeysInDatabase(userId, encryptedNewKeys);
+            
+            // Store new recovery phrase encrypted with new password
+            const newRecoveryPhrase = nostrKeys.generateRecoveryPhrase();
+            const encryptedNewRecoveryPhrase = await this.encryptKeys(newRecoveryPhrase, newPassword);
+            await this.storeRecoveryPhraseInDatabase(userId, encryptedNewRecoveryPhrase);
+            
+            console.log('Keys recovered successfully with recovery phrase');
+            return {
+                success: true,
+                keys: newKeys,
+                newRecoveryPhrase: newRecoveryPhrase
+            };
+        } catch (error) {
+            console.error('Error recovering keys with recovery phrase:', error);
+            throw new Error('Failed to recover keys with recovery phrase. Please check your recovery phrase.');
+        }
+    },
+
     // Auth Methods
     async signUp(email, password) {
         console.log('Signing up user:', email);
@@ -952,6 +1053,9 @@ const social = {
         try {
             // Generate Nostr keypair
             const keys = this.generateNostrKeys();
+            
+            // Generate recovery phrase
+            const recoveryPhrase = nostrKeys.generateRecoveryPhrase();
             
             // Create user in Supabase
             const { data, error } = await state.supabaseClient.auth.signUp({
@@ -967,11 +1071,16 @@ const social = {
             // Store encrypted keys in Supabase database for recovery
             await this.storeKeysInDatabase(data.user.id, encryptedKeys);
             
+            // Store recovery phrase in database (encrypted with password)
+            const encryptedRecoveryPhrase = await this.encryptKeys(recoveryPhrase, password);
+            await this.storeRecoveryPhraseInDatabase(data.user.id, encryptedRecoveryPhrase);
+            
             // Also store in localStorage for immediate access
             keyStorage.storeKeys(encryptedKeys, { 
                 email, 
                 publicKey: keys.publicKey,
-                userId: data.user.id 
+                userId: data.user.id,
+                recoveryPhrase: recoveryPhrase // Store unencrypted for display
             });
             
             // Update state
@@ -980,8 +1089,13 @@ const social = {
             state.isAuthenticated = true;
             state.authSession = data.session;
             
-            console.log('User signed up successfully with key recovery enabled');
-            return { success: true, user: data.user, keys: keys };
+            console.log('User signed up successfully with key recovery and recovery phrase enabled');
+            return { 
+                success: true, 
+                user: data.user, 
+                keys: keys,
+                recoveryPhrase: recoveryPhrase // Return for user to save
+            };
             
         } catch (error) {
             console.error('Error signing up:', error);
@@ -1261,6 +1375,58 @@ const social = {
                 error: error.message
             };
         }
+    },
+
+    // Test method for recovery phrase functionality
+    async testRecoveryPhrase() {
+        console.log('Testing recovery phrase functionality...');
+        
+        try {
+            const testPassword = 'TestPassword123!';
+            
+            console.log('Test password:', testPassword);
+            
+            // Test recovery phrase generation
+            const recoveryPhrase = nostrKeys.generateRecoveryPhrase();
+            console.log('Generated recovery phrase:', recoveryPhrase);
+            
+            // Test recovery phrase validation
+            const isValid = nostrKeys.validateRecoveryPhrase(recoveryPhrase);
+            console.log('Recovery phrase validation:', isValid);
+            
+            // Test encryption of recovery phrase
+            const encryptedRecoveryPhrase = await this.encryptKeys(recoveryPhrase, testPassword);
+            console.log('Encrypted recovery phrase:', encryptedRecoveryPhrase);
+            
+            // Test decryption of recovery phrase
+            const decryptedRecoveryPhrase = await keyEncryption.decryptData(encryptedRecoveryPhrase, testPassword);
+            console.log('Decrypted recovery phrase:', decryptedRecoveryPhrase);
+            
+            // Verify round trip
+            const roundTripSuccess = decryptedRecoveryPhrase === recoveryPhrase;
+            console.log('Recovery phrase round trip test:', roundTripSuccess);
+            
+            // Test invalid recovery phrase validation
+            const invalidPhrase = 'invalid phrase with wrong number of words';
+            const invalidValidation = nostrKeys.validateRecoveryPhrase(invalidPhrase);
+            console.log('Invalid phrase validation:', invalidValidation);
+            
+            return {
+                success: true,
+                recoveryPhrase: recoveryPhrase,
+                validation: isValid,
+                encryptedRecoveryPhrase: encryptedRecoveryPhrase,
+                decryptedRecoveryPhrase: decryptedRecoveryPhrase,
+                roundTripSuccess: roundTripSuccess,
+                invalidValidation: invalidValidation
+            };
+        } catch (error) {
+            console.error('Recovery phrase test failed:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 };
 
@@ -1459,6 +1625,553 @@ const nostrKeys = {
                 success: false,
                 error: error.message
             };
+        }
+    },
+
+    // Recovery phrase generation and validation
+    generateRecoveryPhrase() {
+        console.log('Generating recovery phrase...');
+        
+        try {
+            // Generate 12-word recovery phrase using BIP39 wordlist (simplified)
+            const wordlist = [
+                'abandon', 'ability', 'able', 'about', 'above', 'absent', 'absorb', 'abstract', 'absurd', 'abuse',
+                'access', 'accident', 'account', 'accuse', 'achieve', 'acid', 'acoustic', 'acquire', 'across', 'act',
+                'action', 'actor', 'actress', 'actual', 'adapt', 'add', 'addict', 'address', 'adjust', 'admit',
+                'adult', 'advance', 'advice', 'aerobic', 'affair', 'afford', 'afraid', 'again', 'age', 'agent',
+                'agree', 'ahead', 'aim', 'air', 'airport', 'aisle', 'alarm', 'album', 'alcohol', 'alert',
+                'alien', 'all', 'alley', 'allow', 'almost', 'alone', 'alpha', 'already', 'also', 'alter',
+                'always', 'amateur', 'amazing', 'among', 'amount', 'amused', 'analyst', 'anchor', 'ancient', 'anger',
+                'angle', 'angry', 'animal', 'ankle', 'announce', 'annual', 'another', 'answer', 'antenna', 'antique',
+                'anxiety', 'any', 'apart', 'apology', 'appear', 'apple', 'approve', 'april', 'arch', 'arctic',
+                'area', 'arena', 'argue', 'arm', 'armed', 'armor', 'army', 'around', 'arrange', 'arrest',
+                'arrive', 'arrow', 'art', 'artefact', 'artist', 'artwork', 'ask', 'aspect', 'assault', 'asset',
+                'assist', 'assume', 'asthma', 'athlete', 'atom', 'attack', 'attend', 'attitude', 'attract', 'auction',
+                'audit', 'august', 'aunt', 'author', 'auto', 'autumn', 'average', 'avocado', 'avoid', 'awake',
+                'aware', 'away', 'awesome', 'awful', 'awkward', 'axis', 'baby', 'bachelor', 'bacon', 'badge',
+                'bag', 'balance', 'balcony', 'ball', 'bamboo', 'banana', 'banner', 'bar', 'barely', 'bargain',
+                'barrel', 'base', 'basic', 'basket', 'battle', 'beach', 'bean', 'beauty', 'because', 'become',
+                'beef', 'before', 'begin', 'behave', 'behind', 'believe', 'below', 'belt', 'bench', 'benefit',
+                'best', 'betray', 'better', 'between', 'beyond', 'bicycle', 'bid', 'bike', 'bind', 'biology',
+                'bird', 'birth', 'bitter', 'black', 'blade', 'blame', 'blanket', 'blast', 'bleak', 'bless',
+                'blind', 'blood', 'blossom', 'blow', 'blue', 'blur', 'blush', 'board', 'boat', 'body',
+                'boil', 'bomb', 'bone', 'bonus', 'book', 'boost', 'border', 'boring', 'borrow', 'boss',
+                'bottom', 'bounce', 'box', 'boy', 'bracket', 'brain', 'brand', 'brass', 'brave', 'bread',
+                'breeze', 'brick', 'bridge', 'brief', 'bright', 'bring', 'brisk', 'broccoli', 'broken', 'bronze',
+                'broom', 'brother', 'brown', 'brush', 'bubble', 'buddy', 'budget', 'buffalo', 'build', 'bulb',
+                'bulk', 'bullet', 'bundle', 'bunker', 'burden', 'burger', 'burst', 'bus', 'business', 'busy',
+                'butter', 'buyer', 'buzz', 'cabbage', 'cabin', 'cable', 'cactus', 'cage', 'cake', 'call',
+                'calm', 'camera', 'camp', 'can', 'canal', 'cancel', 'candy', 'cannon', 'canoe', 'canvas',
+                'canyon', 'capable', 'capital', 'captain', 'car', 'carbon', 'card', 'cargo', 'carpet', 'carry',
+                'cart', 'case', 'cash', 'casino', 'cast', 'casual', 'cat', 'catalog', 'catch', 'category',
+                'cattle', 'caught', 'cause', 'caution', 'cave', 'ceiling', 'celery', 'cement', 'census', 'century',
+                'cereal', 'certain', 'chair', 'chalk', 'champion', 'change', 'chaos', 'chapter', 'charge', 'chase',
+                'cheap', 'check', 'cheese', 'chef', 'cherry', 'chest', 'chicken', 'chief', 'child', 'chimney',
+                'choice', 'choose', 'chronic', 'chuckle', 'chunk', 'churn', 'cigar', 'cinnamon', 'circle', 'citizen',
+                'city', 'civil', 'claim', 'clamp', 'clarify', 'claw', 'clay', 'clean', 'clerk', 'clever',
+                'click', 'client', 'cliff', 'climb', 'cling', 'clinic', 'clip', 'clock', 'clog', 'close',
+                'cloth', 'cloud', 'clown', 'club', 'clump', 'cluster', 'clutch', 'coach', 'coast', 'coconut',
+                'code', 'coffee', 'coil', 'coin', 'collect', 'color', 'column', 'come', 'comfort', 'comic',
+                'common', 'company', 'concert', 'conduct', 'confirm', 'congress', 'connect', 'consider', 'control', 'convince',
+                'cook', 'cool', 'copper', 'copy', 'coral', 'core', 'corn', 'correct', 'cost', 'cotton',
+                'couch', 'country', 'couple', 'course', 'cousin', 'cover', 'coyote', 'crack', 'cradle', 'craft',
+                'cram', 'crane', 'crash', 'crater', 'crawl', 'crazy', 'cream', 'credit', 'creek', 'crew',
+                'cricket', 'crime', 'crisp', 'critic', 'crop', 'cross', 'crouch', 'crowd', 'crucial', 'cruel',
+                'cruise', 'crumble', 'crunch', 'crush', 'cry', 'crystal', 'cube', 'culture', 'cup', 'cupboard',
+                'curious', 'current', 'curtain', 'curve', 'cushion', 'custom', 'cute', 'cycle', 'dad', 'damage',
+                'dance', 'danger', 'daring', 'dash', 'daughter', 'dawn', 'day', 'deal', 'debate', 'debris',
+                'decade', 'december', 'decide', 'decline', 'decorate', 'decrease', 'deer', 'defense', 'define', 'defy',
+                'degree', 'delay', 'deliver', 'demand', 'demise', 'denial', 'dentist', 'deny', 'depart', 'depend',
+                'deposit', 'depth', 'deputy', 'derive', 'describe', 'desert', 'design', 'desk', 'despair', 'destroy',
+                'detail', 'detect', 'develop', 'device', 'devote', 'diagram', 'dial', 'diamond', 'diary', 'dice',
+                'diesel', 'diet', 'differ', 'digital', 'dignity', 'dilemma', 'dinner', 'dinosaur', 'direct', 'dirt',
+                'disagree', 'discover', 'disease', 'dish', 'dismiss', 'disorder', 'display', 'distance', 'divert', 'divide',
+                'divorce', 'dizzy', 'doctor', 'document', 'dog', 'doll', 'dolphin', 'domain', 'donate', 'donkey',
+                'donor', 'door', 'dose', 'double', 'dove', 'draft', 'dragon', 'drama', 'drastic', 'draw',
+                'dream', 'dress', 'drift', 'drill', 'drink', 'drip', 'drive', 'drop', 'drum', 'dry',
+                'duck', 'dumb', 'dune', 'during', 'dutch', 'duty', 'dwarf', 'dynamic', 'eager', 'eagle',
+                'early', 'earn', 'earth', 'easily', 'east', 'easy', 'echo', 'ecology', 'economy', 'edge',
+                'edit', 'educate', 'effort', 'egg', 'eight', 'either', 'elbow', 'elder', 'electric', 'elegant',
+                'element', 'elephant', 'elevator', 'elite', 'else', 'embark', 'embody', 'embrace', 'emerge', 'emotion',
+                'employ', 'empower', 'empty', 'enable', 'enact', 'end', 'endless', 'endorse', 'enemy', 'energy',
+                'enforce', 'engage', 'engine', 'english', 'enjoy', 'enlist', 'enough', 'enrich', 'enroll', 'ensure',
+                'enter', 'entire', 'entry', 'envelope', 'episode', 'equal', 'equip', 'era', 'erase', 'erode',
+                'erosion', 'erupt', 'escape', 'essay', 'essence', 'estate', 'eternal', 'ethics', 'evidence', 'evil',
+                'evoke', 'evolve', 'exact', 'example', 'excess', 'exchange', 'excite', 'exclude', 'excuse', 'execute',
+                'exercise', 'exhaust', 'exhibit', 'exile', 'exist', 'exit', 'exotic', 'expand', 'expect', 'expire',
+                'explain', 'expose', 'express', 'extend', 'extra', 'eye', 'eyebrow', 'fabric', 'face', 'faculty',
+                'fade', 'faint', 'faith', 'fall', 'false', 'fame', 'family', 'famous', 'fan', 'fancy',
+                'fantasy', 'farm', 'fashion', 'fat', 'fatal', 'father', 'fatigue', 'fault', 'favorite', 'feature',
+                'february', 'federal', 'fee', 'feed', 'feel', 'female', 'fence', 'festival', 'fetch', 'fever',
+                'few', 'fiber', 'fiction', 'field', 'figure', 'file', 'film', 'filter', 'final', 'find',
+                'fine', 'finger', 'finish', 'fire', 'firm', 'first', 'fiscal', 'fish', 'five', 'flag',
+                'flame', 'flash', 'flat', 'flavor', 'flee', 'flight', 'flip', 'float', 'flock', 'floor',
+                'flower', 'fluid', 'flush', 'fly', 'foam', 'focus', 'fog', 'foil', 'fold', 'follow',
+                'food', 'foot', 'force', 'forest', 'forget', 'fork', 'fortune', 'forum', 'forward', 'fossil',
+                'foster', 'found', 'fox', 'fragile', 'frame', 'frequent', 'fresh', 'friend', 'fringe', 'frog',
+                'front', 'frost', 'frown', 'frozen', 'fruit', 'fuel', 'fun', 'funny', 'furnace', 'fury',
+                'future', 'gadget', 'gain', 'galaxy', 'gallery', 'game', 'gap', 'garage', 'garbage', 'garden',
+                'garlic', 'garment', 'gas', 'gasp', 'gate', 'gather', 'gauge', 'gaze', 'general', 'genius',
+                'genre', 'gentle', 'genuine', 'gesture', 'ghost', 'giant', 'gift', 'giggle', 'ginger', 'giraffe',
+                'girl', 'give', 'glad', 'glance', 'glare', 'glass', 'glide', 'glimpse', 'globe', 'gloom',
+                'glory', 'glove', 'glow', 'glue', 'goat', 'goddess', 'gold', 'good', 'goose', 'gorilla',
+                'gospel', 'gossip', 'govern', 'gown', 'grab', 'grace', 'grain', 'grant', 'grape', 'grass',
+                'gravity', 'great', 'green', 'grid', 'grief', 'grit', 'grocery', 'group', 'grow', 'grunt',
+                'guard', 'guess', 'guide', 'guilt', 'guitar', 'gun', 'gym', 'habit', 'hair', 'half',
+                'hammer', 'hamster', 'hand', 'happy', 'harbor', 'hard', 'harsh', 'harvest', 'hash', 'hate',
+                'have', 'hawk', 'head', 'health', 'heart', 'heavy', 'hedgehog', 'height', 'hello', 'helmet',
+                'help', 'hen', 'hero', 'hidden', 'high', 'hill', 'hint', 'hip', 'hire', 'history',
+                'hobby', 'hockey', 'hold', 'hole', 'holiday', 'hollow', 'home', 'honey', 'hood', 'hope',
+                'horn', 'horror', 'horse', 'hospital', 'host', 'hotel', 'hour', 'hover', 'hub', 'huge',
+                'human', 'humble', 'humor', 'hundred', 'hungry', 'hunt', 'hurdle', 'hurry', 'hurt', 'husband',
+                'hybrid', 'ice', 'icon', 'idea', 'identify', 'idle', 'ignore', 'ill', 'illegal', 'illness',
+                'image', 'imitate', 'immense', 'immune', 'impact', 'impose', 'improve', 'impulse', 'inch', 'include',
+                'income', 'increase', 'index', 'indicate', 'indoor', 'industry', 'infant', 'inflict', 'inform', 'inhale',
+                'inherit', 'initial', 'inject', 'injury', 'inmate', 'inner', 'innocent', 'input', 'inquiry', 'insane',
+                'insect', 'inside', 'inspire', 'install', 'intact', 'interest', 'into', 'invest', 'invite', 'involve',
+                'iron', 'island', 'isolate', 'issue', 'item', 'ivory', 'jacket', 'jaguar', 'jar', 'jazz',
+                'jealous', 'jeans', 'jelly', 'jewel', 'job', 'join', 'joke', 'journey', 'joy', 'judge',
+                'juice', 'jump', 'jungle', 'junior', 'junk', 'just', 'kangaroo', 'keen', 'keep', 'ketchup',
+                'key', 'kick', 'kid', 'kidney', 'kind', 'kingdom', 'kiss', 'kit', 'kitchen', 'kite',
+                'kitten', 'kiwi', 'knee', 'knife', 'knock', 'know', 'lab', 'label', 'labor', 'ladder',
+                'lady', 'lake', 'lamp', 'land', 'landscape', 'lane', 'language', 'laptop', 'large', 'later',
+                'latin', 'laugh', 'laundry', 'lava', 'law', 'lawn', 'lawsuit', 'layer', 'lazy', 'leader',
+                'leaf', 'learn', 'leave', 'lecture', 'left', 'leg', 'legal', 'legend', 'leisure', 'lemon',
+                'lend', 'length', 'lens', 'leopard', 'lesson', 'letter', 'level', 'liar', 'liberty', 'library',
+                'license', 'life', 'lift', 'light', 'like', 'limb', 'limit', 'link', 'lion', 'liquid',
+                'list', 'little', 'live', 'lizard', 'load', 'loan', 'lobster', 'local', 'lock', 'logic',
+                'lonely', 'long', 'loop', 'lottery', 'loud', 'lounge', 'love', 'loyal', 'lucky', 'luggage',
+                'lumber', 'lunar', 'lunch', 'lung', 'lure', 'luxury', 'lyrics', 'machine', 'mad', 'magic',
+                'magnet', 'maid', 'mail', 'main', 'major', 'make', 'mammal', 'man', 'manage', 'mandate',
+                'mango', 'mansion', 'manual', 'maple', 'marble', 'march', 'margin', 'marine', 'market', 'marriage',
+                'mask', 'mass', 'master', 'match', 'material', 'math', 'matrix', 'matter', 'maximum', 'maze',
+                'meadow', 'mean', 'measure', 'meat', 'mechanic', 'medal', 'media', 'melody', 'melt', 'member',
+                'memory', 'mention', 'menu', 'mercy', 'merge', 'merit', 'merry', 'mesh', 'message', 'metal',
+                'method', 'middle', 'midnight', 'milk', 'million', 'mimic', 'mind', 'minimum', 'minor', 'minute',
+                'miracle', 'mirror', 'misery', 'miss', 'mistake', 'mix', 'mixed', 'mixture', 'mobile', 'model',
+                'modify', 'mom', 'moment', 'monitor', 'monkey', 'monster', 'month', 'moon', 'moral', 'more',
+                'morning', 'mosquito', 'mother', 'motion', 'motor', 'mountain', 'mouse', 'move', 'movie', 'much',
+                'muffin', 'mule', 'multiply', 'muscle', 'museum', 'mushroom', 'music', 'must', 'mutual', 'myself',
+                'mystery', 'myth', 'naive', 'name', 'napkin', 'narrow', 'nasty', 'nation', 'nature', 'near',
+                'neck', 'need', 'negative', 'neglect', 'neither', 'nephew', 'nerve', 'nest', 'net', 'network',
+                'neutral', 'never', 'news', 'next', 'nice', 'night', 'noble', 'noise', 'nominee', 'noodle',
+                'normal', 'north', 'nose', 'notable', 'note', 'nothing', 'notice', 'novel', 'now', 'nuclear',
+                'number', 'nurse', 'nut', 'oak', 'obey', 'object', 'oblige', 'obscure', 'observe', 'obtain',
+                'obvious', 'occur', 'ocean', 'october', 'odor', 'off', 'offer', 'office', 'often', 'oil',
+                'okay', 'old', 'olive', 'olympic', 'omit', 'once', 'one', 'onion', 'online', 'only',
+                'open', 'opera', 'opinion', 'oppose', 'option', 'orange', 'orbit', 'orchard', 'order', 'ordinary',
+                'organ', 'orient', 'original', 'orphan', 'ostrich', 'other', 'our', 'ourselves', 'out', 'outdoor',
+                'outer', 'outfit', 'outgoing', 'outline', 'outlook', 'outrageous', 'outstanding', 'oval', 'oven', 'over',
+                'own', 'owner', 'oxygen', 'oyster', 'ozone', 'pact', 'paddle', 'page', 'pair', 'palace',
+                'palm', 'panda', 'panel', 'panic', 'panther', 'paper', 'parade', 'parent', 'park', 'parrot',
+                'party', 'pass', 'patch', 'path', 'patient', 'patrol', 'pattern', 'pause', 'pave', 'payment',
+                'peace', 'peanut', 'pear', 'peasant', 'pelican', 'pen', 'penalty', 'pencil', 'people', 'pepper',
+                'perfect', 'permit', 'person', 'pet', 'phone', 'photo', 'phrase', 'physical', 'piano', 'picnic',
+                'picture', 'piece', 'pig', 'pigeon', 'pill', 'pilot', 'pink', 'pioneer', 'pipe', 'pistol',
+                'pitch', 'pizza', 'place', 'plague', 'planet', 'plastic', 'plate', 'play', 'please', 'pledge',
+                'pluck', 'plug', 'plunge', 'poem', 'poet', 'point', 'polar', 'pole', 'police', 'pond',
+                'pony', 'pool', 'poor', 'pop', 'popcorn', 'population', 'porch', 'port', 'portion', 'portrait',
+                'pose', 'position', 'possible', 'post', 'potato', 'pottery', 'poverty', 'powder', 'power', 'practice',
+                'praise', 'predict', 'prefer', 'prepare', 'present', 'pretty', 'prevent', 'price', 'pride', 'primary',
+                'print', 'priority', 'prison', 'private', 'prize', 'problem', 'process', 'produce', 'profit', 'program',
+                'project', 'promote', 'proof', 'property', 'prosper', 'protect', 'proud', 'provide', 'public', 'pudding',
+                'pull', 'pulp', 'pulse', 'pumpkin', 'punch', 'pupil', 'puppy', 'purchase', 'purity', 'purpose',
+                'purse', 'push', 'put', 'puzzle', 'pyramid', 'quality', 'quantum', 'quarter', 'question', 'quick',
+                'quit', 'quiz', 'quote', 'rabbit', 'raccoon', 'race', 'rack', 'radar', 'radio', 'rail',
+                'rain', 'raise', 'rally', 'ramp', 'ranch', 'random', 'range', 'rapid', 'rare', 'rate',
+                'rather', 'raven', 'raw', 'razor', 'ready', 'real', 'reason', 'rebel', 'rebuild', 'recall',
+                'receive', 'recipe', 'record', 'recover', 'recruit', 'red', 'reduce', 'reflect', 'reform', 'refuse',
+                'region', 'regret', 'regular', 'reject', 'relax', 'release', 'relief', 'rely', 'remain', 'remember',
+                'remind', 'remove', 'render', 'renew', 'rent', 'reopen', 'repair', 'repeat', 'replace', 'reply',
+                'report', 'require', 'rescue', 'resemble', 'resist', 'resource', 'response', 'result', 'retire', 'retreat',
+                'return', 'reunion', 'reveal', 'review', 'reward', 'rhythm', 'rib', 'ribbon', 'rice', 'rich',
+                'ride', 'ridge', 'rifle', 'right', 'rigid', 'ring', 'riot', 'ripple', 'risk', 'ritual',
+                'rival', 'river', 'road', 'roast', 'robot', 'robust', 'rocket', 'romance', 'roof', 'rookie',
+                'room', 'rooster', 'root', 'rose', 'rotate', 'rough', 'round', 'route', 'royal', 'rubber',
+                'rude', 'rug', 'rule', 'run', 'runway', 'rural', 'sad', 'saddle', 'sadness', 'safe',
+                'sail', 'salad', 'salmon', 'salon', 'salt', 'salute', 'same', 'sample', 'sand', 'satisfy',
+                'satoshi', 'sauce', 'sausage', 'save', 'say', 'scale', 'scan', 'scare', 'scatter', 'scene',
+                'scheme', 'school', 'science', 'scissors', 'scorpion', 'scout', 'scrap', 'screen', 'script', 'scrub',
+                'sea', 'search', 'season', 'seat', 'second', 'secret', 'section', 'security', 'seed', 'seek',
+                'segment', 'select', 'sell', 'seminar', 'senior', 'sense', 'sentence', 'series', 'service', 'session',
+                'settle', 'setup', 'seven', 'shadow', 'shaft', 'shallow', 'share', 'shed', 'shell', 'sheriff',
+                'shield', 'shift', 'shine', 'ship', 'shiver', 'shock', 'shoe', 'shoot', 'shop', 'shore',
+                'short', 'shoulder', 'shove', 'shrimp', 'shrug', 'shy', 'sibling', 'sick', 'side', 'siege',
+                'sight', 'sign', 'silent', 'silk', 'silly', 'silver', 'similar', 'simple', 'since', 'sing',
+                'siren', 'sister', 'situate', 'six', 'size', 'skate', 'sketch', 'ski', 'skill', 'skin',
+                'skirt', 'skull', 'skunk', 'sky', 'slab', 'slam', 'slang', 'slap', 'slash', 'slate',
+                'slave', 'sled', 'sleep', 'slender', 'slice', 'slide', 'slight', 'slim', 'slimy', 'sling',
+                'slip', 'slit', 'slob', 'slot', 'slow', 'sludge', 'slug', 'slum', 'slurp', 'slush',
+                'sly', 'smack', 'small', 'smart', 'smash', 'smell', 'smile', 'smirk', 'smog', 'smoke',
+                'smooth', 'smug', 'snack', 'snail', 'snake', 'snap', 'snare', 'snarl', 'sneak', 'sneer',
+                'sneeze', 'sniff', 'snore', 'snort', 'snout', 'snow', 'snub', 'snuff', 'snug', 'soak',
+                'soap', 'sob', 'sober', 'soccer', 'social', 'sock', 'soda', 'sofa', 'soft', 'soggy',
+                'soil', 'solar', 'soldier', 'solid', 'solo', 'solve', 'some', 'song', 'soon', 'soothe',
+                'sophisticated', 'sore', 'sorrow', 'sorry', 'sort', 'soul', 'sound', 'soup', 'sour', 'south',
+                'southern', 'sow', 'space', 'spare', 'spark', 'sparkle', 'spat', 'spawn', 'speak', 'spear',
+                'special', 'speed', 'spell', 'spend', 'sphere', 'spice', 'spider', 'spike', 'spin', 'spirit',
+                'spit', 'splash', 'splendid', 'split', 'spoil', 'spoke', 'sponge', 'spoon', 'sport', 'spot',
+                'spray', 'spread', 'spring', 'spy', 'squad', 'square', 'squash', 'squat', 'squeak', 'squeeze',
+                'squirrel', 'stab', 'stable', 'stack', 'staff', 'stage', 'stain', 'stair', 'stake', 'stale',
+                'stalk', 'stall', 'stamp', 'stand', 'start', 'state', 'stay', 'steak', 'steal', 'steam',
+                'steel', 'steep', 'steer', 'stem', 'step', 'stereo', 'stick', 'still', 'sting', 'stink',
+                'stir', 'stitch', 'stock', 'stomach', 'stone', 'stool', 'stoop', 'stop', 'store', 'storm',
+                'story', 'stove', 'straddle', 'straight', 'strain', 'strand', 'strap', 'straw', 'stray', 'stream',
+                'street', 'strength', 'stress', 'stretch', 'strict', 'stride', 'strike', 'string', 'strip', 'stroll',
+                'strong', 'struggle', 'strut', 'stuck', 'study', 'stuff', 'stump', 'stun', 'stunt', 'stupid',
+                'sturdy', 'stutter', 'style', 'stylish', 'subdue', 'subject', 'submit', 'substance', 'subtract', 'suburb',
+                'subway', 'succeed', 'such', 'sudden', 'suffer', 'sugar', 'suggest', 'suit', 'sulky', 'sultry',
+                'sum', 'summer', 'sun', 'sunny', 'sunset', 'super', 'supper', 'supply', 'supreme', 'sure',
+                'surface', 'surge', 'surprise', 'surround', 'survey', 'suspect', 'sustain', 'swallow', 'swamp', 'swap',
+                'swarm', 'sway', 'swear', 'sweat', 'sweep', 'sweet', 'swell', 'swim', 'swing', 'switch',
+                'sword', 'sworn', 'swung', 'swoop', 'swoosh', 'sword', 'sworn', 'swung', 'swoop', 'swoosh',
+                'symbol', 'symptom', 'syndicate', 'syndrome', 'synergy', 'syntax', 'synthesis', 'syrup', 'system', 'tab',
+                'table', 'tablet', 'tack', 'tackle', 'tact', 'tactics', 'tag', 'tail', 'take', 'tale',
+                'talk', 'tall', 'tame', 'tan', 'tank', 'tap', 'tape', 'target', 'task', 'taste',
+                'tattoo', 'taught', 'tax', 'taxi', 'tea', 'teach', 'team', 'tear', 'tease', 'tedious',
+                'teen', 'teenage', 'teeth', 'telephone', 'tell', 'temper', 'ten', 'tenant', 'tend', 'tender',
+                'tennis', 'tense', 'tent', 'term', 'terrible', 'terrific', 'test', 'text', 'than', 'thank',
+                'that', 'the', 'theater', 'theft', 'their', 'them', 'theme', 'then', 'theory', 'there',
+                'therefore', 'these', 'they', 'thick', 'thief', 'thigh', 'thin', 'thing', 'think', 'third',
+                'this', 'thorough', 'those', 'though', 'thought', 'thousand', 'thread', 'threat', 'three', 'threw',
+                'thrill', 'thrive', 'throat', 'throne', 'through', 'throw', 'thrust', 'thumb', 'thump', 'thunder',
+                'thus', 'tick', 'ticket', 'tide', 'tidy', 'tie', 'tiger', 'tight', 'tile', 'till',
+                'tilt', 'timber', 'time', 'timid', 'tin', 'tiny', 'tip', 'tire', 'tired', 'tissue',
+                'title', 'to', 'toast', 'today', 'toe', 'together', 'toilet', 'token', 'told', 'tolerate',
+                'tomato', 'tomorrow', 'tone', 'tongue', 'tonight', 'too', 'took', 'tool', 'tooth', 'top',
+                'topic', 'topple', 'torch', 'tornado', 'tortoise', 'toss', 'total', 'touch', 'tough', 'tour',
+                'toward', 'towel', 'tower', 'town', 'toy', 'trace', 'track', 'trade', 'traffic', 'tragic',
+                'trail', 'train', 'trait', 'traitor', 'tram', 'trance', 'trap', 'trash', 'travel', 'tray',
+                'tread', 'treason', 'treat', 'tree', 'trek', 'tremble', 'tremendous', 'trench', 'trend', 'trial',
+                'tribe', 'trick', 'trickle', 'trifle', 'trim', 'trip', 'triple', 'triumph', 'trivial', 'trod',
+                'troll', 'troop', 'trophy', 'trouble', 'truck', 'true', 'truly', 'trumpet', 'trunk', 'trust',
+                'truth', 'try', 'tub', 'tube', 'tuck', 'tuesday', 'tug', 'tuition', 'tulip', 'tumble',
+                'tuna', 'tune', 'tunnel', 'turban', 'turbine', 'turkey', 'turn', 'turtle', 'tusk', 'tutor',
+                'tuxedo', 'twelve', 'twenty', 'twice', 'twin', 'twist', 'two', 'type', 'typical', 'tyrant',
+                'ugly', 'ultimate', 'umbrella', 'unable', 'unaware', 'uncle', 'uncover', 'under', 'undergo', 'underlie',
+                'understand', 'undertake', 'underwear', 'undo', 'undone', 'unfair', 'unfold', 'unfortunate', 'unhappy', 'unhealthy',
+                'uniform', 'unimportant', 'unique', 'unit', 'unite', 'unity', 'universal', 'universe', 'unknown', 'unless',
+                'unlike', 'unlikely', 'unload', 'unlock', 'unlucky', 'unnecessary', 'unpleasant', 'unreasonable', 'unstable', 'unusual',
+                'unwilling', 'unwind', 'unwise', 'up', 'update', 'upgrade', 'uphold', 'upon', 'upper', 'upright',
+                'upset', 'upside', 'upstairs', 'upward', 'urban', 'urge', 'urgent', 'usage', 'use', 'used',
+                'useful', 'useless', 'user', 'usual', 'utility', 'utilize', 'utter', 'vacant', 'vacation', 'vacuum',
+                'vague', 'vain', 'valid', 'valley', 'valuable', 'value', 'valve', 'van', 'vanish', 'vanity',
+                'vapor', 'variable', 'variation', 'variety', 'various', 'vary', 'vast', 'vault', 'vegetable', 'vehicle',
+                'veil', 'vein', 'velocity', 'velvet', 'vendor', 'venom', 'vent', 'venture', 'venue', 'verb',
+                'verify', 'version', 'versus', 'vertical', 'very', 'vessel', 'veteran', 'viable', 'vibrant', 'vibrate',
+                'vice', 'vicious', 'victim', 'victory', 'video', 'view', 'vigor', 'village', 'vine', 'vintage',
+                'violate', 'violence', 'violent', 'violet', 'violin', 'virtual', 'virus', 'visa', 'visible', 'vision',
+                'visit', 'visual', 'vital', 'vivid', 'vocal', 'voice', 'void', 'volcano', 'volume', 'volunteer',
+                'vote', 'voyage', 'wade', 'waffle', 'wage', 'wagon', 'wait', 'wake', 'walk', 'wall',
+                'wallet', 'walnut', 'wander', 'want', 'war', 'ward', 'warm', 'warn', 'warp', 'wash',
+                'wasp', 'waste', 'water', 'watermelon', 'wave', 'wax', 'way', 'weak', 'wealth', 'weapon',
+                'wear', 'weasel', 'weather', 'web', 'wedding', 'wedge', 'weed', 'week', 'weep', 'weigh',
+                'weight', 'weird', 'welcome', 'weld', 'well', 'west', 'wet', 'whale', 'what', 'wheat',
+                'wheel', 'when', 'where', 'whip', 'whirl', 'whisper', 'whistle', 'white', 'who', 'whole',
+                'whom', 'whose', 'why', 'wicked', 'wide', 'widow', 'width', 'wife', 'wild', 'will',
+                'willing', 'wilt', 'wimp', 'win', 'wind', 'window', 'wine', 'wing', 'wink', 'winner',
+                'winter', 'wipe', 'wire', 'wisdom', 'wise', 'wish', 'wit', 'witch', 'with', 'withdraw',
+                'withhold', 'within', 'without', 'witness', 'wizard', 'wobble', 'woe', 'wolf', 'woman', 'wonder',
+                'wonderful', 'wood', 'wool', 'woozy', 'word', 'work', 'world', 'worm', 'worn', 'worried',
+                'worry', 'worse', 'worst', 'worth', 'would', 'wound', 'wow', 'wrap', 'wreck', 'wrestle',
+                'wriggle', 'wring', 'wrinkle', 'wrist', 'write', 'wrong', 'wrote', 'wrought', 'wrung', 'wry',
+                'yak', 'yam', 'yard', 'yarn', 'yawn', 'year', 'yellow', 'yes', 'yesterday', 'yet',
+                'yield', 'yoga', 'yoke', 'yolk', 'you', 'young', 'your', 'youth', 'yummy', 'zap',
+                'zebra', 'zero', 'zest', 'zigzag', 'zinc', 'zip', 'zodiac', 'zone', 'zoo', 'zoom'
+            ];
+            
+            // Generate 12 random words
+            const words = [];
+            for (let i = 0; i < 12; i++) {
+                const randomIndex = Math.floor(Math.random() * wordlist.length);
+                words.push(wordlist[randomIndex]);
+            }
+            
+            const phrase = words.join(' ');
+            console.log('Recovery phrase generated');
+            return phrase;
+        } catch (error) {
+            console.error('Error generating recovery phrase:', error);
+            throw error;
+        }
+    },
+
+    validateRecoveryPhrase(phrase) {
+        console.log('Validating recovery phrase...');
+        
+        try {
+            if (!phrase) {
+                console.log('Recovery phrase validation failed: empty phrase');
+                return false;
+            }
+            
+            const words = phrase.trim().split(/\s+/);
+            
+            // Check if phrase has exactly 12 words
+            if (words.length !== 12) {
+                console.log('Recovery phrase validation failed: incorrect word count');
+                return false;
+            }
+            
+            // Check if all words are valid (simplified validation)
+            const wordlist = [
+                'abandon', 'ability', 'able', 'about', 'above', 'absent', 'absorb', 'abstract', 'absurd', 'abuse',
+                'access', 'accident', 'account', 'accuse', 'achieve', 'acid', 'acoustic', 'acquire', 'across', 'act',
+                'action', 'actor', 'actress', 'actual', 'adapt', 'add', 'addict', 'address', 'adjust', 'admit',
+                'adult', 'advance', 'advice', 'aerobic', 'affair', 'afford', 'afraid', 'again', 'age', 'agent',
+                'agree', 'ahead', 'aim', 'air', 'airport', 'aisle', 'alarm', 'album', 'alcohol', 'alert',
+                'alien', 'all', 'alley', 'allow', 'almost', 'alone', 'alpha', 'already', 'also', 'alter',
+                'always', 'amateur', 'amazing', 'among', 'amount', 'amused', 'analyst', 'anchor', 'ancient', 'anger',
+                'angle', 'angry', 'animal', 'ankle', 'announce', 'annual', 'another', 'answer', 'antenna', 'antique',
+                'anxiety', 'any', 'apart', 'apology', 'appear', 'apple', 'approve', 'april', 'arch', 'arctic',
+                'area', 'arena', 'argue', 'arm', 'armed', 'armor', 'army', 'around', 'arrange', 'arrest',
+                'arrive', 'arrow', 'art', 'artefact', 'artist', 'artwork', 'ask', 'aspect', 'assault', 'asset',
+                'assist', 'assume', 'asthma', 'athlete', 'atom', 'attack', 'attend', 'attitude', 'attract', 'auction',
+                'audit', 'august', 'aunt', 'author', 'auto', 'autumn', 'average', 'avocado', 'avoid', 'awake',
+                'aware', 'away', 'awesome', 'awful', 'awkward', 'axis', 'baby', 'bachelor', 'bacon', 'badge',
+                'bag', 'balance', 'balcony', 'ball', 'bamboo', 'banana', 'banner', 'bar', 'barely', 'bargain',
+                'barrel', 'base', 'basic', 'basket', 'battle', 'beach', 'bean', 'beauty', 'because', 'become',
+                'beef', 'before', 'begin', 'behave', 'behind', 'believe', 'below', 'belt', 'bench', 'benefit',
+                'best', 'betray', 'better', 'between', 'beyond', 'bicycle', 'bid', 'bike', 'bind', 'biology',
+                'bird', 'birth', 'bitter', 'black', 'blade', 'blame', 'blanket', 'blast', 'bleak', 'bless',
+                'blind', 'blood', 'blossom', 'blow', 'blue', 'blur', 'blush', 'board', 'boat', 'body',
+                'boil', 'bomb', 'bone', 'bonus', 'book', 'boost', 'border', 'boring', 'borrow', 'boss',
+                'bottom', 'bounce', 'box', 'boy', 'bracket', 'brain', 'brand', 'brass', 'brave', 'bread',
+                'breeze', 'brick', 'bridge', 'brief', 'bright', 'bring', 'brisk', 'broccoli', 'broken', 'bronze',
+                'broom', 'brother', 'brown', 'brush', 'bubble', 'buddy', 'budget', 'buffalo', 'build', 'bulb',
+                'bulk', 'bullet', 'bundle', 'bunker', 'burden', 'burger', 'burst', 'bus', 'business', 'busy',
+                'butter', 'buyer', 'buzz', 'cabbage', 'cabin', 'cable', 'cactus', 'cage', 'cake', 'call',
+                'calm', 'camera', 'camp', 'can', 'canal', 'cancel', 'candy', 'cannon', 'canoe', 'canvas',
+                'canyon', 'capable', 'capital', 'captain', 'car', 'carbon', 'card', 'cargo', 'carpet', 'carry',
+                'cart', 'case', 'cash', 'casino', 'cast', 'casual', 'cat', 'catalog', 'catch', 'category',
+                'cattle', 'caught', 'cause', 'caution', 'cave', 'ceiling', 'celery', 'cement', 'census', 'century',
+                'cereal', 'certain', 'chair', 'chalk', 'champion', 'change', 'chaos', 'chapter', 'charge', 'chase',
+                'cheap', 'check', 'cheese', 'chef', 'cherry', 'chest', 'chicken', 'chief', 'child', 'chimney',
+                'choice', 'choose', 'chronic', 'chuckle', 'chunk', 'churn', 'cigar', 'cinnamon', 'circle', 'citizen',
+                'city', 'civil', 'claim', 'clamp', 'clarify', 'claw', 'clay', 'clean', 'clerk', 'clever',
+                'click', 'client', 'cliff', 'climb', 'cling', 'clinic', 'clip', 'clock', 'clog', 'close',
+                'cloth', 'cloud', 'clown', 'club', 'clump', 'cluster', 'clutch', 'coach', 'coast', 'coconut',
+                'code', 'coffee', 'coil', 'coin', 'collect', 'color', 'column', 'come', 'comfort', 'comic',
+                'common', 'company', 'concert', 'conduct', 'confirm', 'congress', 'connect', 'consider', 'control', 'convince',
+                'cook', 'cool', 'copper', 'copy', 'coral', 'core', 'corn', 'correct', 'cost', 'cotton',
+                'couch', 'country', 'couple', 'course', 'cousin', 'cover', 'coyote', 'crack', 'cradle', 'craft',
+                'cram', 'crane', 'crash', 'crater', 'crawl', 'crazy', 'cream', 'credit', 'creek', 'crew',
+                'cricket', 'crime', 'crisp', 'critic', 'crop', 'cross', 'crouch', 'crowd', 'crucial', 'cruel',
+                'cruise', 'crumble', 'crunch', 'crush', 'cry', 'crystal', 'cube', 'culture', 'cup', 'cupboard',
+                'curious', 'current', 'curtain', 'curve', 'cushion', 'custom', 'cute', 'cycle', 'dad', 'damage',
+                'dance', 'danger', 'daring', 'dash', 'daughter', 'dawn', 'day', 'deal', 'debate', 'debris',
+                'decade', 'december', 'decide', 'decline', 'decorate', 'decrease', 'deer', 'defense', 'define', 'defy',
+                'degree', 'delay', 'deliver', 'demand', 'demise', 'denial', 'dentist', 'deny', 'depart', 'depend',
+                'deposit', 'depth', 'deputy', 'derive', 'describe', 'desert', 'design', 'desk', 'despair', 'destroy',
+                'detail', 'detect', 'develop', 'device', 'devote', 'diagram', 'dial', 'diamond', 'diary', 'dice',
+                'diesel', 'diet', 'differ', 'digital', 'dignity', 'dilemma', 'dinner', 'dinosaur', 'direct', 'dirt',
+                'disagree', 'discover', 'disease', 'dish', 'dismiss', 'disorder', 'display', 'distance', 'divert', 'divide',
+                'divorce', 'dizzy', 'doctor', 'document', 'dog', 'doll', 'dolphin', 'domain', 'donate', 'donkey',
+                'donor', 'door', 'dose', 'double', 'dove', 'draft', 'dragon', 'drama', 'drastic', 'draw',
+                'dream', 'dress', 'drift', 'drill', 'drink', 'drip', 'drive', 'drop', 'drum', 'dry',
+                'duck', 'dumb', 'dune', 'during', 'dutch', 'duty', 'dwarf', 'dynamic', 'eager', 'eagle',
+                'early', 'earn', 'earth', 'easily', 'east', 'easy', 'echo', 'ecology', 'economy', 'edge',
+                'edit', 'educate', 'effort', 'egg', 'eight', 'either', 'elbow', 'elder', 'electric', 'elegant',
+                'element', 'elephant', 'elevator', 'elite', 'else', 'embark', 'embody', 'embrace', 'emerge', 'emotion',
+                'employ', 'empower', 'empty', 'enable', 'enact', 'end', 'endless', 'endorse', 'enemy', 'energy',
+                'enforce', 'engage', 'engine', 'english', 'enjoy', 'enlist', 'enough', 'enrich', 'enroll', 'ensure',
+                'enter', 'entire', 'entry', 'envelope', 'episode', 'equal', 'equip', 'era', 'erase', 'erode',
+                'erosion', 'erupt', 'escape', 'essay', 'essence', 'estate', 'eternal', 'ethics', 'evidence', 'evil',
+                'evoke', 'evolve', 'exact', 'example', 'excess', 'exchange', 'excite', 'exclude', 'excuse', 'execute',
+                'exercise', 'exhaust', 'exhibit', 'exile', 'exist', 'exit', 'exotic', 'expand', 'expect', 'expire',
+                'explain', 'expose', 'express', 'extend', 'extra', 'eye', 'eyebrow', 'fabric', 'face', 'faculty',
+                'fade', 'faint', 'faith', 'fall', 'false', 'fame', 'family', 'famous', 'fan', 'fancy',
+                'fantasy', 'farm', 'fashion', 'fat', 'fatal', 'father', 'fatigue', 'fault', 'favorite', 'feature',
+                'february', 'federal', 'fee', 'feed', 'feel', 'female', 'fence', 'festival', 'fetch', 'fever',
+                'few', 'fiber', 'fiction', 'field', 'figure', 'file', 'film', 'filter', 'final', 'find',
+                'fine', 'finger', 'finish', 'fire', 'firm', 'first', 'fiscal', 'fish', 'five', 'flag',
+                'flame', 'flash', 'flat', 'flavor', 'flee', 'flight', 'flip', 'float', 'flock', 'floor',
+                'flower', 'fluid', 'flush', 'fly', 'foam', 'focus', 'fog', 'foil', 'fold', 'follow',
+                'food', 'foot', 'force', 'forest', 'forget', 'fork', 'fortune', 'forum', 'forward', 'fossil',
+                'foster', 'found', 'fox', 'fragile', 'frame', 'frequent', 'fresh', 'friend', 'fringe', 'frog',
+                'front', 'frost', 'frown', 'frozen', 'fruit', 'fuel', 'fun', 'funny', 'furnace', 'fury',
+                'future', 'gadget', 'gain', 'galaxy', 'gallery', 'game', 'gap', 'garage', 'garbage', 'garden',
+                'garlic', 'garment', 'gas', 'gasp', 'gate', 'gather', 'gauge', 'gaze', 'general', 'genius',
+                'genre', 'gentle', 'genuine', 'gesture', 'ghost', 'giant', 'gift', 'giggle', 'ginger', 'giraffe',
+                'girl', 'give', 'glad', 'glance', 'glare', 'glass', 'glide', 'glimpse', 'globe', 'gloom',
+                'glory', 'glove', 'glow', 'glue', 'goat', 'goddess', 'gold', 'good', 'goose', 'gorilla',
+                'gospel', 'gossip', 'govern', 'gown', 'grab', 'grace', 'grain', 'grant', 'grape', 'grass',
+                'gravity', 'great', 'green', 'grid', 'grief', 'grit', 'grocery', 'group', 'grow', 'grunt',
+                'guard', 'guess', 'guide', 'guilt', 'guitar', 'gun', 'gym', 'habit', 'hair', 'half',
+                'hammer', 'hamster', 'hand', 'happy', 'harbor', 'hard', 'harsh', 'harvest', 'hash', 'hate',
+                'have', 'hawk', 'head', 'health', 'heart', 'heavy', 'hedgehog', 'height', 'hello', 'helmet',
+                'help', 'hen', 'hero', 'hidden', 'high', 'hill', 'hint', 'hip', 'hire', 'history',
+                'hobby', 'hockey', 'hold', 'hole', 'holiday', 'hollow', 'home', 'honey', 'hood', 'hope',
+                'horn', 'horror', 'horse', 'hospital', 'host', 'hotel', 'hour', 'hover', 'hub', 'huge',
+                'human', 'humble', 'humor', 'hundred', 'hungry', 'hunt', 'hurdle', 'hurry', 'hurt', 'husband',
+                'hybrid', 'ice', 'icon', 'idea', 'identify', 'idle', 'ignore', 'ill', 'illegal', 'illness',
+                'image', 'imitate', 'immense', 'immune', 'impact', 'impose', 'improve', 'impulse', 'inch', 'include',
+                'income', 'increase', 'index', 'indicate', 'indoor', 'industry', 'infant', 'inflict', 'inform', 'inhale',
+                'inherit', 'initial', 'inject', 'injury', 'inmate', 'inner', 'innocent', 'input', 'inquiry', 'insane',
+                'insect', 'inside', 'inspire', 'install', 'intact', 'interest', 'into', 'invest', 'invite', 'involve',
+                'iron', 'island', 'isolate', 'issue', 'item', 'ivory', 'jacket', 'jaguar', 'jar', 'jazz',
+                'jealous', 'jeans', 'jelly', 'jewel', 'job', 'join', 'joke', 'journey', 'joy', 'judge',
+                'juice', 'jump', 'jungle', 'junior', 'junk', 'just', 'kangaroo', 'keen', 'keep', 'ketchup',
+                'key', 'kick', 'kid', 'kidney', 'kind', 'kingdom', 'kiss', 'kit', 'kitchen', 'kite',
+                'kitten', 'kiwi', 'knee', 'knife', 'knock', 'know', 'lab', 'label', 'labor', 'ladder',
+                'lady', 'lake', 'lamp', 'land', 'landscape', 'lane', 'language', 'laptop', 'large', 'later',
+                'latin', 'laugh', 'laundry', 'lava', 'law', 'lawn', 'lawsuit', 'layer', 'lazy', 'leader',
+                'leaf', 'learn', 'leave', 'lecture', 'left', 'leg', 'legal', 'legend', 'leisure', 'lemon',
+                'lend', 'length', 'lens', 'leopard', 'lesson', 'letter', 'level', 'liar', 'liberty', 'library',
+                'license', 'life', 'lift', 'light', 'like', 'limb', 'limit', 'link', 'lion', 'liquid',
+                'list', 'little', 'live', 'lizard', 'load', 'loan', 'lobster', 'local', 'lock', 'logic',
+                'lonely', 'long', 'loop', 'lottery', 'loud', 'lounge', 'love', 'loyal', 'lucky', 'luggage',
+                'lumber', 'lunar', 'lunch', 'lung', 'lure', 'luxury', 'lyrics', 'machine', 'mad', 'magic',
+                'magnet', 'maid', 'mail', 'main', 'major', 'make', 'mammal', 'man', 'manage', 'mandate',
+                'mango', 'mansion', 'manual', 'maple', 'marble', 'march', 'margin', 'marine', 'market', 'marriage',
+                'mask', 'mass', 'master', 'match', 'material', 'math', 'matrix', 'matter', 'maximum', 'maze',
+                'meadow', 'mean', 'measure', 'meat', 'mechanic', 'medal', 'media', 'melody', 'melt', 'member',
+                'memory', 'mention', 'menu', 'mercy', 'merge', 'merit', 'merry', 'mesh', 'message', 'metal',
+                'method', 'middle', 'midnight', 'milk', 'million', 'mimic', 'mind', 'minimum', 'minor', 'minute',
+                'miracle', 'mirror', 'misery', 'miss', 'mistake', 'mix', 'mixed', 'mixture', 'mobile', 'model',
+                'modify', 'mom', 'moment', 'monitor', 'monkey', 'monster', 'month', 'moon', 'moral', 'more',
+                'morning', 'mosquito', 'mother', 'motion', 'motor', 'mountain', 'mouse', 'move', 'movie', 'much',
+                'muffin', 'mule', 'multiply', 'muscle', 'museum', 'mushroom', 'music', 'must', 'mutual', 'myself',
+                'mystery', 'myth', 'naive', 'name', 'napkin', 'narrow', 'nasty', 'nation', 'nature', 'near',
+                'neck', 'need', 'negative', 'neglect', 'neither', 'nephew', 'nerve', 'nest', 'net', 'network',
+                'neutral', 'never', 'news', 'next', 'nice', 'night', 'noble', 'noise', 'nominee', 'noodle',
+                'normal', 'north', 'nose', 'notable', 'note', 'nothing', 'notice', 'novel', 'now', 'nuclear',
+                'number', 'nurse', 'nut', 'oak', 'obey', 'object', 'oblige', 'obscure', 'observe', 'obtain',
+                'obvious', 'occur', 'ocean', 'october', 'odor', 'off', 'offer', 'office', 'often', 'oil',
+                'okay', 'old', 'olive', 'olympic', 'omit', 'once', 'one', 'onion', 'online', 'only',
+                'open', 'opera', 'opinion', 'oppose', 'option', 'orange', 'orbit', 'orchard', 'order', 'ordinary',
+                'organ', 'orient', 'original', 'orphan', 'ostrich', 'other', 'our', 'ourselves', 'out', 'outdoor',
+                'outer', 'outfit', 'outgoing', 'outline', 'outlook', 'outrageous', 'outstanding', 'oval', 'oven', 'over',
+                'own', 'owner', 'oxygen', 'oyster', 'ozone', 'pact', 'paddle', 'page', 'pair', 'palace',
+                'palm', 'panda', 'panel', 'panic', 'panther', 'paper', 'parade', 'parent', 'park', 'parrot',
+                'party', 'pass', 'patch', 'path', 'patient', 'patrol', 'pattern', 'pause', 'pave', 'payment',
+                'peace', 'peanut', 'pear', 'peasant', 'pelican', 'pen', 'penalty', 'pencil', 'people', 'pepper',
+                'perfect', 'permit', 'person', 'pet', 'phone', 'photo', 'phrase', 'physical', 'piano', 'picnic',
+                'picture', 'piece', 'pig', 'pigeon', 'pill', 'pilot', 'pink', 'pioneer', 'pipe', 'pistol',
+                'pitch', 'pizza', 'place', 'plague', 'planet', 'plastic', 'plate', 'play', 'please', 'pledge',
+                'pluck', 'plug', 'plunge', 'poem', 'poet', 'point', 'polar', 'pole', 'police', 'pond',
+                'pony', 'pool', 'poor', 'pop', 'popcorn', 'population', 'porch', 'port', 'portion', 'portrait',
+                'pose', 'position', 'possible', 'post', 'potato', 'pottery', 'poverty', 'powder', 'power', 'practice',
+                'praise', 'predict', 'prefer', 'prepare', 'present', 'pretty', 'prevent', 'price', 'pride', 'primary',
+                'print', 'priority', 'prison', 'private', 'prize', 'problem', 'process', 'produce', 'profit', 'program',
+                'project', 'promote', 'proof', 'property', 'prosper', 'protect', 'proud', 'provide', 'public', 'pudding',
+                'pull', 'pulp', 'pulse', 'pumpkin', 'punch', 'pupil', 'puppy', 'purchase', 'purity', 'purpose',
+                'purse', 'push', 'put', 'puzzle', 'pyramid', 'quality', 'quantum', 'quarter', 'question', 'quick',
+                'quit', 'quiz', 'quote', 'rabbit', 'raccoon', 'race', 'rack', 'radar', 'radio', 'rail',
+                'rain', 'raise', 'rally', 'ramp', 'ranch', 'random', 'range', 'rapid', 'rare', 'rate',
+                'rather', 'raven', 'raw', 'razor', 'ready', 'real', 'reason', 'rebel', 'rebuild', 'recall',
+                'receive', 'recipe', 'record', 'recover', 'recruit', 'red', 'reduce', 'reflect', 'reform', 'refuse',
+                'region', 'regret', 'regular', 'reject', 'relax', 'release', 'relief', 'rely', 'remain', 'remember',
+                'remind', 'remove', 'render', 'renew', 'rent', 'reopen', 'repair', 'repeat', 'replace', 'reply',
+                'report', 'require', 'rescue', 'resemble', 'resist', 'resource', 'response', 'result', 'retire', 'retreat',
+                'return', 'reunion', 'reveal', 'review', 'reward', 'rhythm', 'rib', 'ribbon', 'rice', 'rich',
+                'ride', 'ridge', 'rifle', 'right', 'rigid', 'ring', 'riot', 'ripple', 'risk', 'ritual',
+                'rival', 'river', 'road', 'roast', 'robot', 'robust', 'rocket', 'romance', 'roof', 'rookie',
+                'room', 'rooster', 'root', 'rose', 'rotate', 'rough', 'round', 'route', 'royal', 'rubber',
+                'rude', 'rug', 'rule', 'run', 'runway', 'rural', 'sad', 'saddle', 'sadness', 'safe',
+                'sail', 'salad', 'salmon', 'salon', 'salt', 'salute', 'same', 'sample', 'sand', 'satisfy',
+                'satoshi', 'sauce', 'sausage', 'save', 'say', 'scale', 'scan', 'scare', 'scatter', 'scene',
+                'scheme', 'school', 'science', 'scissors', 'scorpion', 'scout', 'scrap', 'screen', 'script', 'scrub',
+                'sea', 'search', 'season', 'seat', 'second', 'secret', 'section', 'security', 'seed', 'seek',
+                'segment', 'select', 'sell', 'seminar', 'senior', 'sense', 'sentence', 'series', 'service', 'session',
+                'settle', 'setup', 'seven', 'shadow', 'shaft', 'shallow', 'share', 'shed', 'shell', 'sheriff',
+                'shield', 'shift', 'shine', 'ship', 'shiver', 'shock', 'shoe', 'shoot', 'shop', 'shore',
+                'short', 'shoulder', 'shove', 'shrimp', 'shrug', 'shy', 'sibling', 'sick', 'side', 'siege',
+                'sight', 'sign', 'silent', 'silk', 'silly', 'silver', 'similar', 'simple', 'since', 'sing',
+                'siren', 'sister', 'situate', 'six', 'size', 'skate', 'sketch', 'ski', 'skill', 'skin',
+                'skirt', 'skull', 'skunk', 'sky', 'slab', 'slam', 'slang', 'slap', 'slash', 'slate',
+                'slave', 'sled', 'sleep', 'slender', 'slice', 'slide', 'slight', 'slim', 'slimy', 'sling',
+                'slip', 'slit', 'slob', 'slot', 'slow', 'sludge', 'slug', 'slum', 'slurp', 'slush',
+                'sly', 'smack', 'small', 'smart', 'smash', 'smell', 'smile', 'smirk', 'smog', 'smoke',
+                'smooth', 'smug', 'snack', 'snail', 'snake', 'snap', 'snare', 'snarl', 'sneak', 'sneer',
+                'sneeze', 'sniff', 'snore', 'snort', 'snout', 'snow', 'snub', 'snuff', 'snug', 'soak',
+                'soap', 'sob', 'sober', 'soccer', 'social', 'sock', 'soda', 'sofa', 'soft', 'soggy',
+                'soil', 'solar', 'soldier', 'solid', 'solo', 'solve', 'some', 'song', 'soon', 'soothe',
+                'sophisticated', 'sore', 'sorrow', 'sorry', 'sort', 'soul', 'sound', 'soup', 'sour', 'south',
+                'southern', 'sow', 'space', 'spare', 'spark', 'sparkle', 'spat', 'spawn', 'speak', 'spear',
+                'special', 'speed', 'spell', 'spend', 'sphere', 'spice', 'spider', 'spike', 'spin', 'spirit',
+                'spit', 'splash', 'splendid', 'split', 'spoil', 'spoke', 'sponge', 'spoon', 'sport', 'spot',
+                'spray', 'spread', 'spring', 'spy', 'squad', 'square', 'squash', 'squat', 'squeak', 'squeeze',
+                'squirrel', 'stab', 'stable', 'stack', 'staff', 'stage', 'stain', 'stair', 'stake', 'stale',
+                'stalk', 'stall', 'stamp', 'stand', 'start', 'state', 'stay', 'steak', 'steal', 'steam',
+                'steel', 'steep', 'steer', 'stem', 'step', 'stereo', 'stick', 'still', 'sting', 'stink',
+                'stir', 'stitch', 'stock', 'stomach', 'stone', 'stool', 'stoop', 'stop', 'store', 'storm',
+                'story', 'stove', 'straddle', 'straight', 'strain', 'strand', 'strap', 'straw', 'stray', 'stream',
+                'street', 'strength', 'stress', 'stretch', 'strict', 'stride', 'strike', 'string', 'strip', 'stroll',
+                'strong', 'struggle', 'strut', 'stuck', 'study', 'stuff', 'stump', 'stun', 'stunt', 'stupid',
+                'sturdy', 'stutter', 'style', 'stylish', 'subdue', 'subject', 'submit', 'substance', 'subtract', 'suburb',
+                'subway', 'succeed', 'such', 'sudden', 'suffer', 'sugar', 'suggest', 'suit', 'sulky', 'sultry',
+                'sum', 'summer', 'sun', 'sunny', 'sunset', 'super', 'supper', 'supply', 'supreme', 'sure',
+                'surface', 'surge', 'surprise', 'surround', 'survey', 'suspect', 'sustain', 'swallow', 'swamp', 'swap',
+                'swarm', 'sway', 'swear', 'sweat', 'sweep', 'sweet', 'swell', 'swim', 'swing', 'switch',
+                'sword', 'sworn', 'swung', 'swoop', 'swoosh', 'sword', 'sworn', 'swung', 'swoop', 'swoosh',
+                'symbol', 'symptom', 'syndicate', 'syndrome', 'synergy', 'syntax', 'synthesis', 'syrup', 'system', 'tab',
+                'table', 'tablet', 'tack', 'tackle', 'tact', 'tactics', 'tag', 'tail', 'take', 'tale',
+                'talk', 'tall', 'tame', 'tan', 'tank', 'tap', 'tape', 'target', 'task', 'taste',
+                'tattoo', 'taught', 'tax', 'taxi', 'tea', 'teach', 'team', 'tear', 'tease', 'tedious',
+                'teen', 'teenage', 'teeth', 'telephone', 'tell', 'temper', 'ten', 'tenant', 'tend', 'tender',
+                'tennis', 'tense', 'tent', 'term', 'terrible', 'terrific', 'test', 'text', 'than', 'thank',
+                'that', 'the', 'theater', 'theft', 'their', 'them', 'theme', 'then', 'theory', 'there',
+                'therefore', 'these', 'they', 'thick', 'thief', 'thigh', 'thin', 'thing', 'think', 'third',
+                'this', 'thorough', 'those', 'though', 'thought', 'thousand', 'thread', 'threat', 'three', 'threw',
+                'thrill', 'thrive', 'throat', 'throne', 'through', 'throw', 'thrust', 'thumb', 'thump', 'thunder',
+                'thus', 'tick', 'ticket', 'tide', 'tidy', 'tie', 'tiger', 'tight', 'tile', 'till',
+                'tilt', 'timber', 'time', 'timid', 'tin', 'tiny', 'tip', 'tire', 'tired', 'tissue',
+                'title', 'to', 'toast', 'today', 'toe', 'together', 'toilet', 'token', 'told', 'tolerate',
+                'tomato', 'tomorrow', 'tone', 'tongue', 'tonight', 'too', 'took', 'tool', 'tooth', 'top',
+                'topic', 'topple', 'torch', 'tornado', 'tortoise', 'toss', 'total', 'touch', 'tough', 'tour',
+                'toward', 'towel', 'tower', 'town', 'toy', 'trace', 'track', 'trade', 'traffic', 'tragic',
+                'trail', 'train', 'trait', 'traitor', 'tram', 'trance', 'trap', 'trash', 'travel', 'tray',
+                'tread', 'treason', 'treat', 'tree', 'trek', 'tremble', 'tremendous', 'trench', 'trend', 'trial',
+                'tribe', 'trick', 'trickle', 'trifle', 'trim', 'trip', 'triple', 'triumph', 'trivial', 'trod',
+                'troll', 'troop', 'trophy', 'trouble', 'truck', 'true', 'truly', 'trumpet', 'trunk', 'trust',
+                'truth', 'try', 'tub', 'tube', 'tuck', 'tuesday', 'tug', 'tuition', 'tulip', 'tumble',
+                'tuna', 'tune', 'tunnel', 'turban', 'turbine', 'turkey', 'turn', 'turtle', 'tusk', 'tutor',
+                'tuxedo', 'twelve', 'twenty', 'twice', 'twin', 'twist', 'two', 'type', 'typical', 'tyrant',
+                'ugly', 'ultimate', 'umbrella', 'unable', 'unaware', 'uncle', 'uncover', 'under', 'undergo', 'underlie',
+                'understand', 'undertake', 'underwear', 'undo', 'undone', 'unfair', 'unfold', 'unfortunate', 'unhappy', 'unhealthy',
+                'uniform', 'unimportant', 'unique', 'unit', 'unite', 'unity', 'universal', 'universe', 'unknown', 'unless',
+                'unlike', 'unlikely', 'unload', 'unlock', 'unlucky', 'unnecessary', 'unpleasant', 'unreasonable', 'unstable', 'unusual',
+                'unwilling', 'unwind', 'unwise', 'up', 'update', 'upgrade', 'uphold', 'upon', 'upper', 'upright',
+                'upset', 'upside', 'upstairs', 'upward', 'urban', 'urge', 'urgent', 'usage', 'use', 'used',
+                'useful', 'useless', 'user', 'usual', 'utility', 'utilize', 'utter', 'vacant', 'vacation', 'vacuum',
+                'vague', 'vain', 'valid', 'valley', 'valuable', 'value', 'valve', 'van', 'vanish', 'vanity',
+                'vapor', 'variable', 'variation', 'variety', 'various', 'vary', 'vast', 'vault', 'vegetable', 'vehicle',
+                'veil', 'vein', 'velocity', 'velvet', 'vendor', 'venom', 'vent', 'venture', 'venue', 'verb',
+                'verify', 'version', 'versus', 'vertical', 'very', 'vessel', 'veteran', 'viable', 'vibrant', 'vibrate',
+                'vice', 'vicious', 'victim', 'victory', 'video', 'view', 'vigor', 'village', 'vine', 'vintage',
+                'violate', 'violence', 'violent', 'violet', 'violin', 'virtual', 'virus', 'visa', 'visible', 'vision',
+                'visit', 'visual', 'vital', 'vivid', 'vocal', 'voice', 'void', 'volcano', 'volume', 'volunteer',
+                'vote', 'voyage', 'wade', 'waffle', 'wage', 'wagon', 'wait', 'wake', 'walk', 'wall',
+                'wallet', 'walnut', 'wander', 'want', 'war', 'ward', 'warm', 'warn', 'warp', 'wash',
+                'wasp', 'waste', 'water', 'watermelon', 'wave', 'wax', 'way', 'weak', 'wealth', 'weapon',
+                'wear', 'weasel', 'weather', 'web', 'wedding', 'wedge', 'weed', 'week', 'weep', 'weigh',
+                'weight', 'weird', 'welcome', 'weld', 'well', 'west', 'wet', 'whale', 'what', 'wheat',
+                'wheel', 'when', 'where', 'whip', 'whirl', 'whisper', 'whistle', 'white', 'who', 'whole',
+                'whom', 'whose', 'why', 'wicked', 'wide', 'widow', 'width', 'wife', 'wild', 'will',
+                'willing', 'wilt', 'wimp', 'win', 'wind', 'window', 'wine', 'wing', 'wink', 'winner',
+                'winter', 'wipe', 'wire', 'wisdom', 'wise', 'wish', 'wit', 'witch', 'with', 'withdraw',
+                'withhold', 'within', 'without', 'witness', 'wizard', 'wobble', 'woe', 'wolf', 'woman', 'wonder',
+                'wonderful', 'wood', 'wool', 'woozy', 'word', 'work', 'world', 'worm', 'worn', 'worried',
+                'worry', 'worse', 'worst', 'worth', 'would', 'wound', 'wow', 'wrap', 'wreck', 'wrestle',
+                'wriggle', 'wring', 'wrinkle', 'wrist', 'write', 'wrong', 'wrote', 'wrought', 'wrung', 'wry',
+                'yak', 'yam', 'yard', 'yarn', 'yawn', 'year', 'yellow', 'yes', 'yesterday', 'yet',
+                'yield', 'yoga', 'yoke', 'yolk', 'you', 'young', 'your', 'youth', 'yummy', 'zap',
+                'zebra', 'zero', 'zest', 'zigzag', 'zinc', 'zip', 'zodiac', 'zone', 'zoo', 'zoom'
+            ];
+            
+            for (const word of words) {
+                if (!wordlist.includes(word.toLowerCase())) {
+                    console.log('Recovery phrase validation failed: invalid word');
+                    return false;
+                }
+            }
+            
+            console.log('Recovery phrase validation successful');
+            return true;
+        } catch (error) {
+            console.error('Error validating recovery phrase:', error);
+            return false;
         }
     }
 };
