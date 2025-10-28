@@ -380,11 +380,39 @@ const social = {
                 relay: 'wss://localhost:8080' // Placeholder private relay
             };
             
+            // Initialize Nostr data fetching
+            await this.initNostrDataFetching();
+            
             console.log('Social layer initialized successfully');
             return true;
         } catch (error) {
             console.error('Error initializing Social layer:', error);
             return false;
+        }
+    },
+
+    async initNostrDataFetching() {
+        console.log('Initializing Nostr data fetching...');
+        
+        try {
+            // Fetch events from Nostr
+            const events = await this.fetchSocialFeed();
+            console.log('Loaded events from Nostr:', events.length);
+            
+            // Fetch profiles from Nostr
+            const profiles = await this.fetchProfilesFromNostr();
+            console.log('Loaded profiles from Nostr:', profiles.length);
+            
+            // Set up periodic refresh (every 5 minutes)
+            setInterval(async () => {
+                console.log('Refreshing Nostr data...');
+                await this.fetchSocialFeed();
+                await this.fetchProfilesFromNostr();
+            }, 5 * 60 * 1000); // 5 minutes
+            
+            console.log('Nostr data fetching initialized');
+        } catch (error) {
+            console.error('Error initializing Nostr data fetching:', error);
         }
     },
 
@@ -513,28 +541,388 @@ const social = {
     },
 
     async fetchSocialFeed() {
-        console.log('Fetching social feed...');
+        console.log('Fetching yDance events from Nostr...');
         
         try {
-            // Placeholder social feed fetching
-            const feedItems = [
-                {
-                    id: 1,
-                    type: 'event_announcement',
-                    content: 'Amazing night at The Warehouse!',
-                    author: 'DJ_Alice',
-                    timestamp: new Date().toISOString(),
-                    linkedEvent: null
-                }
-            ];
+            // Query for Kind 1 events with yDance tags
+            const events = await this.queryNostrEvents({
+                kinds: [1], // Text notes
+                '#t': ['ydance', 'event'], // yDance event tags
+                limit: 100
+            });
             
-            state.socialFeed = feedItems;
-            console.log('Social feed fetched:', feedItems.length, 'items');
-            return feedItems;
+            // Parse events into yDance format
+            const parsedEvents = events.map(event => this.parseEventFromNostr(event));
+            
+            // Update state with new events
+            state.events = [...state.events, ...parsedEvents];
+            
+            console.log('Parsed events from Nostr:', parsedEvents.length);
+            return parsedEvents;
         } catch (error) {
-            console.error('Error fetching social feed:', error);
+            console.error('Error fetching events from Nostr:', error);
+            // Fallback to placeholder for now
+            return this.getPlaceholderFeed();
+        }
+    },
+
+    async queryNostrEvents(filter) {
+        console.log('Querying Nostr events with filter:', filter);
+        
+        try {
+            if (!state.nostrClient || !state.nostrClient.connected) {
+                console.log('Nostr client not connected, returning placeholder data');
+                return this.getPlaceholderNostrEvents();
+            }
+            
+            // TODO: Implement actual Nostr query
+            // For now, return placeholder events that match our parsing logic
+            return this.getPlaceholderNostrEvents();
+        } catch (error) {
+            console.error('Error querying Nostr events:', error);
             throw error;
         }
+    },
+
+    parseEventFromNostr(nostrEvent) {
+        console.log('Parsing Nostr event:', nostrEvent.id);
+        
+        const content = nostrEvent.content;
+        const tags = nostrEvent.tags;
+        
+        // Extract event data from content and tags
+        const eventData = {
+            id: nostrEvent.id,
+            title: this.extractTitle(content),
+            date: this.extractDate(content, tags),
+            location: this.extractLocation(content, tags),
+            dj: this.extractDJ(content, tags),
+            music: this.extractMusicStyle(content, tags),
+            type: this.extractEventType(content, tags),
+            attending: this.extractAttendance(tags),
+            friendsGoing: this.extractFriendsGoing(tags),
+            source: 'nostr',
+            nostrEventId: nostrEvent.id,
+            nostrPubkey: nostrEvent.pubkey
+        };
+        
+        console.log('Parsed event data:', eventData);
+        return eventData;
+    },
+
+    extractTitle(content) {
+        // Extract title from content - look for emoji patterns or first line
+        const lines = content.split('\n');
+        const firstLine = lines[0].trim();
+        
+        // Remove common emojis and clean up
+        return firstLine.replace(/^[🎵🎧🎪🎉🎊🎈🎁🎀🎂🎃🎄🎅🎆🎇🎈🎉🎊🎋🎌🎍🎎🎏🎐🎑🎒🎓🎖🎗🎙🎚🎛🎜🎝🎞🎟🎠🎡🎢🎣🎤🎥🎦🎧🎨🎩🎪🎫🎬🎭🎮🎯🎰🎱🎲🎳🎴🎵🎶🎷🎸🎹🎺🎻🎼🎽🎾🎿🏀🏁🏂🏃🏄🏅🏆🏇🏈🏉🏊🏋🏌🏍🏎🏏🏐🏑🏒🏓🏔🏕🏖🏗🏘🏙🏚🏛🏜🏝🏞🏟🏠🏡🏢🏣🏤🏥🏦🏧🏨🏩🏪🏫🏬🏭🏮🏯🏰🏱🏲🏳🏴🏵🏶🏷🏸🏹🏺🏻🏼🏽🏾🏿]/g, '').trim();
+    },
+
+    extractDate(content, tags) {
+        // Look for date in tags first
+        const dateTag = tags.find(tag => tag[0] === 'date');
+        if (dateTag) return dateTag[1];
+        
+        // Look for date patterns in content
+        const dateMatch = content.match(/(\d{4}-\d{2}-\d{2})|(\d{2}\/\d{2}\/\d{4})|(\d{2}-\d{2}-\d{4})/);
+        if (dateMatch) return dateMatch[0];
+        
+        // Default to today
+        return new Date().toISOString().split('T')[0];
+    },
+
+    extractLocation(content, tags) {
+        // Look for location in tags first
+        const locationTag = tags.find(tag => tag[0] === 'location');
+        if (locationTag) return locationTag[1];
+        
+        // Look for location patterns in content
+        const locationMatch = content.match(/📍\s*(.+)/);
+        if (locationMatch) return locationMatch[1].trim();
+        
+        return 'TBA';
+    },
+
+    extractDJ(content, tags) {
+        // Look for DJ in tags first
+        const djTag = tags.find(tag => tag[0] === 'dj');
+        if (djTag) return djTag[1];
+        
+        // Look for DJ patterns in content
+        const djMatch = content.match(/🎧\s*(.+)/);
+        if (djMatch) return djMatch[1].trim();
+        
+        return 'TBA';
+    },
+
+    extractMusicStyle(content, tags) {
+        // Look for music style in tags
+        const musicTag = tags.find(tag => tag[0] === 'music');
+        if (musicTag) return musicTag[1];
+        
+        // Look for music style patterns in content
+        const musicMatch = content.match(/🎵\s*(.+)/);
+        if (musicMatch) return musicMatch[1].trim();
+        
+        return 'Electronic';
+    },
+
+    extractEventType(content, tags) {
+        // Look for event type in tags
+        const typeTag = tags.find(tag => tag[0] === 'type');
+        if (typeTag) return typeTag[1];
+        
+        // Default based on content analysis
+        if (content.toLowerCase().includes('club')) return 'Club Night';
+        if (content.toLowerCase().includes('festival')) return 'Festival';
+        if (content.toLowerCase().includes('rave')) return 'Rave';
+        
+        return 'Event';
+    },
+
+    extractAttendance(tags) {
+        const attendanceTag = tags.find(tag => tag[0] === 'attending');
+        return attendanceTag ? parseInt(attendanceTag[1]) || 0 : Math.floor(Math.random() * 100) + 10;
+    },
+
+    extractFriendsGoing(tags) {
+        const friendsTag = tags.find(tag => tag[0] === 'friends');
+        return friendsTag ? parseInt(friendsTag[1]) || 0 : Math.floor(Math.random() * 10);
+    },
+
+    getPlaceholderNostrEvents() {
+        return [
+            {
+                id: 'nostr-event-1',
+                content: '🎵 Underground Techno Night\n📅 2024-01-15\n📍 Warehouse 23\n🎧 DJ Shadow\n\nJoin us for an incredible night of underground techno!',
+                tags: [
+                    ['t', 'ydance'],
+                    ['t', 'event'],
+                    ['t', 'techno'],
+                    ['t', 'underground'],
+                    ['location', 'Warehouse 23'],
+                    ['date', '2024-01-15'],
+                    ['music', 'techno'],
+                    ['type', 'club-night'],
+                    ['dj', 'DJ Shadow'],
+                    ['attending', '45'],
+                    ['friends', '3']
+                ],
+                pubkey: 'npub1placeholder1',
+                created_at: Math.floor(Date.now() / 1000)
+            },
+            {
+                id: 'nostr-event-2',
+                content: '🎵 Deep House Sessions\n📅 2024-01-20\n📍 The Loft\n🎧 Sarah Chen\n\nDeep house vibes all night long!',
+                tags: [
+                    ['t', 'ydance'],
+                    ['t', 'event'],
+                    ['t', 'deep-house'],
+                    ['location', 'The Loft'],
+                    ['date', '2024-01-20'],
+                    ['music', 'deep-house'],
+                    ['type', 'club-night'],
+                    ['dj', 'Sarah Chen'],
+                    ['attending', '32'],
+                    ['friends', '1']
+                ],
+                pubkey: 'npub1placeholder2',
+                created_at: Math.floor(Date.now() / 1000)
+            }
+        ];
+    },
+
+    getPlaceholderFeed() {
+        return [
+            {
+                id: 1,
+                type: 'event_announcement',
+                content: 'Amazing night at The Warehouse!',
+                author: 'DJ_Alice',
+                timestamp: new Date().toISOString(),
+                linkedEvent: null
+            }
+        ];
+    },
+
+    // Kind 0 Profile Parsing Methods
+    async fetchProfilesFromNostr() {
+        console.log('Fetching yDance profiles from Nostr...');
+        
+        try {
+            // Query for Kind 0 events (profiles) with yDance tags
+            const profiles = await this.queryNostrProfiles({
+                kinds: [0], // Profile events
+                '#t': ['ydance'], // yDance profile tags
+                limit: 50
+            });
+            
+            // Parse profiles into yDance format
+            const parsedProfiles = profiles.map(profile => this.parseProfileFromNostr(profile));
+            
+            // Update state with new profiles
+            this.updateProfilesInState(parsedProfiles);
+            
+            console.log('Parsed profiles from Nostr:', parsedProfiles.length);
+            return parsedProfiles;
+        } catch (error) {
+            console.error('Error fetching profiles from Nostr:', error);
+            return [];
+        }
+    },
+
+    async queryNostrProfiles(filter) {
+        console.log('Querying Nostr profiles with filter:', filter);
+        
+        try {
+            if (!state.nostrClient || !state.nostrClient.connected) {
+                console.log('Nostr client not connected, returning placeholder profiles');
+                return this.getPlaceholderNostrProfiles();
+            }
+            
+            // TODO: Implement actual Nostr query
+            // For now, return placeholder profiles that match our parsing logic
+            return this.getPlaceholderNostrProfiles();
+        } catch (error) {
+            console.error('Error querying Nostr profiles:', error);
+            throw error;
+        }
+    },
+
+    parseProfileFromNostr(nostrProfile) {
+        console.log('Parsing Nostr profile:', nostrProfile.id);
+        
+        const content = JSON.parse(nostrProfile.content);
+        const tags = nostrProfile.tags;
+        
+        // Determine profile type from tags
+        const profileType = this.determineProfileType(tags);
+        
+        const profileData = {
+            id: nostrProfile.id,
+            name: content.name || content.display_name,
+            bio: content.about,
+            image: content.picture,
+            website: content.website,
+            type: profileType, // 'dj', 'venue', 'soundsystem'
+            socialLinks: this.extractSocialLinks(content),
+            source: 'nostr',
+            nostrEventId: nostrProfile.id,
+            nostrPubkey: nostrProfile.pubkey
+        };
+        
+        console.log('Parsed profile data:', profileData);
+        return profileData;
+    },
+
+    determineProfileType(tags) {
+        // Look for profile type in tags
+        const typeTag = tags.find(tag => tag[0] === 'type');
+        if (typeTag) return typeTag[1];
+        
+        // Look for specific entity tags
+        if (tags.some(tag => tag[0] === 't' && tag[1] === 'dj')) return 'dj';
+        if (tags.some(tag => tag[0] === 't' && tag[1] === 'venue')) return 'venue';
+        if (tags.some(tag => tag[0] === 't' && tag[1] === 'soundsystem')) return 'soundsystem';
+        
+        return 'unknown';
+    },
+
+    extractSocialLinks(content) {
+        const links = [];
+        
+        if (content.website) links.push({ platform: 'Website', url: content.website });
+        if (content.lud16) links.push({ platform: 'Lightning', url: content.lud16 });
+        
+        // Extract additional social links from tags or content
+        // This would be expanded based on actual Nostr profile structure
+        
+        return links;
+    },
+
+    updateProfilesInState(parsedProfiles) {
+        // Update DJs
+        const djProfiles = parsedProfiles.filter(p => p.type === 'dj');
+        if (djProfiles.length > 0) {
+            state.djs = [...state.djs, ...djProfiles];
+        }
+        
+        // Update Venues
+        const venueProfiles = parsedProfiles.filter(p => p.type === 'venue');
+        if (venueProfiles.length > 0) {
+            state.venues = [...state.venues, ...venueProfiles];
+        }
+        
+        // Update Sound Systems
+        const soundSystemProfiles = parsedProfiles.filter(p => p.type === 'soundsystem');
+        if (soundSystemProfiles.length > 0) {
+            state.soundSystems = [...state.soundSystems, ...soundSystemProfiles];
+        }
+    },
+
+    getPlaceholderNostrProfiles() {
+        return [
+            {
+                id: 'nostr-profile-1',
+                content: JSON.stringify({
+                    name: 'DJ Shadow',
+                    about: 'Underground techno DJ with 10+ years experience. Based in Berlin.',
+                    picture: 'https://example.com/dj-shadow.jpg',
+                    website: 'https://djshadow.com',
+                    lud16: 'djshadow@lightning.com'
+                }),
+                tags: [
+                    ['t', 'ydance'],
+                    ['t', 'dj'],
+                    ['t', 'techno'],
+                    ['type', 'dj'],
+                    ['music-style', 'techno'],
+                    ['experience', '10+ years'],
+                    ['location', 'Berlin']
+                ],
+                pubkey: 'npub1djshadow',
+                created_at: Math.floor(Date.now() / 1000)
+            },
+            {
+                id: 'nostr-profile-2',
+                content: JSON.stringify({
+                    name: 'The Warehouse',
+                    about: 'Underground venue in downtown. Capacity: 500. Sound system: Funktion-One.',
+                    picture: 'https://example.com/warehouse.jpg',
+                    website: 'https://thewarehouse.com'
+                }),
+                tags: [
+                    ['t', 'ydance'],
+                    ['t', 'venue'],
+                    ['type', 'venue'],
+                    ['capacity', '500'],
+                    ['soundsystem', 'Funktion-One'],
+                    ['location', 'Downtown']
+                ],
+                pubkey: 'npub1warehouse',
+                created_at: Math.floor(Date.now() / 1000)
+            },
+            {
+                id: 'nostr-profile-3',
+                content: JSON.stringify({
+                    name: 'Funktion-One System',
+                    about: 'Professional sound system for electronic music events. 4-way active system.',
+                    picture: 'https://example.com/funktion-one.jpg',
+                    website: 'https://funktion-one.com'
+                }),
+                tags: [
+                    ['t', 'ydance'],
+                    ['t', 'soundsystem'],
+                    ['type', 'soundsystem'],
+                    ['brand', 'Funktion-One'],
+                    ['type', '4-way active'],
+                    ['power', '10kW']
+                ],
+                pubkey: 'npub1funktion',
+                created_at: Math.floor(Date.now() / 1000)
+            }
+        ];
     },
 
     // Social Intelligence Methods
@@ -1727,6 +2115,12 @@ const router = {
         // Initialize auth UI
         this.initAuthUI();
         
+        // Nostr refresh button
+        const nostrRefreshBtn = document.getElementById('nostr-refresh-btn');
+        if (nostrRefreshBtn) {
+            nostrRefreshBtn.addEventListener('click', () => this.refreshNostrData());
+        }
+        
         // Back to DJ list button
         const backToDJListButton = document.getElementById('back-to-dj-list');
         if (backToDJListButton) {
@@ -1848,6 +2242,51 @@ const router = {
         this.updateAuthStatus();
         
         console.log('Auth UI initialized');
+    },
+
+    async refreshNostrData() {
+        console.log('Refreshing Nostr data...');
+        
+        try {
+            // Show loading state
+            const refreshBtn = document.getElementById('nostr-refresh-btn');
+            if (refreshBtn) {
+                refreshBtn.style.opacity = '0.5';
+                refreshBtn.style.pointerEvents = 'none';
+            }
+            
+            // Refresh events from Nostr
+            const events = await social.fetchSocialFeed();
+            console.log('Refreshed events from Nostr:', events.length);
+            
+            // Refresh profiles from Nostr
+            const profiles = await social.fetchProfilesFromNostr();
+            console.log('Refreshed profiles from Nostr:', profiles.length);
+            
+            // Re-render current view to show new data
+            if (state.currentView === 'events') {
+                views.renderEvents(state.events);
+            } else if (state.currentView === 'djs') {
+                views.renderDJs(state.djs);
+            } else if (state.currentView === 'venues') {
+                views.renderVenues(state.venues);
+            } else if (state.currentView === 'sound-systems') {
+                views.renderSoundSystems(state.soundSystems);
+            }
+            
+            // Show success message
+            console.log('Nostr data refreshed successfully!');
+            
+        } catch (error) {
+            console.error('Error refreshing Nostr data:', error);
+        } finally {
+            // Restore button state
+            const refreshBtn = document.getElementById('nostr-refresh-btn');
+            if (refreshBtn) {
+                refreshBtn.style.opacity = '1';
+                refreshBtn.style.pointerEvents = 'auto';
+            }
+        }
     },
 
     showAuthModal(mode) {
