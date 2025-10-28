@@ -374,11 +374,8 @@ const social = {
         console.log('Initializing Social layer...');
         
         try {
-            // Initialize nostr client (placeholder for now)
-            state.nostrClient = {
-                connected: false,
-                relay: 'wss://localhost:8080' // Placeholder private relay
-            };
+            // Initialize nostr client using nostrClient module
+            state.nostrClient = await nostrClient.connect('wss://localhost:8080');
             
             // Initialize Nostr data fetching
             await this.initNostrDataFetching();
@@ -567,7 +564,7 @@ const social = {
     },
 
     async queryNostrEvents(filter) {
-        console.log('Querying Nostr events with filter:', filter);
+        console.log('SOCIAL: Delegating event query to nostrClient module');
         
         try {
             if (!state.nostrClient || !state.nostrClient.connected) {
@@ -575,9 +572,8 @@ const social = {
                 return this.getPlaceholderNostrEvents();
             }
             
-            // TODO: Implement actual Nostr query
-            // For now, return placeholder events that match our parsing logic
-            return this.getPlaceholderNostrEvents();
+            // Delegate to nostrClient module
+            return await nostrClient.queryEvents(filter);
         } catch (error) {
             console.error('Error querying Nostr events:', error);
             throw error;
@@ -585,110 +581,8 @@ const social = {
     },
 
     parseEventFromNostr(nostrEvent) {
-        console.log('Parsing Nostr event:', nostrEvent.id);
-        
-        const content = nostrEvent.content;
-        const tags = nostrEvent.tags;
-        
-        // Extract event data from content and tags
-        const eventData = {
-            id: nostrEvent.id,
-            title: this.extractTitle(content),
-            date: this.extractDate(content, tags),
-            location: this.extractLocation(content, tags),
-            dj: this.extractDJ(content, tags),
-            music: this.extractMusicStyle(content, tags),
-            type: this.extractEventType(content, tags),
-            attending: this.extractAttendance(tags),
-            friendsGoing: this.extractFriendsGoing(tags),
-            source: 'nostr',
-            nostrEventId: nostrEvent.id,
-            nostrPubkey: nostrEvent.pubkey
-        };
-        
-        console.log('Parsed event data:', eventData);
-        return eventData;
-    },
-
-    extractTitle(content) {
-        // Extract title from content - look for emoji patterns or first line
-        const lines = content.split('\n');
-        const firstLine = lines[0].trim();
-        
-        // Remove common emojis and clean up
-        return firstLine.replace(/^[🎵🎧🎪🎉🎊🎈🎁🎀🎂🎃🎄🎅🎆🎇🎈🎉🎊🎋🎌🎍🎎🎏🎐🎑🎒🎓🎖🎗🎙🎚🎛🎜🎝🎞🎟🎠🎡🎢🎣🎤🎥🎦🎧🎨🎩🎪🎫🎬🎭🎮🎯🎰🎱🎲🎳🎴🎵🎶🎷🎸🎹🎺🎻🎼🎽🎾🎿🏀🏁🏂🏃🏄🏅🏆🏇🏈🏉🏊🏋🏌🏍🏎🏏🏐🏑🏒🏓🏔🏕🏖🏗🏘🏙🏚🏛🏜🏝🏞🏟🏠🏡🏢🏣🏤🏥🏦🏧🏨🏩🏪🏫🏬🏭🏮🏯🏰🏱🏲🏳🏴🏵🏶🏷🏸🏹🏺🏻🏼🏽🏾🏿]/g, '').trim();
-    },
-
-    extractDate(content, tags) {
-        // Look for date in tags first
-        const dateTag = tags.find(tag => tag[0] === 'date');
-        if (dateTag) return dateTag[1];
-        
-        // Look for date patterns in content
-        const dateMatch = content.match(/(\d{4}-\d{2}-\d{2})|(\d{2}\/\d{2}\/\d{4})|(\d{2}-\d{2}-\d{4})/);
-        if (dateMatch) return dateMatch[0];
-        
-        // Default to today
-        return new Date().toISOString().split('T')[0];
-    },
-
-    extractLocation(content, tags) {
-        // Look for location in tags first
-        const locationTag = tags.find(tag => tag[0] === 'location');
-        if (locationTag) return locationTag[1];
-        
-        // Look for location patterns in content
-        const locationMatch = content.match(/📍\s*(.+)/);
-        if (locationMatch) return locationMatch[1].trim();
-        
-        return 'TBA';
-    },
-
-    extractDJ(content, tags) {
-        // Look for DJ in tags first
-        const djTag = tags.find(tag => tag[0] === 'dj');
-        if (djTag) return djTag[1];
-        
-        // Look for DJ patterns in content
-        const djMatch = content.match(/🎧\s*(.+)/);
-        if (djMatch) return djMatch[1].trim();
-        
-        return 'TBA';
-    },
-
-    extractMusicStyle(content, tags) {
-        // Look for music style in tags
-        const musicTag = tags.find(tag => tag[0] === 'music');
-        if (musicTag) return musicTag[1];
-        
-        // Look for music style patterns in content
-        const musicMatch = content.match(/🎵\s*(.+)/);
-        if (musicMatch) return musicMatch[1].trim();
-        
-        return 'Electronic';
-    },
-
-    extractEventType(content, tags) {
-        // Look for event type in tags
-        const typeTag = tags.find(tag => tag[0] === 'type');
-        if (typeTag) return typeTag[1];
-        
-        // Default based on content analysis
-        if (content.toLowerCase().includes('club')) return 'Club Night';
-        if (content.toLowerCase().includes('festival')) return 'Festival';
-        if (content.toLowerCase().includes('rave')) return 'Rave';
-        
-        return 'Event';
-    },
-
-    extractAttendance(tags) {
-        const attendanceTag = tags.find(tag => tag[0] === 'attending');
-        return attendanceTag ? parseInt(attendanceTag[1]) || 0 : Math.floor(Math.random() * 100) + 10;
-    },
-
-    extractFriendsGoing(tags) {
-        const friendsTag = tags.find(tag => tag[0] === 'friends');
-        return friendsTag ? parseInt(friendsTag[1]) || 0 : Math.floor(Math.random() * 10);
+        console.log('SOCIAL: Delegating event parsing to nostrEventParser module');
+        return nostrEventParser.parseEvent(nostrEvent);
     },
 
     getPlaceholderNostrEvents() {
@@ -1062,41 +956,13 @@ const social = {
     },
 
     generateNostrKeys() {
-        console.log('Generating Nostr keypair...');
-        
-        try {
-            // Placeholder Nostr key generation
-            // TODO: Implement actual Nostr key generation
-            const keys = {
-                publicKey: 'npub1' + Math.random().toString(36).substring(2, 15),
-                privateKey: 'nsec1' + Math.random().toString(36).substring(2, 15)
-            };
-            
-            console.log('Nostr keys generated');
-            return keys;
-        } catch (error) {
-            console.error('Error generating Nostr keys:', error);
-            throw error;
-        }
+        console.log('SOCIAL: Delegating key generation to nostrKeys module');
+        return nostrKeys.generateKeyPair();
     },
 
     encryptKeys(keys, password) {
-        console.log('Encrypting Nostr keys...');
-        
-        try {
-            // Placeholder encryption
-            // TODO: Implement actual encryption
-            const encrypted = {
-                publicKey: keys.publicKey,
-                encryptedPrivateKey: 'encrypted_' + keys.privateKey
-            };
-            
-            console.log('Keys encrypted');
-            return encrypted;
-        } catch (error) {
-            console.error('Error encrypting keys:', error);
-            throw error;
-        }
+        console.log('SOCIAL: Delegating encryption to keyEncryption module');
+        return keyEncryption.encryptData(keys.privateKey, password);
     },
 
     // Test method for auth state
@@ -1144,6 +1010,433 @@ const social = {
             user: state.currentUser,
             keys: state.userKeys
         };
+    }
+};
+
+// ============================================================================
+// NOSTR MODULES - Independent Components
+// ============================================================================
+// 🎯 PURPOSE: Modular Nostr functionality for independent development
+// ✅ ADD HERE: New Nostr-related modules
+// ❌ DON'T ADD: Business logic, DOM manipulation, or API calls
+// ============================================================================
+
+// ============================================================================
+// NOSTR KEY GENERATION MODULE
+// ============================================================================
+const nostrKeys = {
+    generateKeyPair() {
+        console.log('Generating Nostr keypair...');
+        
+        try {
+            // Placeholder Nostr key generation
+            // TODO: Implement actual Nostr key generation with nostr-tools
+            const keys = {
+                publicKey: 'npub1' + Math.random().toString(36).substring(2, 15),
+                privateKey: 'nsec1' + Math.random().toString(36).substring(2, 15)
+            };
+            
+            console.log('Nostr keys generated');
+            return keys;
+        } catch (error) {
+            console.error('Error generating Nostr keys:', error);
+            throw error;
+        }
+    },
+
+    encodePublicKey(hexKey) {
+        // TODO: Implement proper npub encoding
+        return 'npub1' + hexKey.substring(0, 10);
+    },
+
+    encodePrivateKey(hexKey) {
+        // TODO: Implement proper nsec encoding
+        return 'nsec1' + hexKey.substring(0, 10);
+    },
+
+    validateKeyFormat(key) {
+        // TODO: Implement key format validation
+        return key && (key.startsWith('npub1') || key.startsWith('nsec1'));
+    }
+};
+
+// ============================================================================
+// NOSTR ENCRYPTION MODULE
+// ============================================================================
+const keyEncryption = {
+    encryptData(data, password) {
+        console.log('Encrypting data...');
+        
+        try {
+            // Placeholder encryption
+            // TODO: Implement actual encryption with Web Crypto API
+            const encrypted = {
+                data: 'encrypted_' + data,
+                timestamp: Date.now(),
+                algorithm: 'placeholder'
+            };
+            
+            console.log('Data encrypted');
+            return encrypted;
+        } catch (error) {
+            console.error('Error encrypting data:', error);
+            throw error;
+        }
+    },
+
+    decryptData(encryptedData, password) {
+        console.log('Decrypting data...');
+        
+        try {
+            // Placeholder decryption
+            // TODO: Implement actual decryption with Web Crypto API
+            const decrypted = encryptedData.data.replace('encrypted_', '');
+            
+            console.log('Data decrypted');
+            return decrypted;
+        } catch (error) {
+            console.error('Error decrypting data:', error);
+            throw error;
+        }
+    },
+
+    generateSalt() {
+        // TODO: Implement proper salt generation
+        return 'salt_' + Math.random().toString(36).substring(2, 15);
+    },
+
+    validatePassword(password) {
+        // TODO: Implement password strength validation
+        return password && password.length >= 8;
+    }
+};
+
+// ============================================================================
+// NOSTR STORAGE MODULE
+// ============================================================================
+const keyStorage = {
+    storeKeys(keys, metadata = {}) {
+        console.log('Storing keys...');
+        
+        try {
+            const storageData = {
+                keys: keys,
+                metadata: {
+                    ...metadata,
+                    timestamp: Date.now(),
+                    version: '1.0'
+                }
+            };
+            
+            localStorage.setItem('ydance_user_keys', JSON.stringify(storageData));
+            console.log('Keys stored successfully');
+            return true;
+        } catch (error) {
+            console.error('Error storing keys:', error);
+            throw error;
+        }
+    },
+
+    retrieveKeys() {
+        console.log('Retrieving keys...');
+        
+        try {
+            const stored = localStorage.getItem('ydance_user_keys');
+            if (!stored) {
+                console.log('No keys found in storage');
+                return null;
+            }
+            
+            const data = JSON.parse(stored);
+            console.log('Keys retrieved successfully');
+            return data;
+        } catch (error) {
+            console.error('Error retrieving keys:', error);
+            throw error;
+        }
+    },
+
+    clearStoredKeys() {
+        console.log('Clearing stored keys...');
+        
+        try {
+            localStorage.removeItem('ydance_user_keys');
+            console.log('Keys cleared successfully');
+            return true;
+        } catch (error) {
+            console.error('Error clearing keys:', error);
+            throw error;
+        }
+    },
+
+    getStorageInfo() {
+        console.log('Getting storage info...');
+        
+        try {
+            const stored = localStorage.getItem('ydance_user_keys');
+            if (!stored) {
+                return { exists: false, size: 0 };
+            }
+            
+            return {
+                exists: true,
+                size: stored.length,
+                timestamp: JSON.parse(stored).metadata?.timestamp
+            };
+        } catch (error) {
+            console.error('Error getting storage info:', error);
+            throw error;
+        }
+    }
+};
+
+// ============================================================================
+// NOSTR CLIENT MODULE
+// ============================================================================
+const nostrClient = {
+    async connect(relayUrl = 'wss://localhost:8080') {
+        console.log('Connecting to Nostr relay:', relayUrl);
+        
+        try {
+            // Placeholder connection
+            // TODO: Implement actual WebSocket connection
+            const client = {
+                connected: true,
+                relay: relayUrl,
+                connectionTime: Date.now()
+            };
+            
+            console.log('Connected to Nostr relay');
+            return client;
+        } catch (error) {
+            console.error('Error connecting to Nostr relay:', error);
+            throw error;
+        }
+    },
+
+    async queryEvents(filter) {
+        console.log('Querying Nostr events with filter:', filter);
+        
+        try {
+            // Placeholder query
+            // TODO: Implement actual Nostr event querying
+            const events = [
+                {
+                    id: 'event-1',
+                    content: 'Test event content',
+                    pubkey: 'npub1test',
+                    created_at: Math.floor(Date.now() / 1000)
+                }
+            ];
+            
+            console.log('Events queried successfully');
+            return events;
+        } catch (error) {
+            console.error('Error querying events:', error);
+            throw error;
+        }
+    },
+
+    async publishEvent(event) {
+        console.log('Publishing Nostr event:', event.id);
+        
+        try {
+            // Placeholder publishing
+            // TODO: Implement actual Nostr event publishing
+            console.log('Event published successfully');
+            return { success: true, eventId: event.id };
+        } catch (error) {
+            console.error('Error publishing event:', error);
+            throw error;
+        }
+    },
+
+    async disconnect() {
+        console.log('Disconnecting from Nostr relay...');
+        
+        try {
+            // Placeholder disconnection
+            // TODO: Implement actual WebSocket disconnection
+            console.log('Disconnected from Nostr relay');
+            return true;
+        } catch (error) {
+            console.error('Error disconnecting from relay:', error);
+            throw error;
+        }
+    }
+};
+
+// ============================================================================
+// NOSTR EVENT PARSER MODULE
+// ============================================================================
+const nostrEventParser = {
+    parseEvent(nostrEvent) {
+        console.log('Parsing Nostr event:', nostrEvent.id);
+        
+        const content = nostrEvent.content;
+        const tags = nostrEvent.tags;
+        
+        // Extract event data from content and tags
+        const eventData = {
+            id: nostrEvent.id,
+            title: this.extractTitle(content),
+            date: this.extractDate(content, tags),
+            location: this.extractLocation(content, tags),
+            dj: this.extractDJ(content, tags),
+            music: this.extractMusicStyle(content, tags),
+            type: this.extractEventType(content, tags),
+            attending: this.extractAttendance(tags),
+            friendsGoing: this.extractFriendsGoing(tags),
+            source: 'nostr',
+            nostrEventId: nostrEvent.id,
+            nostrPubkey: nostrEvent.pubkey
+        };
+        
+        console.log('Event parsed successfully');
+        return eventData;
+    },
+
+    extractTitle(content) {
+        // Extract title from content - look for emoji patterns or first line
+        const lines = content.split('\n');
+        const firstLine = lines[0].trim();
+        
+        // Remove common emojis and clean up
+        return firstLine.replace(/^[🎵🎧🎪🎉🎊🎈🎁🎀🎂🎃🎄🎅🎆🎇🎈🎉🎊🎋🎌🎍🎎🎏🎐🎑🎒🎓🎖🎗🎙🎚🎛🎜🎝🎞🎟🎠🎡🎢🎣🎤🎥🎦🎧🎨🎩🎪🎫🎬🎭🎮🎯🎰🎱🎲🎳🎴🎵🎶🎷🎸🎹🎺🎻🎼🎽🎾🎿🏀🏁🏂🏃🏄🏅🏆🏇🏈🏉🏊🏋🏌🏍🏎🏏🏐🏑🏒🏓🏔🏕🏖🏗🏘🏙🏚🏛🏜🏝🏞🏟🏠🏡🏢🏣🏤🏥🏦🏧🏨🏩🏪🏫🏬🏭🏮🏯🏰🏱🏲🏳🏴🏵🏶🏷🏸🏹🏺🏻🏼🏽🏾🏿]/g, '').trim();
+    },
+
+    extractDate(content, tags) {
+        // Look for date in tags first
+        const dateTag = tags.find(tag => tag[0] === 'date');
+        if (dateTag) return dateTag[1];
+        
+        // Look for date patterns in content
+        const dateMatch = content.match(/(\d{4}-\d{2}-\d{2})|(\d{2}\/\d{2}\/\d{4})|(\d{2}-\d{2}-\d{4})/);
+        if (dateMatch) return dateMatch[0];
+        
+        // Default to today
+        return new Date().toISOString().split('T')[0];
+    },
+
+    extractLocation(content, tags) {
+        // Look for location in tags first
+        const locationTag = tags.find(tag => tag[0] === 'location');
+        if (locationTag) return locationTag[1];
+        
+        // Look for location patterns in content
+        const locationMatch = content.match(/📍\s*(.+)/);
+        if (locationMatch) return locationMatch[1].trim();
+        
+        return 'TBA';
+    },
+
+    extractDJ(content, tags) {
+        // Look for DJ in tags first
+        const djTag = tags.find(tag => tag[0] === 'dj');
+        if (djTag) return djTag[1];
+        
+        // Look for DJ patterns in content
+        const djMatch = content.match(/🎧\s*(.+)/);
+        if (djMatch) return djMatch[1].trim();
+        
+        return 'TBA';
+    },
+
+    extractMusicStyle(content, tags) {
+        // Look for music style in tags
+        const musicTag = tags.find(tag => tag[0] === 'music');
+        if (musicTag) return musicTag[1];
+        
+        // Look for music style patterns in content
+        const musicMatch = content.match(/🎵\s*(.+)/);
+        if (musicMatch) return musicMatch[1].trim();
+        
+        return 'Electronic';
+    },
+
+    extractEventType(content, tags) {
+        // Look for event type in tags
+        const typeTag = tags.find(tag => tag[0] === 'type');
+        if (typeTag) return typeTag[1];
+        
+        // Default based on content analysis
+        if (content.toLowerCase().includes('club')) return 'Club Night';
+        if (content.toLowerCase().includes('festival')) return 'Festival';
+        if (content.toLowerCase().includes('rave')) return 'Rave';
+        
+        return 'Event';
+    },
+
+    extractAttendance(tags) {
+        const attendanceTag = tags.find(tag => tag[0] === 'attending');
+        return attendanceTag ? parseInt(attendanceTag[1]) || 0 : Math.floor(Math.random() * 100) + 10;
+    },
+
+    extractFriendsGoing(tags) {
+        const friendsTag = tags.find(tag => tag[0] === 'friends');
+        return friendsTag ? parseInt(friendsTag[1]) || 0 : Math.floor(Math.random() * 10);
+    }
+};
+
+// ============================================================================
+// NOSTR INTEGRATION ADAPTER
+// ============================================================================
+const nostrAuthAdapter = {
+    async signUp(email, password) {
+        console.log('Nostr adapter: Processing signup for', email);
+        
+        try {
+            // Generate Nostr keys
+            const keys = nostrKeys.generateKeyPair();
+            
+            // Encrypt private key
+            const encrypted = keyEncryption.encryptData(keys.privateKey, password);
+            
+            // Store keys
+            keyStorage.storeKeys(encrypted, { email, publicKey: keys.publicKey });
+            
+            console.log('Nostr adapter: Signup processed successfully');
+            return { success: true, publicKey: keys.publicKey };
+        } catch (error) {
+            console.error('Nostr adapter: Signup error:', error);
+            throw error;
+        }
+    },
+
+    async signIn(email, password) {
+        console.log('Nostr adapter: Processing signin for', email);
+        
+        try {
+            // Retrieve stored keys
+            const stored = keyStorage.retrieveKeys();
+            if (!stored) {
+                throw new Error('No stored keys found');
+            }
+            
+            // Decrypt private key
+            const decrypted = keyEncryption.decryptData(stored.keys, password);
+            
+            console.log('Nostr adapter: Signin processed successfully');
+            return { success: true, privateKey: decrypted };
+        } catch (error) {
+            console.error('Nostr adapter: Signin error:', error);
+            throw error;
+        }
+    },
+
+    async signOut() {
+        console.log('Nostr adapter: Processing signout');
+        
+        try {
+            // Clear stored keys
+            keyStorage.clearStoredKeys();
+            
+            console.log('Nostr adapter: Signout processed successfully');
+            return { success: true };
+        } catch (error) {
+            console.error('Nostr adapter: Signout error:', error);
+            throw error;
+        }
     }
 };
 
