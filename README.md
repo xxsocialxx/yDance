@@ -10,15 +10,16 @@ This project uses a strict modular architecture to prevent code duplication and 
 
 ## 🏗️ Architecture
 
-The codebase follows a **6-layer modular architecture** designed for safe, incremental updates:
+The codebase follows a **7-layer modular architecture** designed for safe, incremental updates:
 
 ```
-CONFIG → STATE → API → VIEWS → ROUTER → INIT
+CONFIG → STATE → API → SOCIAL → VIEWS → ROUTER → INIT
 ```
 
 - **CONFIG**: App settings and constants (safe to add new config)
 - **STATE**: Single source of truth for all data (safe to add new properties)
 - **API**: Database/network calls (safe to add new methods following templates)
+- **SOCIAL**: Social content processing, nostr integration, community intelligence (safe to add new social methods)
 - **VIEWS**: HTML rendering and DOM manipulation (safe to add new rendering functions)
 - **ROUTER**: Navigation and event handling (safe to add new routes)
 - **INIT**: Application startup (protected - do not modify)
@@ -69,10 +70,13 @@ The architecture is designed for **zero-breaking-changes** development:
    // 3. Add to API (following template)
    const api = { fetchNewData() { /* template pattern */ } };
    
-   // 4. Add to VIEWS (following template)
+   // 4. Add to SOCIAL (following template)
+   const social = { processNewContent() { /* template pattern */ } };
+   
+   // 5. Add to VIEWS (following template)
    const views = { renderNewData() { /* template pattern */ } };
    
-   // 5. Add to ROUTER (following template)
+   // 6. Add to ROUTER (following template)
    const router = { showNewView() { /* template pattern */ } };
    ```
 
@@ -94,9 +98,11 @@ The architecture is designed for **zero-breaking-changes** development:
 
 ### **Git Workflow for AI Agents**
 
-🚨 **CRITICAL: Always commit changes after completing features**
+🚨 **CRITICAL: NEVER FORGET TO COMMIT CHANGES** 🚨
 
-1. **After completing any feature or fix**:
+**MANDATORY RULE: Every single change must be committed immediately after completion. No exceptions.**
+
+1. **After completing ANY feature, fix, or change**:
    ```bash
    git add .
    git commit -m "Descriptive commit message"
@@ -112,15 +118,17 @@ The architecture is designed for **zero-breaking-changes** development:
    - Any architectural notes
    ```
 
-3. **Before starting work**:
+3. **Before starting ANY work**:
    ```bash
    git pull origin main
    ```
 
-4. **Check status**:
+4. **Check status regularly**:
    ```bash
    git status
    ```
+
+5. **Emergency reminder**: If you forget to commit, stop everything and commit immediately. Uncommitted changes are a project risk.
 
 **Live Site**: [https://xxsocialxx.github.io/yDance/](https://xxsocialxx.github.io/yDance/)
 
@@ -168,6 +176,7 @@ yDance/
 
 - **Frontend**: Vanilla JavaScript, HTML5, CSS3
 - **Backend**: Supabase (PostgreSQL)
+- **Social Protocol**: Nostr (decentralized social networking)
 - **PWA**: Service Worker ready
 - **Styling**: CSS Grid, Flexbox, Mobile-first
 
@@ -185,9 +194,10 @@ yDance/
 - ✅ **Events Tab**: Full event discovery with clickable elements
 - ✅ **DJs Tab**: DJ profiles with detailed views and social links
 - ✅ **Venues Tab**: Venue discovery with detailed venue pages
-- ✅ **Modular Architecture**: Clean, maintainable code structure
+- ✅ **Modular Architecture**: Clean, maintainable 7-layer code structure
 - ✅ **Responsive Design**: Mobile-first approach
 - ✅ **PWA Foundation**: Ready for offline functionality
+- ✅ **SOCIAL Layer**: Social content processing, nostr integration, community intelligence
 
 ### **In Development**
 - 🚧 **Sound Systems Tab**: Placeholder ready for implementation
