@@ -6,10 +6,10 @@ This project uses a **strict modular architecture** to prevent code duplication 
 
 ## 📋 Architecture Overview
 
-The codebase follows a **6-layer architecture** with clear boundaries:
+The codebase follows a **7-layer architecture** with clear boundaries:
 
 ```
-CONFIG → STATE → API → VIEWS → ROUTER → INIT
+CONFIG → STATE → API → SOCIAL → VIEWS → ROUTER → INIT
 ```
 
 ### 1. CONFIG Layer
@@ -27,17 +27,22 @@ CONFIG → STATE → API → VIEWS → ROUTER → INIT
 - **Add here**: New API methods, database queries, external API calls
 - **Don't add**: DOM manipulation, rendering, UI logic
 
-### 4. VIEWS Layer
+### 4. SOCIAL Layer
+- **Purpose**: Social content processing, nostr integration, community intelligence
+- **Add here**: Message parsing, nostr communication, social algorithms, moderation
+- **Don't add**: Direct DOM manipulation, API calls, or navigation logic
+
+### 5. VIEWS Layer
 - **Purpose**: All HTML rendering, DOM manipulation, UI updates
 - **Add here**: New rendering functions, DOM updates, UI components
 - **Don't add**: API calls, business logic, navigation
 
-### 5. ROUTER Layer
+### 6. ROUTER Layer
 - **Purpose**: Navigation, event handlers, view switching, user interactions
 - **Add here**: New routes, event listeners, navigation logic
 - **Don't add**: API calls, rendering, business logic
 
-### 6. INIT Layer
+### 7. INIT Layer
 - **Purpose**: Application startup orchestration
 - **DO NOT MODIFY**: This section is off-limits
 
@@ -70,6 +75,20 @@ async fetchNewData() {
         return data;
     } catch (error) {
         console.error('Error fetching new data:', error);
+        throw error;
+    }
+}
+```
+
+### For New SOCIAL Methods:
+```javascript
+async processNewContent(contentData) {
+    try {
+        // Process content
+        // Apply social intelligence
+        // Return processed data
+    } catch (error) {
+        console.error('Error processing content:', error);
         throw error;
     }
 }
@@ -121,8 +140,9 @@ async showNewView(parameter = null) {
 1. **Configuration**: Add any constants to `CONFIG`
 2. **State**: Add data tracking to `state` object
 3. **API**: Add data fetching methods to `api` object
-4. **Views**: Add rendering functions to `views` object
-5. **Router**: Add navigation logic to `router` object
+4. **Social**: Add social processing methods to `social` object
+5. **Views**: Add rendering functions to `views` object
+6. **Router**: Add navigation logic to `router` object
 
 ### Adding a New View:
 1. Add HTML structure to `index.html`
@@ -142,7 +162,7 @@ async showNewView(parameter = null) {
 
 Before submitting any changes, verify:
 
-- [ ] Code is in the correct module (CONFIG/STATE/API/VIEWS/ROUTER)
+- [ ] Code is in the correct module (CONFIG/STATE/API/SOCIAL/VIEWS/ROUTER)
 - [ ] No functions are added outside the designated modules
 - [ ] No code duplication exists
 - [ ] Supabase client is reused (not recreated)
@@ -150,6 +170,7 @@ Before submitting any changes, verify:
 - [ ] Console logging is consistent with existing code
 - [ ] DOM manipulation is only in VIEWS module
 - [ ] API calls are only in API module
+- [ ] Social processing is only in SOCIAL module
 - [ ] Navigation logic is only in ROUTER module
 
 ## 🚨 Emergency Fixes
