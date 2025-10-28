@@ -56,7 +56,12 @@ const state = {
     userAuth: null,
     socialFeed: [],
     moderationQueue: [],
-    linkedAttributes: {}
+    linkedAttributes: {},
+    // Auth state
+    currentUser: null,
+    userKeys: null,
+    isAuthenticated: false,
+    authSession: null
 };
 
 // ============================================================================
@@ -528,6 +533,149 @@ const social = {
             console.error('Error fetching social feed:', error);
             throw error;
         }
+    },
+
+    // Auth Methods
+    async signUp(email, password) {
+        console.log('Signing up user:', email);
+        
+        try {
+            // Generate Nostr keypair
+            const keys = this.generateNostrKeys();
+            
+            // Create user in Supabase
+            const { data, error } = await state.supabaseClient.auth.signUp({
+                email: email,
+                password: password
+            });
+            
+            if (error) throw error;
+            
+            // Store Nostr keys encrypted with password
+            const encryptedKeys = this.encryptKeys(keys, password);
+            
+            // Update state
+            state.currentUser = data.user;
+            state.userKeys = keys;
+            state.isAuthenticated = true;
+            state.authSession = data.session;
+            
+            console.log('User signed up successfully');
+            return { success: true, user: data.user, keys: keys };
+            
+        } catch (error) {
+            console.error('Error signing up:', error);
+            throw error;
+        }
+    },
+
+    async signIn(email, password) {
+        console.log('Signing in user:', email);
+        
+        try {
+            // Sign in with Supabase
+            const { data, error } = await state.supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
+            
+            if (error) throw error;
+            
+            // TODO: Retrieve and decrypt Nostr keys from database
+            // For now, generate new keys (placeholder)
+            const keys = this.generateNostrKeys();
+            
+            // Update state
+            state.currentUser = data.user;
+            state.userKeys = keys;
+            state.isAuthenticated = true;
+            state.authSession = data.session;
+            
+            console.log('User signed in successfully');
+            return { success: true, user: data.user, keys: keys };
+            
+        } catch (error) {
+            console.error('Error signing in:', error);
+            throw error;
+        }
+    },
+
+    async signOut() {
+        console.log('Signing out user');
+        
+        try {
+            // Sign out from Supabase
+            const { error } = await state.supabaseClient.auth.signOut();
+            
+            if (error) throw error;
+            
+            // Clear state
+            state.currentUser = null;
+            state.userKeys = null;
+            state.isAuthenticated = false;
+            state.authSession = null;
+            
+            console.log('User signed out successfully');
+            return { success: true };
+            
+        } catch (error) {
+            console.error('Error signing out:', error);
+            throw error;
+        }
+    },
+
+    generateNostrKeys() {
+        console.log('Generating Nostr keypair...');
+        
+        try {
+            // Placeholder Nostr key generation
+            // TODO: Implement actual Nostr key generation
+            const keys = {
+                publicKey: 'npub1' + Math.random().toString(36).substring(2, 15),
+                privateKey: 'nsec1' + Math.random().toString(36).substring(2, 15)
+            };
+            
+            console.log('Nostr keys generated');
+            return keys;
+        } catch (error) {
+            console.error('Error generating Nostr keys:', error);
+            throw error;
+        }
+    },
+
+    encryptKeys(keys, password) {
+        console.log('Encrypting Nostr keys...');
+        
+        try {
+            // Placeholder encryption
+            // TODO: Implement actual encryption
+            const encrypted = {
+                publicKey: keys.publicKey,
+                encryptedPrivateKey: 'encrypted_' + keys.privateKey
+            };
+            
+            console.log('Keys encrypted');
+            return encrypted;
+        } catch (error) {
+            console.error('Error encrypting keys:', error);
+            throw error;
+        }
+    },
+
+    // Test method for auth state
+    testAuthState() {
+        console.log('Testing auth state...');
+        console.log('Current user:', state.currentUser);
+        console.log('User keys:', state.userKeys);
+        console.log('Is authenticated:', state.isAuthenticated);
+        console.log('Auth session:', state.authSession);
+        
+        return {
+            currentUser: state.currentUser,
+            userKeys: state.userKeys,
+            isAuthenticated: state.isAuthenticated,
+            authSession: state.authSession
+        };
     }
 };
 
