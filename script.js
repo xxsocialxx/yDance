@@ -890,7 +890,23 @@ const social = {
             return { success: true, data };
         } catch (error) {
             console.error('Error storing keys in database:', error);
-            throw error;
+            
+            // TEMPORARY FALLBACK: Store in localStorage if database fails
+            console.log('Database storage failed, using localStorage fallback...');
+            try {
+                const fallbackData = {
+                    userId: userId,
+                    encryptedKeys: encryptedKeys,
+                    timestamp: new Date().toISOString(),
+                    fallback: true
+                };
+                localStorage.setItem(`nostr_keys_${userId}`, JSON.stringify(fallbackData));
+                console.log('Keys stored in localStorage as fallback');
+                return { success: true, data: fallbackData, fallback: true };
+            } catch (fallbackError) {
+                console.error('Fallback storage also failed:', fallbackError);
+                throw error; // Throw original error
+            }
         }
     },
 
@@ -916,7 +932,22 @@ const social = {
             return data.encrypted_private_key;
         } catch (error) {
             console.error('Error retrieving keys from database:', error);
-            throw error;
+            
+            // TEMPORARY FALLBACK: Try localStorage if database fails
+            console.log('Database retrieval failed, trying localStorage fallback...');
+            try {
+                const fallbackData = localStorage.getItem(`nostr_keys_${userId}`);
+                if (fallbackData) {
+                    const parsed = JSON.parse(fallbackData);
+                    console.log('Keys retrieved from localStorage fallback');
+                    return parsed.encryptedKeys;
+                }
+                console.log('No keys found in localStorage fallback either');
+                return null;
+            } catch (fallbackError) {
+                console.error('Fallback retrieval also failed:', fallbackError);
+                throw error; // Throw original error
+            }
         }
     },
 
@@ -968,7 +999,23 @@ const social = {
             return { success: true, data };
         } catch (error) {
             console.error('Error storing recovery phrase in database:', error);
-            throw error;
+            
+            // TEMPORARY FALLBACK: Store in localStorage if database fails
+            console.log('Database storage failed, using localStorage fallback...');
+            try {
+                const fallbackData = {
+                    userId: userId,
+                    encryptedRecoveryPhrase: encryptedRecoveryPhrase,
+                    timestamp: new Date().toISOString(),
+                    fallback: true
+                };
+                localStorage.setItem(`recovery_phrase_${userId}`, JSON.stringify(fallbackData));
+                console.log('Recovery phrase stored in localStorage as fallback');
+                return { success: true, data: fallbackData, fallback: true };
+            } catch (fallbackError) {
+                console.error('Fallback storage also failed:', fallbackError);
+                throw error; // Throw original error
+            }
         }
     },
 
@@ -994,7 +1041,22 @@ const social = {
             return data.encrypted_recovery_phrase;
         } catch (error) {
             console.error('Error retrieving recovery phrase from database:', error);
-            throw error;
+            
+            // TEMPORARY FALLBACK: Try localStorage if database fails
+            console.log('Database retrieval failed, trying localStorage fallback...');
+            try {
+                const fallbackData = localStorage.getItem(`recovery_phrase_${userId}`);
+                if (fallbackData) {
+                    const parsed = JSON.parse(fallbackData);
+                    console.log('Recovery phrase retrieved from localStorage fallback');
+                    return parsed.encryptedRecoveryPhrase;
+                }
+                console.log('No recovery phrase found in localStorage fallback either');
+                return null;
+            } catch (fallbackError) {
+                console.error('Fallback retrieval also failed:', fallbackError);
+                throw error; // Throw original error
+            }
         }
     },
 
