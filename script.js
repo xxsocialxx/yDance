@@ -7,13 +7,14 @@
 // 1. NEVER add functions outside the designated modules below
 // 2. NEVER duplicate code - use existing patterns
 // 3. NEVER create new Supabase clients - use state.supabaseClient
-// 4. ALWAYS follow the module structure: CONFIG → STATE → API → VIEWS → ROUTER → INIT
+// 4. ALWAYS follow the module structure: CONFIG → STATE → API → SOCIAL → VIEWS → ROUTER → INIT
 // 5. NEW FEATURES: Add to existing modules, don't create new ones
 // 
 // 📁 MODULE STRUCTURE:
 //   CONFIG    - All settings and constants
 //   STATE     - Single source of truth for all data
 //   API       - All database/network calls
+//   SOCIAL    - Social content processing, nostr integration, community intelligence
 //   VIEWS     - All HTML rendering and DOM manipulation
 //   ROUTER    - Navigation, event handlers, view switching
 //   INIT      - Application startup (DO NOT MODIFY)
@@ -49,7 +50,13 @@ const state = {
     currentDJProfile: null,
     venuesData: [],
     soundSystemsData: [],
-    friendsData: []
+    friendsData: [],
+    // Social layer state
+    nostrClient: null,
+    userAuth: null,
+    socialFeed: [],
+    moderationQueue: [],
+    linkedAttributes: {}
 };
 
 // ============================================================================
@@ -337,7 +344,195 @@ const api = {
 };
 
 // ============================================================================
-// 4. VIEW LAYER (Rendering Module)
+// 4. SOCIAL LAYER (Social Intelligence Module)
+// ============================================================================
+// 🎯 PURPOSE: Social content processing, nostr integration, community intelligence
+// ✅ ADD HERE: Message parsing, nostr communication, social algorithms, moderation
+// ❌ DON'T ADD: Direct DOM manipulation, API calls, or navigation logic
+// 
+// 📋 TEMPLATE FOR NEW SOCIAL METHODS:
+//   async processNewContent(contentData) {
+//       try {
+//           // Process content
+//           // Apply social intelligence
+//           // Return processed data
+//       } catch (error) {
+//           console.error('Error processing content:', error);
+//           throw error;
+//       }
+//   }
+// ============================================================================
+const social = {
+    async init() {
+        console.log('Initializing Social layer...');
+        
+        try {
+            // Initialize nostr client (placeholder for now)
+            state.nostrClient = {
+                connected: false,
+                relay: 'wss://localhost:8080' // Placeholder private relay
+            };
+            
+            console.log('Social layer initialized successfully');
+            return true;
+        } catch (error) {
+            console.error('Error initializing Social layer:', error);
+            return false;
+        }
+    },
+
+    async processMessage(messageText) {
+        console.log('Processing social message:', messageText);
+        
+        try {
+            // Parse message for event attributes
+            const parsedData = this.parseEventMessage(messageText);
+            
+            // Link to existing database attributes
+            const linkedData = await this.linkAttributes(parsedData);
+            
+            // Queue for moderation if needed
+            if (linkedData.needsModeration) {
+                this.queueForModeration(linkedData);
+            }
+            
+            return linkedData;
+        } catch (error) {
+            console.error('Error processing message:', error);
+            throw error;
+        }
+    },
+
+    parseEventMessage(messageText) {
+        console.log('Parsing event message...');
+        
+        try {
+            // Basic parsing patterns (placeholder implementation)
+            const patterns = {
+                dj: /(?:DJ|dj|artist)[\s:]+([A-Za-z\s]+)/i,
+                venue: /(?:at|@|venue)[\s:]+([A-Za-z\s]+)/i,
+                date: /(?:on|date)[\s:]+([A-Za-z0-9\s,]+)/i,
+                time: /(?:at|time)[\s:]+(\d{1,2}:\d{2}|\d{1,2}\s?(?:am|pm))/i
+            };
+            
+            const parsed = {
+                originalText: messageText,
+                dj: this.extractPattern(messageText, patterns.dj),
+                venue: this.extractPattern(messageText, patterns.venue),
+                date: this.extractPattern(messageText, patterns.date),
+                time: this.extractPattern(messageText, patterns.time),
+                needsModeration: true // Default to moderation for now
+            };
+            
+            console.log('Message parsed:', parsed);
+            return parsed;
+        } catch (error) {
+            console.error('Error parsing message:', error);
+            throw error;
+        }
+    },
+
+    extractPattern(text, pattern) {
+        const match = text.match(pattern);
+        return match ? match[1].trim() : null;
+    },
+
+    async linkAttributes(parsedData) {
+        console.log('Linking attributes to database...');
+        
+        try {
+            const linkedData = { ...parsedData };
+            
+            // Link DJ if found
+            if (parsedData.dj) {
+                const djMatch = state.djProfilesData.find(dj => 
+                    dj.name.toLowerCase().includes(parsedData.dj.toLowerCase())
+                );
+                linkedData.linkedDJ = djMatch || null;
+            }
+            
+            // Link venue if found
+            if (parsedData.venue) {
+                const venueMatch = state.venuesData.find(venue => 
+                    venue.name.toLowerCase().includes(parsedData.venue.toLowerCase())
+                );
+                linkedData.linkedVenue = venueMatch || null;
+            }
+            
+            console.log('Attributes linked:', linkedData);
+            return linkedData;
+        } catch (error) {
+            console.error('Error linking attributes:', error);
+            throw error;
+        }
+    },
+
+    queueForModeration(data) {
+        console.log('Queueing for moderation...');
+        
+        try {
+            const moderationItem = {
+                id: Date.now(),
+                data: data,
+                status: 'pending',
+                timestamp: new Date().toISOString()
+            };
+            
+            state.moderationQueue.push(moderationItem);
+            console.log('Item queued for moderation:', moderationItem);
+        } catch (error) {
+            console.error('Error queueing for moderation:', error);
+            throw error;
+        }
+    },
+
+    async sendNostrMessage(content) {
+        console.log('Sending nostr message...');
+        
+        try {
+            // Placeholder nostr message sending
+            if (!state.nostrClient || !state.nostrClient.connected) {
+                console.log('Nostr client not connected, message queued');
+                return { success: false, queued: true };
+            }
+            
+            // TODO: Implement actual nostr message sending
+            console.log('Nostr message would be sent:', content);
+            return { success: true, messageId: 'placeholder-id' };
+        } catch (error) {
+            console.error('Error sending nostr message:', error);
+            throw error;
+        }
+    },
+
+    async fetchSocialFeed() {
+        console.log('Fetching social feed...');
+        
+        try {
+            // Placeholder social feed fetching
+            const feedItems = [
+                {
+                    id: 1,
+                    type: 'event_announcement',
+                    content: 'Amazing night at The Warehouse!',
+                    author: 'DJ_Alice',
+                    timestamp: new Date().toISOString(),
+                    linkedEvent: null
+                }
+            ];
+            
+            state.socialFeed = feedItems;
+            console.log('Social feed fetched:', feedItems.length, 'items');
+            return feedItems;
+        } catch (error) {
+            console.error('Error fetching social feed:', error);
+            throw error;
+        }
+    }
+};
+
+// ============================================================================
+// 5. VIEW LAYER (Rendering Module)
 // ============================================================================
 // 🎯 PURPOSE: All HTML rendering, DOM manipulation, and UI updates
 // ✅ ADD HERE: New rendering functions, DOM updates, UI components
@@ -768,7 +963,7 @@ const views = {
 };
 
 // ============================================================================
-// 5. ROUTER/CONTROLLER LAYER
+// 6. ROUTER/CONTROLLER LAYER
 // ============================================================================
 // 🎯 PURPOSE: Navigation, event handlers, view switching, user interactions
 // ✅ ADD HERE: New routes, event listeners, navigation logic
@@ -1062,7 +1257,7 @@ const router = {
 };
 
 // ============================================================================
-// 6. INITIALIZATION
+// 7. INITIALIZATION
 // ============================================================================
 // 🚨 DO NOT MODIFY THIS SECTION 🚨
 // This orchestrates the entire app startup sequence
@@ -1083,6 +1278,12 @@ async function init() {
     if (!apiInitialized) {
         views.showError('events-container', 'Failed to connect to database');
         return;
+    }
+    
+    // Initialize Social layer
+    const socialInitialized = await social.init();
+    if (!socialInitialized) {
+        console.warn('Social layer initialization failed, continuing without social features');
     }
     
     // Set up navigation
@@ -1111,8 +1312,9 @@ document.addEventListener('DOMContentLoaded', init);
 // 1. Add configuration to CONFIG object
 // 2. Add state properties to state object  
 // 3. Add API methods to api object
-// 4. Add rendering functions to views object
-// 5. Add navigation logic to router object
+// 4. Add social processing to social object
+// 5. Add rendering functions to views object
+// 6. Add navigation logic to router object
 // 
 // NEVER add functions outside these modules!
 // ============================================================================
