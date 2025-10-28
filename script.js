@@ -61,7 +61,8 @@ const state = {
     currentUser: null,
     userKeys: null,
     isAuthenticated: false,
-    authSession: null
+    authSession: null,
+    authModalMode: 'login'
 };
 
 // ============================================================================
@@ -1620,6 +1621,9 @@ const router = {
             backButton.addEventListener('click', this.showEventsView);
         }
         
+        // Initialize auth UI
+        this.initAuthUI();
+        
         // Back to DJ list button
         const backToDJListButton = document.getElementById('back-to-dj-list');
         if (backToDJListButton) {
@@ -1678,6 +1682,203 @@ const router = {
         }
         
         console.log('Navigation setup complete');
+    },
+
+    // Auth UI Management
+    initAuthUI() {
+        console.log('Initializing auth UI...');
+        
+        // Auth button event listeners
+        const loginBtn = document.getElementById('login-btn');
+        const signupBtn = document.getElementById('signup-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const authModal = document.getElementById('auth-modal');
+        const authModalClose = document.getElementById('auth-modal-close');
+        const authCancelBtn = document.getElementById('auth-cancel-btn');
+        const authForm = document.getElementById('auth-form');
+        const authSwitchBtn = document.getElementById('auth-switch-btn');
+        
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => this.showAuthModal('login'));
+        }
+        
+        if (signupBtn) {
+            signupBtn.addEventListener('click', () => this.showAuthModal('signup'));
+        }
+        
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => this.handleLogout());
+        }
+        
+        if (authModalClose) {
+            authModalClose.addEventListener('click', () => this.hideAuthModal());
+        }
+        
+        if (authCancelBtn) {
+            authCancelBtn.addEventListener('click', () => this.hideAuthModal());
+        }
+        
+        if (authForm) {
+            authForm.addEventListener('submit', (e) => this.handleAuthSubmit(e));
+        }
+        
+        if (authSwitchBtn) {
+            authSwitchBtn.addEventListener('click', () => this.switchAuthMode());
+        }
+        
+        // Close modal when clicking outside
+        if (authModal) {
+            authModal.addEventListener('click', (e) => {
+                if (e.target === authModal) {
+                    this.hideAuthModal();
+                }
+            });
+        }
+        
+        // Update auth status on page load
+        this.updateAuthStatus();
+        
+        console.log('Auth UI initialized');
+    },
+
+    showAuthModal(mode) {
+        console.log('Showing auth modal in', mode, 'mode');
+        
+        const authModal = document.getElementById('auth-modal');
+        const authModalTitle = document.getElementById('auth-modal-title');
+        const authSubmitBtn = document.getElementById('auth-submit-btn');
+        const authSwitchText = document.getElementById('auth-switch-text');
+        const authSwitchBtn = document.getElementById('auth-switch-btn');
+        
+        if (!authModal) return;
+        
+        // Set mode
+        state.authModalMode = mode;
+        
+        // Update UI based on mode
+        if (mode === 'login') {
+            authModalTitle.textContent = 'Login';
+            authSubmitBtn.textContent = 'Login';
+            authSwitchText.textContent = "Don't have an account?";
+            authSwitchBtn.textContent = 'Sign Up';
+        } else {
+            authModalTitle.textContent = 'Sign Up';
+            authSubmitBtn.textContent = 'Sign Up';
+            authSwitchText.textContent = 'Already have an account?';
+            authSwitchBtn.textContent = 'Login';
+        }
+        
+        // Clear form
+        document.getElementById('auth-email').value = '';
+        document.getElementById('auth-password').value = '';
+        
+        // Show modal
+        authModal.style.display = 'flex';
+    },
+
+    hideAuthModal() {
+        console.log('Hiding auth modal');
+        
+        const authModal = document.getElementById('auth-modal');
+        if (authModal) {
+            authModal.style.display = 'none';
+        }
+    },
+
+    switchAuthMode() {
+        const currentMode = state.authModalMode;
+        const newMode = currentMode === 'login' ? 'signup' : 'login';
+        this.showAuthModal(newMode);
+    },
+
+    async handleAuthSubmit(e) {
+        e.preventDefault();
+        console.log('Handling auth submit in', state.authModalMode, 'mode');
+        
+        const email = document.getElementById('auth-email').value;
+        const password = document.getElementById('auth-password').value;
+        
+        if (!email || !password) {
+            alert('Please fill in all fields');
+            return;
+        }
+        
+        try {
+            let result;
+            if (state.authModalMode === 'login') {
+                result = await social.signIn(email, password);
+            } else {
+                result = await social.signUp(email, password);
+            }
+            
+            if (result.success) {
+                console.log('Auth successful:', result);
+                this.hideAuthModal();
+                this.updateAuthStatus();
+                
+                // Show success message
+                const message = state.authModalMode === 'login' ? 'Login successful!' : 'Account created successfully!';
+                alert(message);
+            } else {
+                alert('Authentication failed. Please try again.');
+            }
+        } catch (error) {
+            console.error('Auth error:', error);
+            alert('Authentication failed: ' + error.message);
+        }
+    },
+
+    async handleLogout() {
+        console.log('Handling logout');
+        
+        try {
+            const result = await social.signOut();
+            if (result.success) {
+                console.log('Logout successful');
+                this.updateAuthStatus();
+                alert('Logged out successfully!');
+            } else {
+                alert('Logout failed. Please try again.');
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+            alert('Logout failed: ' + error.message);
+        }
+    },
+
+    updateAuthStatus() {
+        console.log('Updating auth status...');
+        
+        const authStatus = document.getElementById('auth-status');
+        const authUser = document.getElementById('auth-user');
+        const loginBtn = document.getElementById('login-btn');
+        const signupBtn = document.getElementById('signup-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        
+        if (!authStatus) return;
+        
+        if (state.isAuthenticated && state.currentUser) {
+            // User is authenticated
+            authStatus.textContent = 'Signed in as:';
+            authUser.textContent = state.currentUser.email;
+            authUser.style.display = 'inline';
+            
+            // Show/hide buttons
+            if (loginBtn) loginBtn.style.display = 'none';
+            if (signupBtn) signupBtn.style.display = 'none';
+            if (logoutBtn) logoutBtn.style.display = 'inline-block';
+        } else {
+            // User is not authenticated
+            authStatus.textContent = 'Not signed in';
+            authUser.style.display = 'none';
+            
+            // Show/hide buttons
+            if (loginBtn) loginBtn.style.display = 'inline-block';
+            if (signupBtn) signupBtn.style.display = 'inline-block';
+            if (logoutBtn) logoutBtn.style.display = 'none';
+        }
+        
+        console.log('Auth status updated:', state.isAuthenticated ? 'authenticated' : 'not authenticated');
     }
 };
 

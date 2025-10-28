@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>yDance Social Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 3px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>yDance Social Layer Test</h1>
+    
+    <div class="test-section">
+        <h3>Test 1: Social Layer Initialization</h3>
+        <button onclick="testSocialInit()">Test Social Init</button>
+        <div id="init-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 2: Auth Simulation</h3>
+        <button onclick="testAuthSimulation()">Test Auth Simulation</button>
+        <div id="auth-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 3: Message Processing</h3>
+        <button onclick="testMessageProcessing()">Test Message Processing</button>
+        <div id="message-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 4: Social Mentions</h3>
+        <button onclick="testSocialMentions()">Test Social Mentions</button>
+        <div id="mentions-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 5: Render Social Mentions</h3>
+        <button onclick="testRenderSocialMentions()">Test Render Social Mentions</button>
+        <div id="render-result"></div>
+    </div>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="script.js"></script>
+    <script>
+        // Test functions
+        function testSocialInit() {
+            const resultDiv = document.getElementById('init-result');
+            try {
+                social.init().then(success => {
+                    if (success) {
+                        resultDiv.innerHTML = '<div class="test-result success">✅ Social layer initialized successfully</div>';
+                    } else {
+                        resultDiv.innerHTML = '<div class="test-result error">❌ Social layer initialization failed</div>';
+                    }
+                });
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        function testAuthSimulation() {
+            const resultDiv = document.getElementById('auth-result');
+            try {
+                const result = social.simulateAuth();
+                if (result.success) {
+                    resultDiv.innerHTML = `<div class="test-result success">✅ Auth simulation successful<br>
+                        User: ${result.user.email}<br>
+                        Nostr PubKey: ${result.keys.publicKey}</div>`;
+                } else {
+                    resultDiv.innerHTML = '<div class="test-result error">❌ Auth simulation failed</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        function testMessageProcessing() {
+            const resultDiv = document.getElementById('message-result');
+            try {
+                const testMessage = "Amazing night at The Warehouse with DJ Alice!";
+                social.processMessage(testMessage).then(result => {
+                    resultDiv.innerHTML = `<div class="test-result success">✅ Message processed successfully<br>
+                        Original: ${result.originalText}<br>
+                        DJ: ${result.dj || 'None'}<br>
+                        Venue: ${result.venue || 'None'}<br>
+                        Linked DJ: ${result.linkedDJ ? result.linkedDJ.name : 'None'}<br>
+                        Linked Venue: ${result.linkedVenue ? result.linkedVenue.name : 'None'}</div>`;
+                });
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        function testSocialMentions() {
+            const resultDiv = document.getElementById('mentions-result');
+            try {
+                // First add some test messages to social feed
+                state.socialFeed = [
+                    {
+                        id: 1,
+                        content: "DJ Alice killed it at The Warehouse last night!",
+                        author: "test_user",
+                        timestamp: new Date().toISOString()
+                    },
+                    {
+                        id: 2,
+                        content: "The Warehouse has amazing sound system",
+                        author: "venue_fan",
+                        timestamp: new Date().toISOString()
+                    }
+                ];
+                
+                const djMentions = social.getSocialMentionsForDJ("Alice");
+                const venueMentions = social.getSocialMentionsForVenue("Warehouse");
+                
+                resultDiv.innerHTML = `<div class="test-result success">✅ Social mentions test successful<br>
+                    DJ mentions: ${djMentions.length}<br>
+                    Venue mentions: ${venueMentions.length}</div>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        function testRenderSocialMentions() {
+            const resultDiv = document.getElementById('render-result');
+            try {
+                // Ensure we have test data
+                if (state.socialFeed.length === 0) {
+                    state.socialFeed = [
+                        {
+                            id: 1,
+                            content: "DJ Alice killed it at The Warehouse last night!",
+                            author: "test_user",
+                            timestamp: new Date().toISOString()
+                        }
+                    ];
+                }
+                
+                const renderedHTML = views.renderSocialMentions("Alice");
+                resultDiv.innerHTML = `<div class="test-result success">✅ Render social mentions successful<br>
+                    <div style="margin-top: 10px; border: 1px solid #ccc; padding: 10px;">${renderedHTML}</div></div>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Social test page loaded');
+        });
+    </script>
+</body>
+</html>

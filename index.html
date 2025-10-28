@@ -41,6 +41,19 @@
                     <span class="tab-label">Social</span>
                 </button>
             </div>
+            
+            <!-- Auth Status Bar -->
+            <div class="auth-status-bar" id="auth-status-bar">
+                <div class="auth-info" id="auth-info">
+                    <span class="auth-status" id="auth-status">Not signed in</span>
+                    <span class="auth-user" id="auth-user" style="display: none;"></span>
+                </div>
+                <div class="auth-actions" id="auth-actions">
+                    <button class="auth-button" id="login-btn">Login</button>
+                    <button class="auth-button" id="signup-btn">Sign Up</button>
+                    <button class="auth-button" id="logout-btn" style="display: none;">Logout</button>
+                </div>
+            </div>
         </nav>
         
         <!-- Events View -->
@@ -156,6 +169,36 @@
             <!-- Social Feed -->
             <div class="social-feed-container" id="social-feed-container">
                 <!-- Social messages will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Auth Modal -->
+        <div class="auth-modal" id="auth-modal" style="display: none;">
+            <div class="auth-modal-content">
+                <div class="auth-modal-header">
+                    <h3 id="auth-modal-title">Login</h3>
+                    <button class="auth-modal-close" id="auth-modal-close">&times;</button>
+                </div>
+                <div class="auth-modal-body">
+                    <form id="auth-form">
+                        <div class="auth-form-group">
+                            <label for="auth-email">Email:</label>
+                            <input type="email" id="auth-email" required>
+                        </div>
+                        <div class="auth-form-group">
+                            <label for="auth-password">Password:</label>
+                            <input type="password" id="auth-password" required>
+                        </div>
+                        <div class="auth-form-actions">
+                            <button type="submit" id="auth-submit-btn">Login</button>
+                            <button type="button" id="auth-cancel-btn">Cancel</button>
+                        </div>
+                    </form>
+                    <div class="auth-switch">
+                        <span id="auth-switch-text">Don't have an account?</span>
+                        <button type="button" id="auth-switch-btn">Sign Up</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
