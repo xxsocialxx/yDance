@@ -1215,3 +1215,57 @@ h2 {
         padding: 20px;
     }
 }
+
+/* Social Mentions Styling */
+.social-mentions-container {
+    margin-top: 15px;
+}
+
+.social-mention-item {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-left: 3px solid #007bff;
+}
+
+.mention-content {
+    color: #555;
+    line-height: 1.4;
+    margin-bottom: 8px;
+}
+
+.mention-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.mention-author {
+    font-weight: 500;
+    color: #333;
+}
+
+.mention-timestamp {
+    color: #888;
+}
+
+.no-mentions {
+    color: #888;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.error-mentions {
+    color: #dc3545;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+    background: #f8d7da;
+    border-radius: 8px;
+}

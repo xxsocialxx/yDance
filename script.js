@@ -535,6 +535,53 @@ const social = {
         }
     },
 
+    // Social Intelligence Methods
+    getSocialMentionsForDJ(djName) {
+        console.log('Finding social mentions for DJ:', djName);
+        
+        try {
+            // Search through social feed for mentions of this DJ
+            const mentions = state.socialFeed.filter(message => {
+                const content = message.content.toLowerCase();
+                const djNameLower = djName.toLowerCase();
+                
+                // Check if DJ name appears in message content
+                return content.includes(djNameLower) || 
+                       content.includes('dj ' + djNameLower) ||
+                       content.includes('artist ' + djNameLower);
+            });
+            
+            console.log('Found', mentions.length, 'mentions for', djName);
+            return mentions;
+        } catch (error) {
+            console.error('Error finding social mentions:', error);
+            return [];
+        }
+    },
+
+    getSocialMentionsForVenue(venueName) {
+        console.log('Finding social mentions for venue:', venueName);
+        
+        try {
+            // Search through social feed for mentions of this venue
+            const mentions = state.socialFeed.filter(message => {
+                const content = message.content.toLowerCase();
+                const venueNameLower = venueName.toLowerCase();
+                
+                // Check if venue name appears in message content
+                return content.includes(venueNameLower) ||
+                       content.includes('at ' + venueNameLower) ||
+                       content.includes('venue ' + venueNameLower);
+            });
+            
+            console.log('Found', mentions.length, 'mentions for', venueName);
+            return mentions;
+        } catch (error) {
+            console.error('Error finding venue mentions:', error);
+            return [];
+        }
+    },
+
     // Auth Methods
     async signUp(email, password) {
         console.log('Signing up user:', email);
@@ -890,6 +937,11 @@ const views = {
                             <!-- Future badge system will add more badges here -->
                         </div>
                     </div>
+                    
+                    <div class="dj-profile-social-mentions">
+                        <h3>Recent Social Mentions</h3>
+                        ${this.renderSocialMentions(profile.name)}
+                    </div>
                 </div>
             </div>
         `;
@@ -1196,6 +1248,39 @@ const views = {
         if (diffDays < 7) return `${diffDays}d ago`;
         
         return date.toLocaleDateString();
+    },
+
+    renderSocialMentions(djName) {
+        console.log('Rendering social mentions for DJ:', djName);
+        
+        try {
+            // Get social mentions for this DJ
+            const mentions = social.getSocialMentionsForDJ(djName);
+            
+            if (!mentions || mentions.length === 0) {
+                return '<p class="no-mentions">No recent social mentions found.</p>';
+            }
+            
+            // Create mentions HTML
+            const mentionsHTML = mentions.map(mention => `
+                <div class="social-mention-item">
+                    <div class="mention-content">${mention.content}</div>
+                    <div class="mention-meta">
+                        <span class="mention-author">${mention.author || 'Anonymous'}</span>
+                        <span class="mention-timestamp">${this.formatTimestamp(mention.timestamp)}</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            return `
+                <div class="social-mentions-container">
+                    ${mentionsHTML}
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error rendering social mentions:', error);
+            return '<p class="error-mentions">Error loading social mentions.</p>';
+        }
     }
 };
 
