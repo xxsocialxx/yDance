@@ -676,6 +676,37 @@ const social = {
             isAuthenticated: state.isAuthenticated,
             authSession: state.authSession
         };
+    },
+
+    // Test method to simulate authentication
+    simulateAuth() {
+        console.log('Simulating authentication...');
+        
+        // Generate test user and keys
+        const keys = this.generateNostrKeys();
+        
+        // Set test user data
+        state.currentUser = {
+            id: 'test-user-123',
+            email: 'test@example.com',
+            created_at: new Date().toISOString()
+        };
+        state.userKeys = keys;
+        state.isAuthenticated = true;
+        state.authSession = {
+            access_token: 'test-token',
+            expires_at: Date.now() + 3600000
+        };
+        
+        console.log('Authentication simulated successfully');
+        console.log('User:', state.currentUser.email);
+        console.log('Nostr PubKey:', state.userKeys.publicKey);
+        
+        return {
+            success: true,
+            user: state.currentUser,
+            keys: state.userKeys
+        };
     }
 };
 
@@ -1444,10 +1475,12 @@ const router = {
             const message = {
                 id: Date.now(),
                 content: messageText,
-                author: 'You',
+                author: state.isAuthenticated ? (state.currentUser?.email || 'Authenticated User') : 'Anonymous',
                 timestamp: new Date().toISOString(),
                 status: 'processed',
-                links: []
+                links: [],
+                userId: state.currentUser?.id || null,
+                nostrPubKey: state.userKeys?.publicKey || null
             };
             
             // Add links if attributes were found
@@ -1480,10 +1513,12 @@ const router = {
             const errorMessage = {
                 id: Date.now(),
                 content: messageText,
-                author: 'You',
+                author: state.isAuthenticated ? (state.currentUser?.email || 'Authenticated User') : 'Anonymous',
                 timestamp: new Date().toISOString(),
                 status: 'error',
-                links: []
+                links: [],
+                userId: state.currentUser?.id || null,
+                nostrPubKey: state.userKeys?.publicKey || null
             };
             
             state.socialFeed.unshift(errorMessage);
