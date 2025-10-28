@@ -162,6 +162,34 @@ If you accidentally break the architecture:
 4. **Test functionality** - Make sure everything still works
 5. **Update this guide** - If you found a new pattern
 
+## 🔄 Git Workflow
+
+### **CRITICAL: Always commit your changes**
+
+After completing any feature or fix:
+
+```bash
+git add .
+git commit -m "Brief description of changes
+
+- Specific change 1
+- Specific change 2
+- Any architectural notes"
+git push origin main
+```
+
+### **Before Starting Work**
+```bash
+git pull origin main
+```
+
+### **Check Status**
+```bash
+git status
+```
+
+**Live Site**: [https://xxsocialxx.github.io/yDance/](https://xxsocialxx.github.io/yDance/)
+
 ## 📞 Need Help?
 
 If you're unsure where code should go:

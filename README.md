@@ -92,6 +92,40 @@ The architecture is designed for **zero-breaking-changes** development:
 - **Fix linting**: `npm run lint:fix`
 - **Serve locally**: `npm run serve`
 
+### **Git Workflow for AI Agents**
+
+🚨 **CRITICAL: Always commit changes after completing features**
+
+1. **After completing any feature or fix**:
+   ```bash
+   git add .
+   git commit -m "Descriptive commit message"
+   git push origin main
+   ```
+
+2. **Commit Message Format**:
+   ```
+   Brief description of changes
+
+   - Specific change 1
+   - Specific change 2
+   - Any architectural notes
+   ```
+
+3. **Before starting work**:
+   ```bash
+   git pull origin main
+   ```
+
+4. **Check status**:
+   ```bash
+   git status
+   ```
+
+**Live Site**: [https://xxsocialxx.github.io/yDance/](https://xxsocialxx.github.io/yDance/)
+
+**Repository**: All changes are automatically deployed to GitHub Pages
+
 ## 📁 Project Structure
 
 ```
