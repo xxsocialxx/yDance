@@ -8,10 +8,13 @@
     "lint:fix": "eslint script.js --fix",
     "serve": "python3 -m http.server 8000"
   },
+  "dependencies": {
+    "nostr-tools": "^2.0.0"
+  },
   "devDependencies": {
     "eslint": "^8.0.0"
   },
-  "keywords": ["music", "events", "dj", "pwa"],
+  "keywords": ["music", "events", "dj", "pwa", "nostr"],
   "author": "",
   "license": "MIT"
 }

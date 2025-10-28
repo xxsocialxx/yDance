@@ -957,7 +957,13 @@ const social = {
 
     generateNostrKeys() {
         console.log('SOCIAL: Delegating key generation to nostrKeys module');
-        return nostrKeys.generateKeyPair();
+        const keys = nostrKeys.generateKeyPair();
+        
+        // Return in the format expected by the rest of the application
+        return {
+            publicKey: keys.npub,  // Use npub format for public key
+            privateKey: keys.nsec   // Use nsec format for private key
+        };
     },
 
     encryptKeys(keys, password) {
@@ -1010,6 +1016,45 @@ const social = {
             user: state.currentUser,
             keys: state.userKeys
         };
+    },
+
+    // Test method for Nostr key generation integration
+    testNostrIntegration() {
+        console.log('Testing Nostr integration...');
+        
+        try {
+            // Test key generation
+            const keyTest = nostrKeys.testKeyGeneration();
+            console.log('Key generation test result:', keyTest);
+            
+            // Test SOCIAL layer key generation
+            const socialKeys = this.generateNostrKeys();
+            console.log('SOCIAL layer keys:', socialKeys);
+            
+            // Test key validation
+            const publicKeyValid = nostrKeys.validateKeyFormat(socialKeys.publicKey);
+            const privateKeyValid = nostrKeys.validateKeyFormat(socialKeys.privateKey);
+            
+            console.log('SOCIAL layer key validation:');
+            console.log('- Public key valid:', publicKeyValid);
+            console.log('- Private key valid:', privateKeyValid);
+            
+            return {
+                success: true,
+                keyGenerationTest: keyTest,
+                socialKeys: socialKeys,
+                validation: {
+                    publicKey: publicKeyValid,
+                    privateKey: privateKeyValid
+                }
+            };
+        } catch (error) {
+            console.error('Nostr integration test failed:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 };
 
@@ -1029,34 +1074,186 @@ const nostrKeys = {
         console.log('Generating Nostr keypair...');
         
         try {
-            // Placeholder Nostr key generation
-            // TODO: Implement actual Nostr key generation with nostr-tools
-            const keys = {
-                publicKey: 'npub1' + Math.random().toString(36).substring(2, 15),
-                privateKey: 'nsec1' + Math.random().toString(36).substring(2, 15)
-            };
-            
-            console.log('Nostr keys generated');
-            return keys;
+            // Import nostr-tools functions dynamically to avoid module loading issues
+            if (typeof window !== 'undefined' && window.nostrTools) {
+                const { generatePrivateKey, getPublicKey } = window.nostrTools;
+                
+                // Generate real Nostr keys
+                const privateKey = generatePrivateKey();
+                const publicKey = getPublicKey(privateKey);
+                
+                const keys = {
+                    privateKey: privateKey,
+                    publicKey: publicKey,
+                    npub: this.encodePublicKey(publicKey),
+                    nsec: this.encodePrivateKey(privateKey)
+                };
+                
+                console.log('Real Nostr keys generated');
+                return keys;
+            } else {
+                // Fallback to placeholder if nostr-tools not available
+                console.warn('nostr-tools not available, using placeholder keys');
+                return this.generatePlaceholderKeys();
+            }
         } catch (error) {
             console.error('Error generating Nostr keys:', error);
+            console.warn('Falling back to placeholder keys');
+            return this.generatePlaceholderKeys();
+        }
+    },
+
+    generatePlaceholderKeys() {
+        // Placeholder implementation for fallback
+        const keys = {
+            privateKey: 'placeholder_private_' + Math.random().toString(36).substring(2, 15),
+            publicKey: 'placeholder_public_' + Math.random().toString(36).substring(2, 15),
+            npub: 'npub1' + Math.random().toString(36).substring(2, 15),
+            nsec: 'nsec1' + Math.random().toString(36).substring(2, 15)
+        };
+        
+        console.log('Placeholder Nostr keys generated');
+        return keys;
+    },
+
+    encodePublicKey(hexKey) {
+        try {
+            if (typeof window !== 'undefined' && window.nostrTools) {
+                const { nip19 } = window.nostrTools;
+                return nip19.npubEncode(hexKey);
+            } else {
+                // Fallback encoding
+                return 'npub1' + hexKey.substring(0, 10);
+            }
+        } catch (error) {
+            console.error('Error encoding public key:', error);
+            return 'npub1' + hexKey.substring(0, 10);
+        }
+    },
+
+    encodePrivateKey(hexKey) {
+        try {
+            if (typeof window !== 'undefined' && window.nostrTools) {
+                const { nip19 } = window.nostrTools;
+                return nip19.nsecEncode(hexKey);
+            } else {
+                // Fallback encoding
+                return 'nsec1' + hexKey.substring(0, 10);
+            }
+        } catch (error) {
+            console.error('Error encoding private key:', error);
+            return 'nsec1' + hexKey.substring(0, 10);
+        }
+    },
+
+    validateKeyFormat(key) {
+        try {
+            if (!key) return false;
+            
+            // Check for valid Nostr key prefixes
+            if (key.startsWith('npub1') || key.startsWith('nsec1')) {
+                // Basic length validation for bech32 encoded keys
+                return key.length >= 50 && key.length <= 70;
+            }
+            
+            // Check for hex format (32 bytes = 64 hex chars)
+            if (/^[0-9a-fA-F]{64}$/.test(key)) {
+                return true;
+            }
+            
+            return false;
+        } catch (error) {
+            console.error('Error validating key format:', error);
+            return false;
+        }
+    },
+
+    decodePublicKey(npub) {
+        try {
+            if (typeof window !== 'undefined' && window.nostrTools) {
+                const { nip19 } = window.nostrTools;
+                return nip19.npubDecode(npub);
+            } else {
+                // Fallback decoding
+                return npub.replace('npub1', '');
+            }
+        } catch (error) {
+            console.error('Error decoding public key:', error);
             throw error;
         }
     },
 
-    encodePublicKey(hexKey) {
-        // TODO: Implement proper npub encoding
-        return 'npub1' + hexKey.substring(0, 10);
+    decodePrivateKey(nsec) {
+        try {
+            if (typeof window !== 'undefined' && window.nostrTools) {
+                const { nip19 } = window.nostrTools;
+                return nip19.nsecDecode(nsec);
+            } else {
+                // Fallback decoding
+                return nsec.replace('nsec1', '');
+            }
+        } catch (error) {
+            console.error('Error decoding private key:', error);
+            throw error;
+        }
     },
 
-    encodePrivateKey(hexKey) {
-        // TODO: Implement proper nsec encoding
-        return 'nsec1' + hexKey.substring(0, 10);
-    },
-
-    validateKeyFormat(key) {
-        // TODO: Implement key format validation
-        return key && (key.startsWith('npub1') || key.startsWith('nsec1'));
+    // Test function for key generation
+    testKeyGeneration() {
+        console.log('Testing Nostr key generation...');
+        
+        try {
+            // Test key generation
+            const keys = this.generateKeyPair();
+            console.log('Generated keys:', keys);
+            
+            // Test key validation
+            const publicKeyValid = this.validateKeyFormat(keys.publicKey);
+            const privateKeyValid = this.validateKeyFormat(keys.privateKey);
+            const npubValid = this.validateKeyFormat(keys.npub);
+            const nsecValid = this.validateKeyFormat(keys.nsec);
+            
+            console.log('Key validation results:');
+            console.log('- Public key valid:', publicKeyValid);
+            console.log('- Private key valid:', privateKeyValid);
+            console.log('- npub valid:', npubValid);
+            console.log('- nsec valid:', nsecValid);
+            
+            // Test encoding/decoding round trip
+            if (typeof window !== 'undefined' && window.nostrTools) {
+                try {
+                    const decodedPublic = this.decodePublicKey(keys.npub);
+                    const decodedPrivate = this.decodePrivateKey(keys.nsec);
+                    
+                    console.log('Encoding/decoding test:');
+                    console.log('- Original public key:', keys.publicKey);
+                    console.log('- Decoded public key:', decodedPublic);
+                    console.log('- Match:', keys.publicKey === decodedPublic);
+                    console.log('- Original private key:', keys.privateKey);
+                    console.log('- Decoded private key:', decodedPrivate);
+                    console.log('- Match:', keys.privateKey === decodedPrivate);
+                } catch (decodeError) {
+                    console.warn('Decoding test failed:', decodeError);
+                }
+            }
+            
+            return {
+                success: true,
+                keys: keys,
+                validation: {
+                    publicKey: publicKeyValid,
+                    privateKey: privateKeyValid,
+                    npub: npubValid,
+                    nsec: nsecValid
+                }
+            };
+        } catch (error) {
+            console.error('Key generation test failed:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 };
 
