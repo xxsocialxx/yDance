@@ -194,14 +194,66 @@
                     <button class="auth-modal-close" id="auth-modal-close">&times;</button>
                 </div>
                 <div class="auth-modal-body">
+                    <!-- Account Mode Selection (Sign Up Only) -->
+                    <div class="account-mode-selection" id="account-mode-selection" style="display: none;">
+                        <h4>Choose Your Security Level</h4>
+                        <div class="mode-options">
+                            <div class="mode-option" data-mode="light">
+                                <div class="mode-header">
+                                    <span class="mode-icon">💡</span>
+                                    <span class="mode-title">Light Mode</span>
+                                </div>
+                                <div class="mode-description">
+                                    <p><strong>Standard Security</strong></p>
+                                    <ul>
+                                        <li>Email link authentication</li>
+                                        <li>Standard password recovery</li>
+                                        <li>Familiar web app experience</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="mode-option" data-mode="bold">
+                                <div class="mode-header">
+                                    <span class="mode-icon">🔐</span>
+                                    <span class="mode-title">Bold Mode</span>
+                                </div>
+                                <div class="mode-description">
+                                    <p><strong>Maximum Security</strong></p>
+                                    <ul>
+                                        <li>Password + recovery phrase</li>
+                                        <li>Cryptocurrency-grade security</li>
+                                        <li>No password reset possible</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mode-warning" id="mode-warning" style="display: none;">
+                            <div class="warning-icon">⚠️</div>
+                            <div class="warning-content">
+                                <h5>Important Security Notice</h5>
+                                <p>In Bold Mode, account recovery requires:</p>
+                                <ul>
+                                    <li>Access to your email</li>
+                                    <li>Your recovery phrase (12 words)</li>
+                                </ul>
+                                <p><strong>We cannot recover your account without both.</strong></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Authentication Form -->
                     <form id="auth-form">
                         <div class="auth-form-group">
                             <label for="auth-email">Email:</label>
                             <input type="email" id="auth-email" required>
                         </div>
-                        <div class="auth-form-group">
+                        <div class="auth-form-group" id="password-group">
                             <label for="auth-password">Password:</label>
                             <input type="password" id="auth-password" required>
+                        </div>
+                        <div class="auth-form-group" id="recovery-phrase-group" style="display: none;">
+                            <label for="auth-recovery-phrase">Recovery Phrase (12 words):</label>
+                            <textarea id="auth-recovery-phrase" placeholder="Enter your 12-word recovery phrase..." rows="2"></textarea>
                         </div>
                         <div class="auth-form-actions">
                             <button type="submit" id="auth-submit-btn">Login</button>

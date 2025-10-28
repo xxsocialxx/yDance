@@ -48,6 +48,11 @@ const state = {
     djProfilesData: [],
     selectedDJ: null,
     selectedEvent: null,
+    
+    // Account Mode Management
+    authModalMode: 'login', // 'login' or 'signup'
+    selectedAccountMode: null, // 'light' or 'bold' (for signup)
+    userAccountMode: null, // 'light' or 'bold' (for current user)
     currentDJProfile: null,
     venuesData: [],
     soundSystemsData: [],
@@ -1099,6 +1104,48 @@ const social = {
             
         } catch (error) {
             console.error('Error signing up:', error);
+            throw error;
+        }
+    },
+
+    async signUpLight(email, password) {
+        console.log('Signing up user in Light mode:', email);
+        
+        try {
+            // Create user in Supabase (standard auth)
+            const { data, error } = await state.supabaseClient.auth.signUp({
+                email: email,
+                password: password
+            });
+            
+            if (error) throw error;
+            
+            // Generate simple Nostr keys (not critical for account recovery)
+            const keys = this.generateNostrKeys();
+            
+            // Store keys in localStorage only (no database storage for Light mode)
+            keyStorage.storeKeys(keys, { 
+                email, 
+                publicKey: keys.publicKey,
+                userId: data.user.id,
+                mode: 'light'
+            });
+            
+            // Update state
+            state.currentUser = data.user;
+            state.userKeys = keys;
+            state.isAuthenticated = true;
+            state.authSession = data.session;
+            
+            console.log('User signed up successfully in Light mode');
+            return { 
+                success: true, 
+                user: data.user, 
+                keys: keys
+            };
+            
+        } catch (error) {
+            console.error('Error signing up in Light mode:', error);
             throw error;
         }
     },
@@ -3961,6 +4008,12 @@ const router = {
             authSwitchBtn.addEventListener('click', () => this.switchAuthMode());
         }
         
+        // Account mode selection event listeners
+        const modeOptions = document.querySelectorAll('.mode-option');
+        modeOptions.forEach(option => {
+            option.addEventListener('click', () => this.selectAccountMode(option.dataset.mode));
+        });
+        
         // Close modal when clicking outside
         if (authModal) {
             authModal.addEventListener('click', (e) => {
@@ -4029,11 +4082,15 @@ const router = {
         const authSubmitBtn = document.getElementById('auth-submit-btn');
         const authSwitchText = document.getElementById('auth-switch-text');
         const authSwitchBtn = document.getElementById('auth-switch-btn');
+        const accountModeSelection = document.getElementById('account-mode-selection');
+        const passwordGroup = document.getElementById('password-group');
+        const recoveryPhraseGroup = document.getElementById('recovery-phrase-group');
         
         if (!authModal) return;
         
         // Set mode
         state.authModalMode = mode;
+        state.selectedAccountMode = null; // Reset account mode selection
         
         // Update UI based on mode
         if (mode === 'login') {
@@ -4041,16 +4098,32 @@ const router = {
             authSubmitBtn.textContent = 'Login';
             authSwitchText.textContent = "Don't have an account?";
             authSwitchBtn.textContent = 'Sign Up';
+            
+            // Hide account mode selection for login
+            if (accountModeSelection) accountModeSelection.style.display = 'none';
+            if (passwordGroup) passwordGroup.style.display = 'block';
+            if (recoveryPhraseGroup) recoveryPhraseGroup.style.display = 'none';
+            
         } else {
             authModalTitle.textContent = 'Sign Up';
             authSubmitBtn.textContent = 'Sign Up';
             authSwitchText.textContent = 'Already have an account?';
             authSwitchBtn.textContent = 'Login';
+            
+            // Show account mode selection for signup
+            if (accountModeSelection) accountModeSelection.style.display = 'block';
+            if (passwordGroup) passwordGroup.style.display = 'none';
+            if (recoveryPhraseGroup) recoveryPhraseGroup.style.display = 'none';
+            
+            // Reset mode selection
+            this.resetAccountModeSelection();
         }
         
         // Clear form
         document.getElementById('auth-email').value = '';
         document.getElementById('auth-password').value = '';
+        const recoveryPhraseInput = document.getElementById('auth-recovery-phrase');
+        if (recoveryPhraseInput) recoveryPhraseInput.value = '';
         
         // Show modal
         authModal.style.display = 'flex';
@@ -4071,41 +4144,204 @@ const router = {
         this.showAuthModal(newMode);
     },
 
+    selectAccountMode(mode) {
+        console.log('Account mode selected:', mode);
+        
+        state.selectedAccountMode = mode;
+        
+        // Update UI to show selected mode
+        const modeOptions = document.querySelectorAll('.mode-option');
+        modeOptions.forEach(option => {
+            option.classList.remove('selected');
+            if (option.dataset.mode === mode) {
+                option.classList.add('selected');
+            }
+        });
+        
+        // Show/hide form fields based on mode
+        const passwordGroup = document.getElementById('password-group');
+        const recoveryPhraseGroup = document.getElementById('recovery-phrase-group');
+        const modeWarning = document.getElementById('mode-warning');
+        
+        if (mode === 'light') {
+            // Light mode: Show password field, hide recovery phrase
+            if (passwordGroup) passwordGroup.style.display = 'block';
+            if (recoveryPhraseGroup) recoveryPhraseGroup.style.display = 'none';
+            if (modeWarning) modeWarning.style.display = 'none';
+            
+        } else if (mode === 'bold') {
+            // Bold mode: Show password field and recovery phrase, show warning
+            if (passwordGroup) passwordGroup.style.display = 'block';
+            if (recoveryPhraseGroup) recoveryPhraseGroup.style.display = 'block';
+            if (modeWarning) modeWarning.style.display = 'block';
+        }
+    },
+
+    resetAccountModeSelection() {
+        console.log('Resetting account mode selection');
+        
+        state.selectedAccountMode = null;
+        
+        // Remove selected class from all options
+        const modeOptions = document.querySelectorAll('.mode-option');
+        modeOptions.forEach(option => {
+            option.classList.remove('selected');
+        });
+        
+        // Hide warning
+        const modeWarning = document.getElementById('mode-warning');
+        if (modeWarning) modeWarning.style.display = 'none';
+    },
+
     async handleAuthSubmit(e) {
         e.preventDefault();
         console.log('Handling auth submit in', state.authModalMode, 'mode');
         
         const email = document.getElementById('auth-email').value;
         const password = document.getElementById('auth-password').value;
+        const recoveryPhrase = document.getElementById('auth-recovery-phrase').value;
         
-        if (!email || !password) {
-            alert('Please fill in all fields');
-            return;
+        // Validate based on mode
+        if (state.authModalMode === 'signup') {
+            if (!state.selectedAccountMode) {
+                alert('Please select an account mode (Light or Bold)');
+                return;
+            }
+            
+            if (!email || !password) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            if (state.selectedAccountMode === 'bold' && !recoveryPhrase) {
+                alert('Please enter your recovery phrase for Bold mode');
+                return;
+            }
+        } else {
+            // Login mode
+            if (!email || !password) {
+                alert('Please fill in all fields');
+                return;
+            }
         }
         
         try {
             let result;
             if (state.authModalMode === 'login') {
-                result = await social.signIn(email, password);
+                // For login, try both light and bold modes
+                result = await this.handleLogin(email, password, recoveryPhrase);
             } else {
-                result = await social.signUp(email, password);
+                // For signup, use selected mode
+                result = await this.handleSignup(email, password, recoveryPhrase);
             }
             
             if (result.success) {
-                console.log('Auth successful:', result);
                 this.hideAuthModal();
                 this.updateAuthStatus();
+                console.log('Authentication successful');
                 
-                // Show success message
-                const message = state.authModalMode === 'login' ? 'Login successful!' : 'Account created successfully!';
-                alert(message);
+                // Show success message for Bold mode signup
+                if (state.authModalMode === 'signup' && state.selectedAccountMode === 'bold' && result.recoveryPhrase) {
+                    this.showRecoveryPhraseModal(result.recoveryPhrase);
+                }
             } else {
-                alert('Authentication failed. Please try again.');
+                alert('Authentication failed: ' + (result.error || 'Unknown error'));
             }
         } catch (error) {
-            console.error('Auth error:', error);
+            console.error('Authentication error:', error);
             alert('Authentication failed: ' + error.message);
         }
+    },
+
+    async handleLogin(email, password, recoveryPhrase) {
+        console.log('Handling login for', email);
+        
+        try {
+            // Try standard login first
+            const result = await social.signIn(email, password);
+            if (result.success) {
+                // Store account mode in state
+                state.userAccountMode = 'light'; // Default to light for existing users
+                return result;
+            }
+        } catch (error) {
+            console.log('Standard login failed, trying recovery phrase login');
+            
+            // If standard login fails and recovery phrase is provided, try recovery
+            if (recoveryPhrase) {
+                try {
+                    const recoveryResult = await social.recoverKeysWithRecoveryPhrase(email, recoveryPhrase, password);
+                    if (recoveryResult.success) {
+                        state.userAccountMode = 'bold';
+                        return recoveryResult;
+                    }
+                } catch (recoveryError) {
+                    console.error('Recovery phrase login failed:', recoveryError);
+                }
+            }
+        }
+        
+        throw new Error('Login failed. Please check your credentials.');
+    },
+
+    async handleSignup(email, password, recoveryPhrase) {
+        console.log('Handling signup for', email, 'in', state.selectedAccountMode, 'mode');
+        
+        if (state.selectedAccountMode === 'light') {
+            // Light mode: Standard Supabase signup
+            const result = await social.signUpLight(email, password);
+            if (result.success) {
+                state.userAccountMode = 'light';
+            }
+            return result;
+        } else if (state.selectedAccountMode === 'bold') {
+            // Bold mode: Full Nostr key generation with recovery phrase
+            const result = await social.signUp(email, password);
+            if (result.success) {
+                state.userAccountMode = 'bold';
+            }
+            return result;
+        }
+        
+        throw new Error('Invalid account mode selected');
+    },
+
+    showRecoveryPhraseModal(recoveryPhrase) {
+        console.log('Showing recovery phrase modal');
+        
+        // Create a modal to display the recovery phrase
+        const modal = document.createElement('div');
+        modal.className = 'auth-modal';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+            <div class="auth-modal-content">
+                <div class="auth-modal-header">
+                    <h3>🔐 Save Your Recovery Phrase</h3>
+                </div>
+                <div class="auth-modal-body">
+                    <div class="recovery-phrase-display">
+                        <p><strong>Important:</strong> Save this recovery phrase in a secure location. You'll need it to recover your account.</p>
+                        <div class="phrase-container">
+                            <textarea readonly class="recovery-phrase-text">${recoveryPhrase}</textarea>
+                            <button class="copy-phrase-btn" onclick="navigator.clipboard.writeText('${recoveryPhrase}')">Copy</button>
+                        </div>
+                        <p class="warning-text">⚠️ We cannot recover your account without this phrase!</p>
+                    </div>
+                    <div class="auth-form-actions">
+                        <button class="auth-button" onclick="this.closest('.auth-modal').remove()">I've Saved It</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Auto-remove after 30 seconds
+        setTimeout(() => {
+            if (modal.parentNode) {
+                modal.remove();
+            }
+        }, 30000);
     },
 
     async handleLogout() {
@@ -4143,6 +4379,9 @@ const router = {
             authUser.textContent = state.currentUser.email;
             authUser.style.display = 'inline';
             
+            // Add account mode indicator
+            this.updateAccountModeIndicator();
+            
             // Show/hide buttons
             if (loginBtn) loginBtn.style.display = 'none';
             if (signupBtn) signupBtn.style.display = 'none';
@@ -4152,6 +4391,9 @@ const router = {
             authStatus.textContent = 'Not signed in';
             authUser.style.display = 'none';
             
+            // Remove account mode indicator
+            this.removeAccountModeIndicator();
+            
             // Show/hide buttons
             if (loginBtn) loginBtn.style.display = 'inline-block';
             if (signupBtn) signupBtn.style.display = 'inline-block';
@@ -4159,7 +4401,41 @@ const router = {
         }
         
         console.log('Auth status updated:', state.isAuthenticated ? 'authenticated' : 'not authenticated');
-    }
+    },
+
+    updateAccountModeIndicator() {
+        console.log('Updating account mode indicator for mode:', state.userAccountMode);
+        
+        const authUser = document.getElementById('auth-user');
+        if (!authUser) return;
+        
+        // Remove existing indicator
+        this.removeAccountModeIndicator();
+        
+        if (state.userAccountMode) {
+            // Create account mode indicator
+            const indicator = document.createElement('span');
+            indicator.className = `account-mode-indicator ${state.userAccountMode}`;
+            
+            if (state.userAccountMode === 'light') {
+                indicator.innerHTML = '<span class="mode-icon">💡</span>Light';
+            } else if (state.userAccountMode === 'bold') {
+                indicator.innerHTML = '<span class="mode-icon">🔐</span>Bold';
+            }
+            
+            authUser.appendChild(indicator);
+        }
+    },
+
+    removeAccountModeIndicator() {
+        const authUser = document.getElementById('auth-user');
+        if (!authUser) return;
+        
+        const existingIndicator = authUser.querySelector('.account-mode-indicator');
+        if (existingIndicator) {
+            existingIndicator.remove();
+        }
+    },
 };
 
 // ============================================================================
