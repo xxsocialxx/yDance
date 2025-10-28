@@ -1339,6 +1339,29 @@ const views = {
         console.log('DJ profile rendered successfully!');
     },
 
+    renderSocialMentions(djName) {
+        console.log('Rendering social mentions for DJ:', djName);
+        try {
+            const mentions = social.getSocialMentionsForDJ(djName);
+            if (!mentions || mentions.length === 0) {
+                return '<p class="no-mentions">No recent social mentions found.</p>';
+            }
+            const mentionsHTML = mentions.map(mention => `
+                <div class="social-mention-item">
+                    <div class="mention-content">${mention.content}</div>
+                    <div class="mention-meta">
+                        <span class="mention-author">${mention.author || 'Anonymous'}</span>
+                        <span class="mention-timestamp">${this.formatTimestamp(mention.timestamp)}</span>
+                    </div>
+                </div>
+            `).join('');
+            return `<div class="social-mentions-container">${mentionsHTML}</div>`;
+        } catch (error) {
+            console.error('Error rendering social mentions:', error);
+            return '<p class="error-mentions">Error loading social mentions.</p>';
+        }
+    },
+
     createVenueCard(venue) {
         return `
             <div class="venue-card" onclick="router.showVenueDetails('${venue.name}')" style="cursor: pointer;">
