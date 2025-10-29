@@ -38,6 +38,19 @@ CONFIG → STATE → API → SOCIAL → VIEWS → ROUTER → INIT
 - ❌ Alter state property names
 - ❌ Add functions outside designated modules
 
+## Data pipeline (boring by design)
+
+We use a deterministic, append-only pipeline to keep data clean and trustable:
+
+- raw_events (append-only): Stores the exact incoming payloads from the private relay or form, plus source, pubkey, signature, and a content_hash.
+- normalized_events (versioned): Stores normalized, validated events with a version counter and a computed dedupe_key.
+- normalized_events_latest (view): A read-only view of the latest version per event_uid. The UI reads only from this view.
+
+Rules:
+- All writes go raw → normalize → normalized (no UI direct writes).
+- No destructive updates. New info creates new versions.
+- Idempotent jobs keyed by content_hash (safe to retry).
+
 ## 🚀 Getting Started
 
 1. **Install dependencies** (optional, for linting):
@@ -76,20 +89,24 @@ CONFIG → STATE → API → SOCIAL → VIEWS → ROUTER → INIT
 - ✅ **Social Mentions**: DJ and venue mention detection and display
 - ✅ **Auth Integration**: User authentication affects social message authorship
 
-### **Nostr Integration Status**
-- ✅ **Foundation Ready**: SOCIAL layer designed for Nostr integration
-- ✅ **Auth System**: Nostr key generation placeholders implemented
-- ✅ **Message Processing**: Social feed infrastructure ready for Nostr messages
-- ✅ **UI Components**: Social tab and auth UI ready for real Nostr data
-- 🔧 **Placeholder Implementation**: Current implementation uses placeholder Nostr client
-- 🔧 **Ready for Real Integration**: All infrastructure in place for actual Nostr protocol
+### Nostr integration
 
-### **Future Enhancements**
-- 🔮 **Real Nostr Integration**: Replace placeholders with actual Nostr client
-- 🔮 **Event Announcements**: Publish events to Nostr network
-- 🔮 **DJ Profile Verification**: Link DJ profiles to Nostr identities
+- Private relay first: We ingest only from your private relay (`wss://localhost:8080` in development).
+- Schema-first: Incoming notes must conform to our minimal event schema (see `schema/event.schema.json`) or land in the review queue.
+- Idempotent: We hash payloads to avoid duplicates and make retries safe.
+- Later: When ready, we can publish normalized summaries to public relays and retro-sign historical data.
 
 ## 🎯 Next Priority: Nostr Integration
+
+## Feature flags
+
+We gate new or risky logic behind flags so you can roll forward safely:
+
+- CONFIG.flags.nostrRealClient (default: false)
+- CONFIG.flags.writeToRawEvents (default: false)
+- CONFIG.flags.enableReviewQueue (default: true)
+
+Turn features on deliberately, one at a time.
 
 ### Phase 1: Core Nostr Client (CRITICAL - 1-2 days)
 
@@ -97,6 +114,17 @@ CONFIG → STATE → API → SOCIAL → VIEWS → ROUTER → INIT
 ```bash
 npm install nostr-tools
 ```
+
+## Supabase tables (MVP)
+
+We expect these tables/views:
+
+- raw_events: append-only log of incoming posts
+- normalized_events: versioned normalized records
+- normalized_events_latest (view): latest-per-event_uid for UI reads
+- review_queue: human-in-the-loop approvals for uncertain items
+
+You can start with just raw_events + normalized_events_latest and grow from there.
 
 **Replace Placeholders:**
 
@@ -177,6 +205,13 @@ await state.nostrClient.publish(event)
 - ✅ DJ profiles and event details display properly
 - ✅ Mobile responsiveness maintained
 
+## Product non‑negotiables
+
+- This week/weekend scope, text-first. No images in the listing view.
+- UI is read-only from normalized_events_latest; no direct DB writes.
+- All event writes go via relay/form → raw_events → pipeline.
+- Keep changes reversible: append-only logs, versioned normalized rows.
+
 ## 🎯 Success Metrics
 
 - ✅ Real Nostr messages appear in social feed
@@ -208,74 +243,6 @@ git push origin main
 ```
 
 **Live Site**: [https://xxsocialxx.github.io/yDance/](https://xxsocialxx.github.io/yDance/)
-
-## 📅 Development Log
-
-### **December 19, 2024 - Key Generation & Security Implementation**
-
-**Major Accomplishments:**
-- ✅ **Fixed Critical Key Generation Bug**: Replaced 16-character placeholder keys with proper 64-character cryptographic keys using Web Crypto API
-- ✅ **Implemented Account Security Modes**: Added "Light Mode" (standard auth) and "Bold Mode" (password + recovery phrase) with elegant UI selection
-- ✅ **Recovery Phrase System**: Implemented 12-word BIP39-compatible recovery phrases for Bold Mode account recovery
-- ✅ **Key Encryption & Storage**: Added password-based encryption (AES-GCM, PBKDF2) for secure Nostr key storage in Supabase database
-- ✅ **Nostr Protocol Masking**: Implemented first-4-character masking (`xxxx`) to obscure Nostr protocol usage while maintaining functionality
-- ✅ **Database Integration**: Added Supabase tables for encrypted key storage with localStorage fallbacks
-- ✅ **Authentication UI Enhancement**: Created modal-based auth system with mode selection and security warnings
-
-**Technical Details:**
-- **Key Generation**: Web Crypto API fallback when nostr-tools unavailable
-- **Encryption**: AES-GCM with PBKDF2 (100,000 iterations, SHA-256)
-- **Storage**: Supabase `user_nostr_keys` and `user_recovery_phrases` tables
-- **Recovery**: Email + password + recovery phrase for Bold Mode
-- **Masking**: Keys display as `npub1xxxx...` and `nsec1xxxx...` instead of full hex
-
-**Files Modified:**
-- `script.js`: Complete overhaul of key generation, encryption, and authentication systems
-- `index.html`: Added account mode selection UI and recovery phrase input
-- `style.css`: Enhanced auth modal styling and mode selection interface
-
-### **Next Priority: Proper Modularization**
-
-**Critical Modularization Tasks:**
-
-1. **Extract Key Management Module** (`nostr-key-manager.js`):
-   - Move `nostrKeys` object to separate file
-   - Include key generation, encoding, decoding, validation
-   - Export clean API for other modules
-
-2. **Extract Encryption Module** (`key-encryption.js`):
-   - Move `keyEncryption` object to separate file
-   - Include encryption, decryption, salt generation
-   - Export secure encryption API
-
-3. **Extract Recovery Module** (`recovery-phrase-manager.js`):
-   - Move recovery phrase generation and validation
-   - Include BIP39 wordlist and validation logic
-   - Export recovery phrase API
-
-4. **Database Schema Updates**:
-   - Create proper Supabase tables: `user_nostr_keys`, `user_recovery_phrases`
-   - Add proper indexes and constraints
-   - Implement proper error handling
-
-**Modularization Guidelines:**
-- **Single Responsibility**: Each module handles one specific concern
-- **Clean Interfaces**: Export only necessary functions, hide implementation details
-- **Error Handling**: Each module handles its own errors gracefully
-- **Testing**: Each module should be independently testable
-- **Documentation**: Each module needs clear API documentation
-
-**Security Considerations:**
-- **Zero-Knowledge Architecture**: No plaintext keys or phrases stored anywhere
-- **Reversible Masking**: Can restore full keys by adding back first 4 characters
-- **Fallback Systems**: localStorage fallbacks for database operations
-- **Error Recovery**: Graceful degradation when services unavailable
-
-**Future Development Notes:**
-- Maintain backward compatibility with existing authentication
-- Ensure all new modules follow 7-layer architecture
-- Test thoroughly before deploying to production
-- Consider implementing proper bech32 encoding when nostr-tools available
 
 ---
 

@@ -1,0 +1,9 @@
+{
+  "id": "note1abc...",
+  "pubkey": "npub1xyz...",
+  "created_at": 1761936000,
+  "kind": 1,
+  "content": "{\n  \"type\": \"dance_event\",\n  \"title\": \"Noche de Tango\",\n  \"start\": \"2025-11-01T20:00:00-04:00\",\n  \"end\": \"2025-11-02T01:00:00-04:00\",\n  \"city\": \"New York\",\n  \"venue\": \"Loft 27\",\n  \"coords\": [40.7480, -73.9940],\n  \"styles\": [\"tango\"],\n  \"price\": \"15-25\",\n  \"links\": [\"https://tickets.example.com/abc\"]\n}",
+  "tags": [["t","ydance"],["t","event"]],
+  "sig": "sigxxx..."
+}

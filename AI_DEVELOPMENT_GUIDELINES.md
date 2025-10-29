@@ -47,6 +47,16 @@ CONFIG → STATE → API → SOCIAL → VIEWS → ROUTER → INIT
 - **DO NOT MODIFY**: This section is off-limits
 
 ## 🛡️ Architectural Rules
+## Contracts and invariants (do not break)
+
+- Canonical schema: All event data must validate against `schema/event.schema.json`.
+- Write path: UI never writes events. All writes go to `raw_events`.
+- Versioning: `normalized_events` is append-only by version; never mutate past versions.
+- Latest view: UI reads only from `normalized_events_latest`.
+- Idempotency: Jobs must be safe to retry; use `content_hash` guards.
+- Dedupe: Use `dedupe_key = title + time_window + venue_radius + organizer_pubkey`.
+- Review: Uncertain items must go to `review_queue` with a human decision.
+
 
 ### ✅ DO:
 1. **Follow the module structure** - Add code to the appropriate layer
@@ -56,11 +66,11 @@ CONFIG → STATE → API → SOCIAL → VIEWS → ROUTER → INIT
 5. **Read the section comments** - Each section has clear guidelines
 
 ### ❌ DON'T:
-1. **Add functions outside modules** - Everything must go in CONFIG/STATE/API/VIEWS/ROUTER
-2. **Duplicate code** - Use existing patterns instead
-3. **Create new Supabase clients** - Use the existing one in state
-4. **Mix concerns** - Keep API calls in API, rendering in VIEWS, etc.
-5. **Modify the INIT section** - It's protected for a reason
+1. Write directly to normalized tables or views
+2. Bypass schema validation or insert non-conformant data
+3. Create alternate clients for Supabase or the relay
+4. Change module boundaries (mix API/SOCIAL/VIEWS responsibilities)
+5. Modify INIT or ROUTER to perform database writes
 
 ## 📋 Template Functions
 
@@ -158,20 +168,40 @@ async showNewView(parameter = null) {
 3. Add rendering functions to `views` object
 4. Add navigation logic to `router` if needed
 
-## 🔍 Code Review Checklist
+## Protected files
+
+- schema/event.schema.json
+- supabase/migrations/**
+- contract.md
+
+Edits require explicit approval. Changes must include updated fixtures and pass schema validation.
+
+## Feature flags
+
+- Add new flags under `CONFIG.flags`.
+- Default new flags to false.
+- Wrap new behavior with a clear guard (`if (!CONFIG.flags.someFlag) return;`).
+- Include a brief note in the PR: which flag, default state, rollback plan.
+
+## Review queue expectations
+
+- Uncertain parsing or low-confidence mapping routes to `review_queue`.
+- SOCIAL may parse and score, but only API/pipeline write to DB.
+- VIEWS can display a badge ("updated", "verified", "needs review") but cannot change state.
+
+See `contract.md` for product non‑negotiables and acceptance criteria. If a proposed change conflicts with the contract, the change must be dropped or the contract revised first.
+
+## Agent checklist (must pass)
 
 Before submitting any changes, verify:
 
-- [ ] Code is in the correct module (CONFIG/STATE/API/SOCIAL/VIEWS/ROUTER)
-- [ ] No functions are added outside the designated modules
-- [ ] No code duplication exists
-- [ ] Supabase client is reused (not recreated)
-- [ ] Error handling follows existing patterns
-- [ ] Console logging is consistent with existing code
-- [ ] DOM manipulation is only in VIEWS module
-- [ ] API calls are only in API module
-- [ ] Social processing is only in SOCIAL module
-- [ ] Navigation logic is only in ROUTER module
+- [ ] Change stays within the correct module (CONFIG/STATE/API/SOCIAL/VIEWS/ROUTER)
+- [ ] No UI writes: all event writes enter via `raw_events`
+- [ ] If schema touched: fixtures updated and validator passes
+- [ ] Idempotency: content_hash guard present on new jobs
+- [ ] Dedupe_key logic unchanged or updated with tests
+- [ ] Feature flags wrap any new risky logic; defaults remain OFF
+- [ ] No edits to INIT; ROUTER only handles navigation and handlers
 
 ## 🚨 Emergency Fixes
 

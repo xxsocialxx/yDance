@@ -30,7 +30,13 @@
 // ============================================================================
 const CONFIG = {
     supabaseUrl: 'https://rymcfymmigomaytblqml.supabase.co',
-    supabaseKey: 'sb_publishable_sk0GTezrQ8me8sPRLsWo4g_8UEQgztQ'
+    supabaseKey: 'sb_publishable_sk0GTezrQ8me8sPRLsWo4g_8UEQgztQ',
+    flags: {
+        nostrRealClient: false,
+        writeToRawEvents: false,
+        enableReviewQueue: true,
+        allowClientSensitiveWrites: false
+    }
 };
 
 // ============================================================================
@@ -110,23 +116,31 @@ const api = {
 
     async fetchEvents() {
         console.log('Loading events from database...');
-        
         try {
-            // Try different table names
+            // Preferred: read from normalized_events_latest view
+            console.log('Trying normalized_events_latest view...');
+            const viewResult = await state.supabaseClient
+                .from('normalized_events_latest')
+                .select('normalized_json, created_at')
+                .order('created_at', { ascending: true });
+
+            if (!viewResult.error && Array.isArray(viewResult.data) && viewResult.data.length > 0) {
+                const events = viewResult.data.map(row => row.normalized_json).filter(Boolean);
+                state.eventsData = events;
+                console.log('Loaded events from normalized view:', state.eventsData.length);
+                return state.eventsData;
+            }
+
+            // Fallback: legacy tables
             let events = null;
             let error = null;
-            
-            // First try 'Events' (capital E)
-            console.log('Trying Events table...');
+
+            console.log('Trying Events table (fallback)...');
             const result1 = await state.supabaseClient.from('Events').select('*').order('date', { ascending: true });
-            
             if (result1.error) {
                 console.log('Events table failed:', result1.error.message);
-                
-                // Try 'events' (lowercase)
-                console.log('Trying events table...');
+                console.log('Trying events table (fallback)...');
                 const result2 = await state.supabaseClient.from('events').select('*').order('date', { ascending: true });
-                
                 if (result2.error) {
                     console.log('events table failed:', result2.error.message);
                     error = result2.error;
@@ -138,18 +152,13 @@ const api = {
                 events = result1.data;
                 console.log('Found events in capital table:', events.length);
             }
-            
-            if (error) {
-                console.error('Error loading events:', error);
-                throw error;
-            }
-            
+
+            if (error) throw error;
             state.eventsData = events || [];
-            console.log('Events loaded successfully:', state.eventsData.length);
+            console.log('Events loaded successfully (fallback):', state.eventsData.length);
             return state.eventsData;
-            
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error loading events:', error);
             throw error;
         }
     },
@@ -377,15 +386,17 @@ const api = {
 const social = {
     async init() {
         console.log('Initializing Social layer...');
-        
         try {
-            // Initialize nostr client using nostrClient module
-            state.nostrClient = await nostrClient.connect('wss://localhost:8080');
-            
-            // Initialize Nostr data fetching
-            await this.initNostrDataFetching();
-            
-            console.log('Social layer initialized successfully');
+            if (CONFIG.flags.nostrRealClient) {
+                // Initialize nostr client using nostrClient module
+                state.nostrClient = await nostrClient.connect('wss://localhost:8080');
+                // Initialize Nostr data fetching
+                await this.initNostrDataFetching();
+                console.log('Social layer initialized with real Nostr client');
+            } else {
+                state.nostrClient = { connected: false, relay: 'disabled' };
+                console.log('Social layer initialized (nostr disabled by flag)');
+            }
             return true;
         } catch (error) {
             console.error('Error initializing Social layer:', error);
@@ -527,6 +538,10 @@ const social = {
         console.log('Sending nostr message...');
         
         try {
+            if (!CONFIG.flags.nostrRealClient) {
+                console.log('Nostr real client disabled by feature flag. Skip publish.');
+                return { success: false, disabled: true };
+            }
             // Placeholder nostr message sending
             if (!state.nostrClient || !state.nostrClient.connected) {
                 console.log('Nostr client not connected, message queued');
@@ -876,6 +891,10 @@ const social = {
         console.log('Storing encrypted keys in Supabase database...');
         
         try {
+            if (!CONFIG.flags.allowClientSensitiveWrites) {
+                console.log('Client-side sensitive writes disabled by flag.');
+                return { success: false, disabled: true };
+            }
             const { data, error } = await state.supabaseClient
                 .from('user_nostr_keys')
                 .upsert({
@@ -985,6 +1004,10 @@ const social = {
         console.log('Storing encrypted recovery phrase in Supabase database...');
         
         try {
+            if (!CONFIG.flags.allowClientSensitiveWrites) {
+                console.log('Client-side sensitive writes disabled by flag.');
+                return { success: false, disabled: true };
+            }
             const { data, error } = await state.supabaseClient
                 .from('user_recovery_phrases')
                 .upsert({
@@ -1640,14 +1663,12 @@ const nostrKeys = {
                 const { nip19 } = window.nostrTools;
                 return nip19.npubEncode(hexKey);
             } else {
-                // Masked encoding - hide first 4 chars to obscure Nostr protocol
-                const maskedKey = 'xxxx' + hexKey.substring(4);
-                return 'npub1' + maskedKey;
+                // Fallback encoding - use full key length
+                return 'npub1' + hexKey;
             }
         } catch (error) {
             console.error('Error encoding public key:', error);
-            const maskedKey = 'xxxx' + hexKey.substring(4);
-            return 'npub1' + maskedKey;
+            return 'npub1' + hexKey;
         }
     },
 
@@ -1657,55 +1678,12 @@ const nostrKeys = {
                 const { nip19 } = window.nostrTools;
                 return nip19.nsecEncode(hexKey);
             } else {
-                // Masked encoding - hide first 4 chars to obscure Nostr protocol
-                const maskedKey = 'xxxx' + hexKey.substring(4);
-                return 'nsec1' + maskedKey;
+                // Fallback encoding - use full key length
+                return 'nsec1' + hexKey;
             }
         } catch (error) {
             console.error('Error encoding private key:', error);
-            const maskedKey = 'xxxx' + hexKey.substring(4);
-            return 'nsec1' + maskedKey;
-        }
-    },
-
-    decodePublicKey(maskedKey) {
-        try {
-            if (typeof window !== 'undefined' && window.nostrTools && window.nostrTools.nip19) {
-                const { nip19 } = window.nostrTools;
-                return nip19.npubDecode(maskedKey);
-            } else {
-                // Reverse masked encoding - restore first 4 chars
-                if (maskedKey.startsWith('npub1xxxx')) {
-                    // This is a masked key, we need the original first 4 chars
-                    // For now, return the masked version (would need original key storage)
-                    console.warn('Cannot decode masked key without original first 4 characters');
-                    return maskedKey.substring(5); // Remove 'npub1' prefix
-                }
-                return maskedKey.substring(5); // Remove 'npub1' prefix
-            }
-        } catch (error) {
-            console.error('Error decoding public key:', error);
-            return maskedKey.substring(5);
-        }
-    },
-
-    decodePrivateKey(maskedKey) {
-        try {
-            if (typeof window !== 'undefined' && window.nostrTools && window.nostrTools.nip19) {
-                const { nip19 } = window.nostrTools;
-                return nip19.nsecDecode(maskedKey);
-            } else {
-                // Reverse masked encoding - restore first 4 chars
-                if (maskedKey.startsWith('nsec1xxxx')) {
-                    // This is a masked key, we need the original first 4 chars
-                    console.warn('Cannot decode masked key without original first 4 characters');
-                    return maskedKey.substring(5); // Remove 'nsec1' prefix
-                }
-                return maskedKey.substring(5); // Remove 'nsec1' prefix
-            }
-        } catch (error) {
-            console.error('Error decoding private key:', error);
-            return maskedKey.substring(5);
+            return 'nsec1' + hexKey;
         }
     },
 

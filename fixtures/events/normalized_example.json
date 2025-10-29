@@ -1,0 +1,19 @@
+{
+  "event_uid": "evt_2025-11-01_loft27_tango_pubkeyXYZ",
+  "version": 1,
+  "title": "Noche de Tango",
+  "description": "Social + lesson. Traditional music.",
+  "styles": ["tango"],
+  "vibe_tags": ["traditional", "social"],
+  "start": "2025-11-01T20:00:00-04:00",
+  "end": "2025-11-02T01:00:00-04:00",
+  "timezone": "America/New_York",
+  "city": "New York",
+  "venue": { "name": "Loft 27", "address": "27 W 27th St", "lat": 40.7480, "lon": -73.9940 },
+  "price": { "currency": "USD", "min": 15, "max": 25 },
+  "organizer": { "name": "Milonga NYC", "pubkey": "npub1xyz..." },
+  "links": [ { "type": "tickets", "url": "https://tickets.example.com/abc" } ],
+  "sources": [ { "type": "nostr", "event_id": "note1abc...", "relay": "wss://relay.local", "received_at": "2025-10-28T16:12:00Z" } ],
+  "last_update": "2025-10-28T16:12:00Z",
+  "quality_score": 0.82
+}

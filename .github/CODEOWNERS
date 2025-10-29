@@ -1,0 +1,8 @@
+# Protect critical architecture files. Require owner review for changes.
+
+/schema/event.schema.json   @xxsocialxx
+/supabase/migrations/**     @xxsocialxx
+/contract.md                @xxsocialxx
+
+# Default owner for other files (optional):
+*                          @xxsocialxx
