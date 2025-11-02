@@ -88,6 +88,39 @@ Rules:
 - ✅ **Event Detail Pages**: Full-page event details matching DJ profile experience
 - ✅ **Social Mentions**: DJ and venue mention detection and display
 - ✅ **Auth Integration**: User authentication affects social message authorship
+- ✅ **Terminal-Style Interface**: Complete redesign with greyscale dark mode, flat list layout, minimal aesthetic
+- ✅ **Location Selection**: City selection modal on first visit (saved to localStorage)
+
+### **Design Overhaul - Terminal Interface**
+- **Visual Style**: Greyscale dark mode (black/white/gray only), IBM Plex Mono monospace font throughout
+- **Layout**: Flat terminal-style list view replacing card-based layouts
+- **Content**: Removed all emojis, simplified to protocol-style labels ([DETAILS], [PROFILE])
+- **Navigation**: Clean tab navigation with terminal borders, no gradients or shadows
+- **Event Display**: Terminal list format showing TIME [TYPE] Location [DETAILS]
+- **User Experience**: Minimal, efficient, LLM-like interaction model
+
+### **Future Enhancements Needed**
+
+#### **City-Based Filtering** 🔴 HIGH PRIORITY
+Currently, all cities show the same general database for testing. City selection is saved but not used for filtering.
+
+**To implement city filtering:**
+1. Ensure event data structure includes a `city` field (or determine how to match events to cities)
+2. Update `filterEventsByCity()` function in `script.js` (around line 4575) to filter `state.eventsData` based on `state.userCity`
+3. Apply filtering when events are loaded and when city is changed
+4. Consider adding city field to event schema if not already present
+5. Update event fetching logic to filter by city at database level (more efficient) or client-side (current approach)
+
+**Current state:** `state.userCity` is saved to localStorage but filtering is disabled for testing.
+
+#### **Light Mode Implementation**
+- Terminal-style light mode with subtle color accents (separate from dark mode)
+- Toggle mechanism for mode switching
+- Ensure readability and contrast in light mode
+
+#### **Logo Integration**
+- Incorporate animated x.dance logo from prototype (`Logo : Marketing Concepts/Generated Image November 02, 2025 - 5_16PM.png`)
+- Implement grayscale fight-back animation if desired
 
 ### Nostr integration
 
@@ -95,6 +128,39 @@ Rules:
 - Schema-first: Incoming notes must conform to our minimal event schema (see `schema/event.schema.json`) or land in the review queue.
 - Idempotent: We hash payloads to avoid duplicates and make retries safe.
 - Later: When ready, we can publish normalized summaries to public relays and retro-sign historical data.
+
+#### Dev health check
+Flip `CONFIG.flags.nostrHealthCheck` to true to run a quick Nostr connect→disconnect sanity check during social init. You can also call `window.social.healthCheck()` from the console.
+
+## 🎨 Interface Design Notes
+
+### Terminal-Style Redesign Implementation
+
+**Design Philosophy:**
+- Maximum efficiency and clarity
+- Minimal visual noise (no emojis, no unnecessary wording)
+- Terminal/CLI aesthetic for efficient information consumption
+- Greyscale dark mode for clean, retro feel
+
+**Key Changes:**
+1. **Removed card layouts** → Flat list with dotted dividers
+2. **Removed all emojis** → Text-only labels and protocol-style actions
+3. **Simplified language** → "Learn More" → "[DETAILS]", protocol-style brackets
+4. **Greyscale color palette** → Pure black/white/grays (no color accents in dark mode)
+5. **IBM Plex Mono font** → Monospace throughout for terminal feel
+6. **No shadows/gradients** → Flat design with minimal borders
+7. **Location selection** → First-visit modal, saved to localStorage, not persistent in UI
+
+**Files Modified:**
+- `style.css` - Complete terminal-style redesign (~600 lines, down from ~2175)
+- `index.html` - Removed emojis from tabs, added location modal
+- `script.js` - Updated rendering to flat list format, added location management
+
+**CSS Structure:**
+- CSS variables for greyscale theme
+- Terminal-style borders and dividers
+- Flat, minimal hover states
+- Mobile-first responsive design maintained
 
 ## 🎯 Next Priority: Nostr Integration
 
@@ -125,6 +191,17 @@ We expect these tables/views:
 - review_queue: human-in-the-loop approvals for uncertain items
 
 You can start with just raw_events + normalized_events_latest and grow from there.
+
+## Security/Keys
+
+We use the Supabase anon (publishable) key in the client by design. This is safe and recommended for frontend apps per Supabase docs; Row Level Security (RLS) and policies protect data access.
+
+## Dev flags
+
+These flags live under `CONFIG.flags` in `script.js` and are safe to flip during development:
+
+- `debug` (default: false): Enables verbose console logs for queries and renders.
+- `nostrHealthCheck` (default: false): Runs a quick Nostr connect→disconnect sanity check at social init. You can also run it manually via `window.social.healthCheck()`.
 
 **Replace Placeholders:**
 

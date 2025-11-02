@@ -263,6 +263,36 @@
         </div>
     </div>
     
+        <!-- Location Selection Modal -->
+        <div class="location-modal" id="location-modal" style="display: none;">
+            <div class="location-modal-content">
+                <div class="location-prompt">
+                    <p class="location-prompt-text">> SELECT CITY:</p>
+                    <select class="location-dropdown" id="location-dropdown">
+                        <option value="">-- select city --</option>
+                        <option value="amsterdam">Amsterdam</option>
+                        <option value="barcelona">Barcelona</option>
+                        <option value="berlin">Berlin</option>
+                        <option value="london">London</option>
+                        <option value="los-angeles">Los Angeles</option>
+                        <option value="madrid">Madrid</option>
+                        <option value="melbourne">Melbourne</option>
+                        <option value="mexico-city">Mexico City</option>
+                        <option value="montreal">Montreal</option>
+                        <option value="new-york">New York</option>
+                        <option value="paris">Paris</option>
+                        <option value="rome">Rome</option>
+                        <option value="sao-paulo">São Paulo</option>
+                        <option value="sydney">Sydney</option>
+                        <option value="tokyo">Tokyo</option>
+                        <option value="toronto">Toronto</option>
+                        <option value="vancouver">Vancouver</option>
+                    </select>
+                    <button class="location-select-button" id="location-select-btn">[SELECT]</button>
+                </div>
+            </div>
+        </div>
+    
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/nostr-tools@2.0.0/dist/nostr-tools.umd.js"></script>
     <script>

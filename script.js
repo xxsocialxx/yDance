@@ -96,7 +96,9 @@ const state = {
     userKeys: null,
     isAuthenticated: false,
     authSession: null,
-    authModalMode: 'login'
+    authModalMode: 'login',
+    // Location state
+    userCity: null
 };
 
 // ============================================================================
@@ -4519,6 +4521,64 @@ const router = {
 };
 
 // ============================================================================
+// LOCATION MANAGEMENT
+// ============================================================================
+function initLocationSelection() {
+    // Check if city is already selected
+    const savedCity = localStorage.getItem('ydance_city');
+    
+    if (savedCity) {
+        state.userCity = savedCity;
+        if (CONFIG.flags.debug) console.log('City loaded from storage:', savedCity);
+        return; // City already selected, no need to show prompt
+    }
+    
+    // Show location selection modal
+    const locationModal = document.getElementById('location-modal');
+    const locationDropdown = document.getElementById('location-dropdown');
+    const locationSelectBtn = document.getElementById('location-select-btn');
+    
+    if (!locationModal || !locationDropdown || !locationSelectBtn) {
+        console.error('Location modal elements not found');
+        return;
+    }
+    
+    locationModal.style.display = 'flex';
+    
+    // Handle selection
+    function selectCity() {
+        const selectedCity = locationDropdown.value;
+        if (!selectedCity) {
+            return; // No selection made
+        }
+        
+        state.userCity = selectedCity;
+        localStorage.setItem('ydance_city', selectedCity);
+        locationModal.style.display = 'none';
+        
+        if (CONFIG.flags.debug) console.log('City selected:', selectedCity);
+        // Note: City selection is saved but doesn't filter events during testing
+        // All cities currently show the same general database
+    }
+    
+    locationSelectBtn.addEventListener('click', selectCity);
+    locationDropdown.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            selectCity();
+        }
+    });
+}
+
+// Location filtering function (currently disabled for testing)
+// All cities show the same general database events
+// City selection is saved in localStorage for future filtering implementation
+function filterEventsByCity() {
+    // TESTING MODE: All cities direct to main site with general database
+    // No filtering applied - everyone sees the same events regardless of city
+    return state.eventsData;
+}
+
+// ============================================================================
 // 7. INITIALIZATION
 // ============================================================================
 // 🚨 DO NOT MODIFY THIS SECTION 🚨
@@ -4527,6 +4587,9 @@ const router = {
 // ============================================================================
 async function init() {
     console.log('Initializing yDance Events app...');
+    
+    // Initialize location selection first (before any data loading)
+    initLocationSelection();
     
     // Check if Supabase is available
     if (typeof supabase === 'undefined') {
