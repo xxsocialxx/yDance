@@ -4521,6 +4521,70 @@ const router = {
 };
 
 // ============================================================================
+// THEME MODE MANAGEMENT
+// ============================================================================
+function initThemeToggle() {
+    const modeToggle = document.getElementById('mode-toggle');
+    const modeToggleIcon = document.getElementById('mode-toggle-icon');
+    const body = document.body;
+    
+    if (!modeToggle || !modeToggleIcon) {
+        console.error('Mode toggle elements not found');
+        return;
+    }
+    
+    // Check saved preference
+    const savedMode = localStorage.getItem('ydance_theme_mode');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    // Set initial mode
+    if (savedMode === 'light' || (!savedMode && !prefersDark)) {
+        body.classList.add('light-mode');
+        updateToggleIcon(true); // light mode active
+    } else {
+        body.classList.remove('light-mode');
+        updateToggleIcon(false); // dark mode active
+    }
+    
+    // Toggle function
+    function toggleTheme() {
+        const isLight = body.classList.contains('light-mode');
+        
+        if (isLight) {
+            body.classList.remove('light-mode');
+            localStorage.setItem('ydance_theme_mode', 'dark');
+            updateToggleIcon(false);
+        } else {
+            body.classList.add('light-mode');
+            localStorage.setItem('ydance_theme_mode', 'light');
+            updateToggleIcon(true);
+        }
+    }
+    
+    function updateToggleIcon(isLightMode) {
+        // Moon icon (dark mode)
+        const moonIcon = '<path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18 10a.75.75 0 00.75-.75V7a.75.75 0 00-1.5 0v2.25A.75.75 0 0018 10zM17.25 17.25a.75.75 0 011.5 0V20a.75.75 0 01-1.5 0v-2.75zM12 18a.75.75 0 00.75.75H15a.75.75 0 000-1.5h-2.25A.75.75 0 0012 18zM7.758 17.25a.75.75 0 00-1.5 0V20a.75.75 0 001.5 0v-2.75zM6 10a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 10zM2.25 6.75a.75.75 0 00-1.5 0V7.5a.75.75 0 001.5 0v-.75zm11.409-3.376a.75.75 0 001.06 0l1.5-1.5a.75.75 0 10-1.06-1.061l-1.5 1.5a.75.75 0 000 1.06zm3.376 12.5a.75.75 0 10-1.06-1.06l-1.5 1.5a.75.75 0 101.06 1.06l1.5-1.5zM4.281 4.22a.75.75 0 00-1.06 0l-1.5 1.5a.75.75 0 101.06 1.06l1.5-1.5a.75.75 0 000-1.06zm12.5 12.5a.75.75 0 00-1.06 0l-1.5 1.5a.75.75 0 101.06 1.06l1.5-1.5a.75.75 0 000-1.06z"/>';
+        // Sun icon (light mode)
+        const sunIcon = '<path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18 10a.75.75 0 00.75-.75V7a.75.75 0 00-1.5 0v2.25A.75.75 0 0018 10zM17.25 17.25a.75.75 0 011.5 0V20a.75.75 0 01-1.5 0v-2.75zM12 18a.75.75 0 00.75.75H15a.75.75 0 000-1.5h-2.25A.75.75 0 0012 18zM7.758 17.25a.75.75 0 00-1.5 0V20a.75.75 0 001.5 0v-2.75zM6 10a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 10zM2.25 6.75a.75.75 0 00-1.5 0V7.5a.75.75 0 001.5 0v-.75zm11.409-3.376a.75.75 0 001.06 0l1.5-1.5a.75.75 0 10-1.06-1.061l-1.5 1.5a.75.75 0 000 1.06zm3.376 12.5a.75.75 0 10-1.06-1.06l-1.5 1.5a.75.75 0 101.06 1.06l1.5-1.5a.75.75 0 000-1.06zM4.281 4.22a.75.75 0 00-1.06 0l-1.5 1.5a.75.75 0 101.06 1.06l1.5-1.5a.75.75 0 000-1.06zm12.5 12.5a.75.75 0 00-1.06 0l-1.5 1.5a.75.75 0 101.06 1.06l1.5-1.5a.75.75 0 000-1.06z"/>';
+        
+        if (isLightMode) {
+            // Show sun icon (currently in light mode, clicking will go to dark)
+            modeToggleIcon.innerHTML = sunIcon;
+            modeToggle.setAttribute('title', 'Switch to dark mode');
+        } else {
+            // Show moon icon (currently in dark mode, clicking will go to light)
+            modeToggleIcon.innerHTML = moonIcon;
+            modeToggle.setAttribute('title', 'Switch to light mode');
+        }
+    }
+    
+    modeToggle.addEventListener('click', toggleTheme);
+    
+    // Initialize icon based on current mode
+    updateToggleIcon(body.classList.contains('light-mode'));
+}
+
+// ============================================================================
 // LOCATION MANAGEMENT
 // ============================================================================
 function initLocationSelection() {
@@ -4588,7 +4652,10 @@ function filterEventsByCity() {
 async function init() {
     console.log('Initializing yDance Events app...');
     
-    // Initialize location selection first (before any data loading)
+    // Initialize theme toggle first (before anything renders)
+    initThemeToggle();
+    
+    // Initialize location selection (before any data loading)
     initLocationSelection();
     
     // Check if Supabase is available

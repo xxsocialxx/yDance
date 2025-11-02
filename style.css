@@ -96,6 +96,7 @@ body {
 .tab-button:hover {
     background: var(--bg-tertiary);
     color: var(--text-primary);
+    /* Subtle warm hover effect maintained */
 }
 
 .tab-button.active {
@@ -842,4 +843,48 @@ body {
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border-color: var(--accent);
+}
+
+/* ========================================
+   MODE TOGGLE BUTTON - Icon Only
+   ======================================== */
+.mode-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2001;
+    transition: all 0.3s ease;
+    color: var(--text-secondary);
+    font-size: 18px;
+}
+
+.mode-toggle:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent);
+    color: var(--text-primary);
+    transform: scale(1.05);
+}
+
+.mode-toggle svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
+/* Smooth transition for mode switch */
+body {
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body * {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
