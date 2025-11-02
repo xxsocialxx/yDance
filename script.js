@@ -4133,7 +4133,8 @@ const router = {
             
             // Re-render current view to show new data
             if (state.currentView === 'events') {
-                views.renderEvents(state.events);
+                const filteredEvents = filterEventsByCity(state.events);
+                views.renderEvents(filteredEvents);
             } else if (state.currentView === 'djs') {
                 views.renderDJs(state.djs);
             } else if (state.currentView === 'venues') {
