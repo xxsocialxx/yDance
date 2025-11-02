@@ -101,17 +101,17 @@ Rules:
 
 ### **Future Enhancements Needed**
 
-#### **City-Based Filtering** 🔴 HIGH PRIORITY
-Currently, all cities show the same general database for testing. City selection is saved but not used for filtering.
+#### **City-Based Filtering** ✅ IMPLEMENTED
+City selection now filters events by the selected city. Filtering checks both `event.city` and `event.venue.city` fields for flexible matching.
 
-**To implement city filtering:**
-1. Ensure event data structure includes a `city` field (or determine how to match events to cities)
-2. Update `filterEventsByCity()` function in `script.js` (around line 4575) to filter `state.eventsData` based on `state.userCity`
-3. Apply filtering when events are loaded and when city is changed
-4. Consider adding city field to event schema if not already present
-5. Update event fetching logic to filter by city at database level (more efficient) or client-side (current approach)
+**Implementation details:**
+- `filterEventsByCity()` function filters events based on `state.userCity`
+- Filtering is applied when events are loaded and when city selection changes
+- Handles city name variations (e.g., "New York" vs "New York City") via case-insensitive contains matching
+- Shows city context in empty state messages when no events found for selected city
+- Falls back to showing all events if no city is selected
 
-**Current state:** `state.userCity` is saved to localStorage but filtering is disabled for testing.
+**Future optimization:** Consider filtering at database level for better performance with large datasets.
 
 #### **Light Mode Implementation**
 - Terminal-style light mode with subtle color accents (separate from dark mode)

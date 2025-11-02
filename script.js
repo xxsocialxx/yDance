@@ -3071,9 +3071,10 @@ const views = {
         }
 
         if (!events || events.length === 0) {
+            const cityContext = state.userCity ? ` in ${state.userCity}` : '';
             container.innerHTML = `
                 <div class="empty-state">
-                    > No events found. Use refresh to reload data.
+                    > No events found${cityContext}. Use refresh to reload data.
                 </div>
             `;
             return;
@@ -4621,8 +4622,12 @@ function initLocationSelection() {
         locationModal.style.display = 'none';
         
         if (CONFIG.flags.debug) console.log('City selected:', selectedCity);
-        // Note: City selection is saved but doesn't filter events during testing
-        // All cities currently show the same general database
+        
+        // Re-filter and re-render events with new city selection
+        if (state.eventsData && state.eventsData.length > 0) {
+            const filteredEvents = filterEventsByCity();
+            views.renderEvents(filteredEvents);
+        }
     }
     
     locationSelectBtn.addEventListener('click', selectCity);
@@ -4636,10 +4641,48 @@ function initLocationSelection() {
 // Location filtering function (currently disabled for testing)
 // All cities show the same general database events
 // City selection is saved in localStorage for future filtering implementation
-function filterEventsByCity() {
-    // TESTING MODE: All cities direct to main site with general database
-    // No filtering applied - everyone sees the same events regardless of city
-    return state.eventsData;
+function filterEventsByCity(events = null) {
+    // Use provided events or fall back to state.eventsData
+    const eventsToFilter = events || state.eventsData;
+    
+    // If no city selected, return all events
+    if (!state.userCity) {
+        return eventsToFilter;
+    }
+    
+    // Filter events by city
+    // Events can have city field directly or nested in venue.city
+    const filtered = eventsToFilter.filter(event => {
+        // Check direct city field
+        if (event.city) {
+            // Normalize for comparison (case-insensitive, handle variations)
+            const eventCity = event.city.toLowerCase().trim();
+            const userCity = state.userCity.toLowerCase().trim();
+            
+            // Exact match or contains user city (handles "New York" vs "New York City")
+            if (eventCity === userCity || eventCity.includes(userCity) || userCity.includes(eventCity)) {
+                return true;
+            }
+        }
+        
+        // Check venue.city if available
+        if (event.venue && event.venue.city) {
+            const venueCity = event.venue.city.toLowerCase().trim();
+            const userCity = state.userCity.toLowerCase().trim();
+            
+            if (venueCity === userCity || venueCity.includes(userCity) || userCity.includes(venueCity)) {
+                return true;
+            }
+        }
+        
+        return false;
+    });
+    
+    if (CONFIG.flags.debug) {
+        console.log(`Filtered ${eventsToFilter.length} events to ${filtered.length} for city: ${state.userCity}`);
+    }
+    
+    return filtered;
 }
 
 // ============================================================================
@@ -4685,7 +4728,9 @@ async function init() {
     views.showLoading('events-container');
     try {
         const events = await api.fetchEvents();
-        views.renderEvents(events);
+        // Apply city filtering if city is selected
+        const filteredEvents = filterEventsByCity(events);
+        views.renderEvents(filteredEvents);
     } catch (error) {
         views.showError('events-container', error.message);
     }
