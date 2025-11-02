@@ -1,4 +1,21 @@
 // ============================================================================
+/*
+yDance Script - Table of Contents (scan me)
+1) CONFIG
+2) STATE
+3) API
+4) SOCIAL
+5) VIEWS
+6) ROUTER
+7) INITIALIZATION (DO NOT MODIFY)
+
+Rules:
+- No renaming IDs/classes/functions/state keys.
+- New behavior only behind flags (default off).
+- If a section grows > ~300 lines, consider extraction later.
+*/
+// ============================================================================
+// ============================================================================
 // yDance Events - Refactored Architecture
 // ============================================================================
 // 
@@ -30,11 +47,17 @@
 // ============================================================================
 const CONFIG = {
     supabaseUrl: 'https://rymcfymmigomaytblqml.supabase.co',
+    // Supabase anon publishable key (safe for frontend per Supabase docs)
     supabaseKey: 'sb_publishable_sk0GTezrQ8me8sPRLsWo4g_8UEQgztQ',
+    nostrRelayUrl: 'wss://relay.beginnersurfer.com',
     flags: {
         nostrRealClient: false,
         writeToRawEvents: false,
         enableReviewQueue: true,
+        // Flip to run a quick Nostr connect→disconnect sanity check in dev
+        nostrHealthCheck: false,
+        // Verbose console logging during development
+        debug: false,
         allowClientSensitiveWrites: false
     }
 };
@@ -56,7 +79,6 @@ const state = {
     selectedEvent: null,
     
     // Account Mode Management
-    authModalMode: 'login', // 'login' or 'signup'
     selectedAccountMode: null, // 'light' or 'bold' (for signup)
     userAccountMode: null, // 'light' or 'bold' (for current user)
     currentDJProfile: null,
@@ -100,25 +122,43 @@ const state = {
 // ============================================================================
 const api = {
     async init() {
-        console.log('Initializing Supabase client...');
-        console.log('URL:', CONFIG.supabaseUrl);
-        console.log('Key:', CONFIG.supabaseKey.substring(0, 20) + '...');
+        if (CONFIG.flags.debug) console.log('Initializing Supabase client...');
+        if (CONFIG.flags.debug) console.log('URL:', CONFIG.supabaseUrl);
         
         try {
             state.supabaseClient = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
-            console.log('Supabase client created successfully');
+            if (CONFIG.flags.debug) console.log('Supabase client created successfully');
             return true;
         } catch (error) {
             console.error('Error creating Supabase client:', error);
             return false;
         }
     },
+    
+    async healthCheck(relayUrl = CONFIG.nostrRelayUrl) {
+        if (CONFIG.flags.debug) console.log('Nostr health check starting...');
+        try {
+            if (state.nostrClient && state.nostrClient.connected) {
+                if (CONFIG.flags.debug) console.log('Nostr health: already connected to', state.nostrClient.relay);
+                return { ok: true, relay: state.nostrClient.relay, reused: true };
+            }
+            const temp = await nostrClient.connect(relayUrl);
+            const connected = !!(temp && temp.connected);
+            if (!connected) throw new Error('Temp connection did not report connected');
+            await nostrClient.disconnect();
+            if (CONFIG.flags.debug) console.log('Nostr health: connect/disconnect OK for', relayUrl);
+            return { ok: true, relay: relayUrl, reused: false };
+        } catch (error) {
+            console.error('Nostr health: failed for', relayUrl, error);
+            return { ok: false, relay: relayUrl, error: (error && error.message) ? error.message : String(error) };
+        }
+    },
 
     async fetchEvents() {
-        console.log('Loading events from database...');
+        if (CONFIG.flags.debug) console.log('Loading events from database...');
         try {
             // Preferred: read from normalized_events_latest view
-            console.log('Trying normalized_events_latest view...');
+            if (CONFIG.flags.debug) console.log('Trying normalized_events_latest view...');
             const viewResult = await state.supabaseClient
                 .from('normalized_events_latest')
                 .select('normalized_json, created_at')
@@ -127,7 +167,7 @@ const api = {
             if (!viewResult.error && Array.isArray(viewResult.data) && viewResult.data.length > 0) {
                 const events = viewResult.data.map(row => row.normalized_json).filter(Boolean);
                 state.eventsData = events;
-                console.log('Loaded events from normalized view:', state.eventsData.length);
+                if (CONFIG.flags.debug) console.log('Loaded events from normalized view:', state.eventsData.length);
                 return state.eventsData;
             }
 
@@ -135,27 +175,27 @@ const api = {
             let events = null;
             let error = null;
 
-            console.log('Trying Events table (fallback)...');
+            if (CONFIG.flags.debug) console.log('Trying Events table (fallback)...');
             const result1 = await state.supabaseClient.from('Events').select('*').order('date', { ascending: true });
             if (result1.error) {
-                console.log('Events table failed:', result1.error.message);
-                console.log('Trying events table (fallback)...');
+                if (CONFIG.flags.debug) console.log('Events table failed:', result1.error.message);
+                if (CONFIG.flags.debug) console.log('Trying events table (fallback)...');
                 const result2 = await state.supabaseClient.from('events').select('*').order('date', { ascending: true });
                 if (result2.error) {
-                    console.log('events table failed:', result2.error.message);
+                    if (CONFIG.flags.debug) console.log('events table failed:', result2.error.message);
                     error = result2.error;
                 } else {
                     events = result2.data;
-                    console.log('Found events in lowercase table:', events.length);
+                    if (CONFIG.flags.debug) console.log('Found events in lowercase table:', events.length);
                 }
             } else {
                 events = result1.data;
-                console.log('Found events in capital table:', events.length);
+                if (CONFIG.flags.debug) console.log('Found events in capital table:', events.length);
             }
 
             if (error) throw error;
             state.eventsData = events || [];
-            console.log('Events loaded successfully (fallback):', state.eventsData.length);
+            if (CONFIG.flags.debug) console.log('Events loaded successfully (fallback):', state.eventsData.length);
             return state.eventsData;
         } catch (error) {
             console.error('Error loading events:', error);
@@ -164,7 +204,7 @@ const api = {
     },
 
     async fetchDJProfiles() {
-        console.log('Loading DJ profiles from database...');
+        if (CONFIG.flags.debug) console.log('Loading DJ profiles from database...');
         
         try {
             const { data: profiles, error } = await state.supabaseClient
@@ -172,7 +212,7 @@ const api = {
                 .select('*')
                 .order('name', { ascending: true });
             
-            console.log('DJ profiles query result:', { profiles, error });
+        if (CONFIG.flags.debug) console.log('DJ profiles query result:', { profiles, error });
             
             if (error) {
                 console.error('Error loading DJ profiles:', error);
@@ -180,7 +220,7 @@ const api = {
             }
             
             state.djProfilesData = profiles || [];
-            console.log('DJ profiles loaded successfully:', state.djProfilesData.length);
+            if (CONFIG.flags.debug) console.log('DJ profiles loaded successfully:', state.djProfilesData.length);
             return state.djProfilesData;
             
         } catch (error) {
@@ -190,7 +230,7 @@ const api = {
     },
 
     async fetchDJProfile(djName) {
-        console.log('Loading individual DJ profile for:', djName);
+        if (CONFIG.flags.debug) console.log('Loading individual DJ profile for:', djName);
         
         try {
             const { data: profile, error } = await state.supabaseClient
@@ -199,7 +239,7 @@ const api = {
                 .eq('name', djName)
                 .single();
             
-            console.log('DJ profile query result:', { profile, error });
+            if (CONFIG.flags.debug) console.log('DJ profile query result:', { profile, error });
             
             if (error) {
                 console.error('Error loading DJ profile:', error);
@@ -207,7 +247,7 @@ const api = {
             }
             
             state.currentDJProfile = profile;
-            console.log('DJ profile loaded successfully:', profile);
+            if (CONFIG.flags.debug) console.log('DJ profile loaded successfully');
             return profile;
             
         } catch (error) {
@@ -217,45 +257,12 @@ const api = {
     },
 
     async fetchVenues() {
-        console.log('Loading venues from database...');
+        if (CONFIG.flags.debug) console.log('Loading venues from database...');
         
         try {
             // For now, return placeholder data until venues table is created
-            const placeholderVenues = [
-                {
-                    id: 1,
-                    name: "The Warehouse",
-                    location: "Industrial District",
-                    capacity: 500,
-                    soundSystem: "BassBoom Pro",
-                    about: "Iconic warehouse venue known for underground electronic music",
-                    address: "123 Industrial Way",
-                    website: "warehouse-venue.com"
-                },
-                {
-                    id: 2,
-                    name: "Skyline Rooftop",
-                    location: "Downtown",
-                    capacity: 200,
-                    soundSystem: "Crystal Clear Audio",
-                    about: "Rooftop venue with stunning city views and premium sound",
-                    address: "456 Skyline Blvd",
-                    website: "skyline-rooftop.com"
-                },
-                {
-                    id: 3,
-                    name: "Underground Club",
-                    location: "Arts Quarter",
-                    capacity: 150,
-                    soundSystem: "Deep Bass Systems",
-                    about: "Intimate underground space for experimental electronic music",
-                    address: "789 Arts Street",
-                    website: "underground-club.com"
-                }
-            ];
-            
-            state.venuesData = placeholderVenues;
-            console.log('Venues loaded successfully:', state.venuesData.length);
+            state.venuesData = api.placeholders?.venues || [];
+            if (CONFIG.flags.debug) console.log('Venues loaded successfully:', state.venuesData.length);
             return state.venuesData;
             
         } catch (error) {
@@ -265,45 +272,12 @@ const api = {
     },
 
     async fetchSoundSystems() {
-        console.log('Loading sound systems from database...');
+        if (CONFIG.flags.debug) console.log('Loading sound systems from database...');
         
         try {
             // For now, return placeholder data until sound systems table is created
-            const placeholderSoundSystems = [
-                {
-                    id: 1,
-                    name: "BassBoom Pro",
-                    brand: "AudioTech",
-                    power: "5000W",
-                    type: "Full Range System",
-                    about: "Professional-grade sound system known for deep bass and crystal clear highs",
-                    features: ["Subwoofers", "Tweeters", "Amplifiers", "Mixer"],
-                    venues: ["The Warehouse", "Underground Club"]
-                },
-                {
-                    id: 2,
-                    name: "Crystal Clear Audio",
-                    brand: "SoundMaster",
-                    power: "3000W",
-                    type: "High-End System",
-                    about: "Premium sound system delivering pristine audio quality for intimate venues",
-                    features: ["Active Speakers", "Digital Processing", "Wireless Control"],
-                    venues: ["Skyline Rooftop"]
-                },
-                {
-                    id: 3,
-                    name: "Deep Bass Systems",
-                    brand: "BassTech",
-                    power: "8000W",
-                    type: "Heavy Bass System",
-                    about: "Powerful bass-focused system designed for underground electronic music",
-                    features: ["Massive Subwoofers", "Bass Amplifiers", "EQ Processing"],
-                    venues: ["Underground Club", "The Warehouse"]
-                }
-            ];
-            
-            state.soundSystemsData = placeholderSoundSystems;
-            console.log('Sound systems loaded successfully:', state.soundSystemsData.length);
+            state.soundSystemsData = api.placeholders?.soundSystems || [];
+            if (CONFIG.flags.debug) console.log('Sound systems loaded successfully:', state.soundSystemsData.length);
             return state.soundSystemsData;
             
         } catch (error) {
@@ -313,48 +287,12 @@ const api = {
     },
 
     async fetchFriends() {
-        console.log('Loading friends data from database...');
+        if (CONFIG.flags.debug) console.log('Loading friends data from database...');
         
         try {
             // For now, return placeholder data until friends table is created
-            const placeholderFriends = [
-                {
-                    id: 1,
-                    name: "Alice Johnson",
-                    username: "@alice_music",
-                    avatar: "👩‍🎤",
-                    eventsAttending: 3,
-                    favoriteGenres: ["Techno", "House"],
-                    about: "Electronic music enthusiast and event organizer",
-                    mutualFriends: 12,
-                    lastActive: "2 hours ago"
-                },
-                {
-                    id: 2,
-                    name: "Bob Chen",
-                    username: "@bob_bass",
-                    avatar: "👨‍🎧",
-                    eventsAttending: 5,
-                    favoriteGenres: ["Dubstep", "Drum & Bass"],
-                    about: "Bass music lover and sound engineer",
-                    mutualFriends: 8,
-                    lastActive: "1 day ago"
-                },
-                {
-                    id: 3,
-                    name: "Charlie Rodriguez",
-                    username: "@charlie_beat",
-                    avatar: "👨‍🎵",
-                    eventsAttending: 2,
-                    favoriteGenres: ["Progressive House", "Trance"],
-                    about: "Melodic electronic music fan",
-                    mutualFriends: 15,
-                    lastActive: "3 hours ago"
-                }
-            ];
-            
-            state.friendsData = placeholderFriends;
-            console.log('Friends data loaded successfully:', state.friendsData.length);
+            state.friendsData = api.placeholders?.friends || [];
+            if (CONFIG.flags.debug) console.log('Friends data loaded successfully:', state.friendsData.length);
             return state.friendsData;
             
         } catch (error) {
@@ -385,17 +323,36 @@ const api = {
 // ============================================================================
 const social = {
     async init() {
-        console.log('Initializing Social layer...');
+        if (CONFIG.flags.debug) console.log('Initializing Social layer...');
         try {
             if (CONFIG.flags.nostrRealClient) {
                 // Initialize nostr client using nostrClient module
-                state.nostrClient = await nostrClient.connect('wss://localhost:8080');
+                const urlParams = new URLSearchParams(window.location.search);
+                const relayOverride = urlParams.get('relay');
+                const relayUrl = relayOverride || CONFIG.nostrRelayUrl;
+                state.nostrClient = await nostrClient.connect(relayUrl);
                 // Initialize Nostr data fetching
                 await this.initNostrDataFetching();
-                console.log('Social layer initialized with real Nostr client');
+                if (CONFIG.flags.debug) console.log('Social layer initialized with real Nostr client at', relayUrl);
+                if (CONFIG.flags.nostrHealthCheck) {
+                    try {
+                        await this.healthCheck(relayUrl);
+                    } catch (e) {
+                        console.warn('Nostr health check failed:', e && e.message ? e.message : e);
+                    }
+                }
+                // Expose dev hook
+                if (typeof window !== 'undefined') {
+                    window.social = this;
+                }
             } else {
                 state.nostrClient = { connected: false, relay: 'disabled' };
-                console.log('Social layer initialized (nostr disabled by flag)');
+                if (CONFIG.flags.debug) console.log('Social layer initialized (nostr disabled by flag)');
+                // Expose dev hook and tip
+                if (typeof window !== 'undefined') {
+                    window.social = this;
+                    console.log('Tip: run window.social.healthCheck() to test Nostr connectivity');
+                }
             }
             return true;
         } catch (error) {
@@ -405,32 +362,32 @@ const social = {
     },
 
     async initNostrDataFetching() {
-        console.log('Initializing Nostr data fetching...');
+        if (CONFIG.flags.debug) console.log('Initializing Nostr data fetching...');
         
         try {
             // Fetch events from Nostr
             const events = await this.fetchSocialFeed();
-            console.log('Loaded events from Nostr:', events.length);
+            if (CONFIG.flags.debug) console.log('Loaded events from Nostr:', events.length);
             
             // Fetch profiles from Nostr
             const profiles = await this.fetchProfilesFromNostr();
-            console.log('Loaded profiles from Nostr:', profiles.length);
+            if (CONFIG.flags.debug) console.log('Loaded profiles from Nostr:', profiles.length);
             
             // Set up periodic refresh (every 5 minutes)
             setInterval(async () => {
-                console.log('Refreshing Nostr data...');
+                if (CONFIG.flags.debug) console.log('Refreshing Nostr data...');
                 await this.fetchSocialFeed();
                 await this.fetchProfilesFromNostr();
             }, 5 * 60 * 1000); // 5 minutes
             
-            console.log('Nostr data fetching initialized');
+            if (CONFIG.flags.debug) console.log('Nostr data fetching initialized');
         } catch (error) {
             console.error('Error initializing Nostr data fetching:', error);
         }
     },
 
     async processMessage(messageText) {
-        console.log('Processing social message:', messageText);
+        if (CONFIG.flags.debug) console.log('Processing social message');
         
         try {
             // Parse message for event attributes
@@ -452,7 +409,7 @@ const social = {
     },
 
     parseEventMessage(messageText) {
-        console.log('Parsing event message...');
+        if (CONFIG.flags.debug) console.log('Parsing event message...');
         
         try {
             // Basic parsing patterns (placeholder implementation)
@@ -472,7 +429,7 @@ const social = {
                 needsModeration: true // Default to moderation for now
             };
             
-            console.log('Message parsed:', parsed);
+            if (CONFIG.flags.debug) console.log('Message parsed');
             return parsed;
         } catch (error) {
             console.error('Error parsing message:', error);
@@ -486,7 +443,7 @@ const social = {
     },
 
     async linkAttributes(parsedData) {
-        console.log('Linking attributes to database...');
+        if (CONFIG.flags.debug) console.log('Linking attributes to database...');
         
         try {
             const linkedData = { ...parsedData };
@@ -507,7 +464,7 @@ const social = {
                 linkedData.linkedVenue = venueMatch || null;
             }
             
-            console.log('Attributes linked:', linkedData);
+            if (CONFIG.flags.debug) console.log('Attributes linked');
             return linkedData;
         } catch (error) {
             console.error('Error linking attributes:', error);
@@ -516,7 +473,7 @@ const social = {
     },
 
     queueForModeration(data) {
-        console.log('Queueing for moderation...');
+        if (CONFIG.flags.debug) console.log('Queueing for moderation...');
         
         try {
             const moderationItem = {
@@ -527,7 +484,7 @@ const social = {
             };
             
             state.moderationQueue.push(moderationItem);
-            console.log('Item queued for moderation:', moderationItem);
+            if (CONFIG.flags.debug) console.log('Item queued for moderation');
         } catch (error) {
             console.error('Error queueing for moderation:', error);
             throw error;
@@ -535,21 +492,21 @@ const social = {
     },
 
     async sendNostrMessage(content) {
-        console.log('Sending nostr message...');
+        if (CONFIG.flags.debug) console.log('Sending nostr message...');
         
         try {
             if (!CONFIG.flags.nostrRealClient) {
-                console.log('Nostr real client disabled by feature flag. Skip publish.');
+                if (CONFIG.flags.debug) console.log('Nostr real client disabled by feature flag. Skip publish.');
                 return { success: false, disabled: true };
             }
             // Placeholder nostr message sending
             if (!state.nostrClient || !state.nostrClient.connected) {
-                console.log('Nostr client not connected, message queued');
+                if (CONFIG.flags.debug) console.log('Nostr client not connected, message queued');
                 return { success: false, queued: true };
             }
             
             // TODO: Implement actual nostr message sending
-            console.log('Nostr message would be sent:', content);
+            if (CONFIG.flags.debug) console.log('Nostr message would be sent');
             return { success: true, messageId: 'placeholder-id' };
         } catch (error) {
             console.error('Error sending nostr message:', error);
@@ -558,7 +515,7 @@ const social = {
     },
 
     async fetchSocialFeed() {
-        console.log('Fetching yDance events from Nostr...');
+        if (CONFIG.flags.debug) console.log('Fetching yDance events from Nostr...');
         
         try {
             // Query for Kind 1 events with yDance tags
@@ -574,7 +531,7 @@ const social = {
             // Update state with new events
             state.events = [...state.events, ...parsedEvents];
             
-            console.log('Parsed events from Nostr:', parsedEvents.length);
+            if (CONFIG.flags.debug) console.log('Parsed events from Nostr:', parsedEvents.length);
             return parsedEvents;
         } catch (error) {
             console.error('Error fetching events from Nostr:', error);
@@ -584,11 +541,11 @@ const social = {
     },
 
     async queryNostrEvents(filter) {
-        console.log('SOCIAL: Delegating event query to nostrClient module');
+        if (CONFIG.flags.debug) console.log('SOCIAL: Delegating event query to nostrClient module');
         
         try {
             if (!state.nostrClient || !state.nostrClient.connected) {
-                console.log('Nostr client not connected, returning placeholder data');
+                if (CONFIG.flags.debug) console.log('Nostr client not connected, returning placeholder data');
                 return this.getPlaceholderNostrEvents();
             }
             
@@ -662,7 +619,7 @@ const social = {
 
     // Kind 0 Profile Parsing Methods
     async fetchProfilesFromNostr() {
-        console.log('Fetching yDance profiles from Nostr...');
+        if (CONFIG.flags.debug) console.log('Fetching yDance profiles from Nostr...');
         
         try {
             // Query for Kind 0 events (profiles) with yDance tags
@@ -678,7 +635,7 @@ const social = {
             // Update state with new profiles
             this.updateProfilesInState(parsedProfiles);
             
-            console.log('Parsed profiles from Nostr:', parsedProfiles.length);
+            if (CONFIG.flags.debug) console.log('Parsed profiles from Nostr:', parsedProfiles.length);
             return parsedProfiles;
         } catch (error) {
             console.error('Error fetching profiles from Nostr:', error);
@@ -687,11 +644,11 @@ const social = {
     },
 
     async queryNostrProfiles(filter) {
-        console.log('Querying Nostr profiles with filter:', filter);
+        if (CONFIG.flags.debug) console.log('Querying Nostr profiles with filter:', filter);
         
         try {
             if (!state.nostrClient || !state.nostrClient.connected) {
-                console.log('Nostr client not connected, returning placeholder profiles');
+                if (CONFIG.flags.debug) console.log('Nostr client not connected, returning placeholder profiles');
                 return this.getPlaceholderNostrProfiles();
             }
             
@@ -705,7 +662,7 @@ const social = {
     },
 
     parseProfileFromNostr(nostrProfile) {
-        console.log('Parsing Nostr profile:', nostrProfile.id);
+        if (CONFIG.flags.debug) console.log('Parsing Nostr profile:', nostrProfile.id);
         
         const content = JSON.parse(nostrProfile.content);
         const tags = nostrProfile.tags;
@@ -1330,17 +1287,17 @@ const social = {
     },
 
     encryptKeys(keys, password) {
-        console.log('SOCIAL: Delegating encryption to keyEncryption module');
+        if (CONFIG.flags.debug) console.log('SOCIAL: Delegating encryption to keyEncryption module');
         return keyEncryption.encryptData(keys.privateKey, password);
     },
 
     // Test method for auth state
     testAuthState() {
-        console.log('Testing auth state...');
-        console.log('Current user:', state.currentUser);
-        console.log('User keys:', state.userKeys);
-        console.log('Is authenticated:', state.isAuthenticated);
-        console.log('Auth session:', state.authSession);
+        if (CONFIG.flags.debug) console.log('Testing auth state...');
+        if (CONFIG.flags.debug) console.log('Current user:', state.currentUser);
+        if (CONFIG.flags.debug) console.log('User keys:', state.userKeys);
+        if (CONFIG.flags.debug) console.log('Is authenticated:', state.isAuthenticated);
+        if (CONFIG.flags.debug) console.log('Auth session:', state.authSession);
         
         return {
             currentUser: state.currentUser,
@@ -1352,7 +1309,7 @@ const social = {
 
     // Test method to simulate authentication
     simulateAuth() {
-        console.log('Simulating authentication...');
+        if (CONFIG.flags.debug) console.log('Simulating authentication...');
         
         // Generate test user and keys
         const keys = this.generateNostrKeys();
@@ -1370,9 +1327,9 @@ const social = {
             expires_at: Date.now() + 3600000
         };
         
-        console.log('Authentication simulated successfully');
-        console.log('User:', state.currentUser.email);
-        console.log('Nostr PubKey:', state.userKeys.publicKey);
+        if (CONFIG.flags.debug) console.log('Authentication simulated successfully');
+        if (CONFIG.flags.debug) console.log('User:', state.currentUser.email);
+        if (CONFIG.flags.debug) console.log('Nostr PubKey:', state.userKeys.publicKey);
         
         return {
             success: true,
@@ -1383,24 +1340,24 @@ const social = {
 
     // Test method for Nostr key generation integration
     testNostrIntegration() {
-        console.log('Testing Nostr integration...');
+        if (CONFIG.flags.debug) console.log('Testing Nostr integration...');
         
         try {
             // Test key generation
             const keyTest = nostrKeys.testKeyGeneration();
-            console.log('Key generation test result:', keyTest);
+            if (CONFIG.flags.debug) console.log('Key generation test result:', keyTest);
             
             // Test SOCIAL layer key generation
             const socialKeys = this.generateNostrKeys();
-            console.log('SOCIAL layer keys:', socialKeys);
+            if (CONFIG.flags.debug) console.log('SOCIAL layer keys:', socialKeys);
             
             // Test key validation
             const publicKeyValid = nostrKeys.validateKeyFormat(socialKeys.publicKey);
             const privateKeyValid = nostrKeys.validateKeyFormat(socialKeys.privateKey);
             
-            console.log('SOCIAL layer key validation:');
-            console.log('- Public key valid:', publicKeyValid);
-            console.log('- Private key valid:', privateKeyValid);
+            if (CONFIG.flags.debug) console.log('SOCIAL layer key validation:');
+            if (CONFIG.flags.debug) console.log('- Public key valid:', publicKeyValid);
+            if (CONFIG.flags.debug) console.log('- Private key valid:', privateKeyValid);
             
             return {
                 success: true,
@@ -2780,7 +2737,7 @@ const keyStorage = {
 // ============================================================================
 const nostrClient = {
     async connect(relayUrl = 'wss://localhost:8080') {
-        console.log('Connecting to Nostr relay:', relayUrl);
+        if (CONFIG.flags.debug) console.log('Connecting to Nostr relay:', relayUrl);
         
         try {
             // Placeholder connection
@@ -2791,7 +2748,7 @@ const nostrClient = {
                 connectionTime: Date.now()
             };
             
-            console.log('Connected to Nostr relay');
+            if (CONFIG.flags.debug) console.log('Connected to Nostr relay');
             return client;
         } catch (error) {
             console.error('Error connecting to Nostr relay:', error);
@@ -2800,7 +2757,7 @@ const nostrClient = {
     },
 
     async queryEvents(filter) {
-        console.log('Querying Nostr events with filter:', filter);
+        if (CONFIG.flags.debug) console.log('Querying Nostr events with filter:', filter);
         
         try {
             // Placeholder query
@@ -2814,7 +2771,7 @@ const nostrClient = {
                 }
             ];
             
-            console.log('Events queried successfully');
+            if (CONFIG.flags.debug) console.log('Events queried successfully');
             return events;
         } catch (error) {
             console.error('Error querying events:', error);
@@ -2823,12 +2780,12 @@ const nostrClient = {
     },
 
     async publishEvent(event) {
-        console.log('Publishing Nostr event:', event.id);
+        if (CONFIG.flags.debug) console.log('Publishing Nostr event:', event.id);
         
         try {
             // Placeholder publishing
             // TODO: Implement actual Nostr event publishing
-            console.log('Event published successfully');
+            if (CONFIG.flags.debug) console.log('Event published successfully');
             return { success: true, eventId: event.id };
         } catch (error) {
             console.error('Error publishing event:', error);
@@ -2837,12 +2794,12 @@ const nostrClient = {
     },
 
     async disconnect() {
-        console.log('Disconnecting from Nostr relay...');
+        if (CONFIG.flags.debug) console.log('Disconnecting from Nostr relay...');
         
         try {
             // Placeholder disconnection
             // TODO: Implement actual WebSocket disconnection
-            console.log('Disconnected from Nostr relay');
+            if (CONFIG.flags.debug) console.log('Disconnected from Nostr relay');
             return true;
         } catch (error) {
             console.error('Error disconnecting from relay:', error);
@@ -2855,8 +2812,10 @@ const nostrClient = {
 // NOSTR EVENT PARSER MODULE
 // ============================================================================
 const nostrEventParser = {
+    // Strip leading decorative emojis from titles for cleaner display
+    EMOJI_PREFIX_REGEX: /^[🎵🎧🎪🎉🎊🎈🎁🎀🎂🎃🎄🎅🎆🎇🎈🎉🎊🎋🎌🎍🎎🎏🎐🎑🎒🎓🎖🎗🎙🎚🎛🎜🎝🎞🎟🎠🎡🎢🎣🎤🎥🎦🎧🎨🎩🎪🎫🎬🎭🎮🎯🎰🎱🎲🎳🎴🎵🎶🎷🎸🎹🎺🎻🎼🎽🎾🎿🏀🏁🏂🏃🏄🏅🏆🏇🏈🏉🏊🏋🏌🏍🏎🏏🏐🏑🏒🏓🏔🏕🏖🏗🏘🏙🏚🏛🏜🏝🏞🏟🏠🏡🏢🏣🏤🏥🏦🏧🏨🏩🏪🏫🏬🏭🏮🏯🏰🏱🏲🏳🏴🏵🏶🏷🏸🏹🏺🏻🏼🏽🏾🏿]/g,
     parseEvent(nostrEvent) {
-        console.log('Parsing Nostr event:', nostrEvent.id);
+        if (CONFIG.flags.debug) console.log('Parsing Nostr event:', nostrEvent.id);
         
         const content = nostrEvent.content;
         const tags = nostrEvent.tags;
@@ -2877,7 +2836,7 @@ const nostrEventParser = {
             nostrPubkey: nostrEvent.pubkey
         };
         
-        console.log('Event parsed successfully');
+        if (CONFIG.flags.debug) console.log('Event parsed successfully');
         return eventData;
     },
 
@@ -2887,7 +2846,7 @@ const nostrEventParser = {
         const firstLine = lines[0].trim();
         
         // Remove common emojis and clean up
-        return firstLine.replace(/^[🎵🎧🎪🎉🎊🎈🎁🎀🎂🎃🎄🎅🎆🎇🎈🎉🎊🎋🎌🎍🎎🎏🎐🎑🎒🎓🎖🎗🎙🎚🎛🎜🎝🎞🎟🎠🎡🎢🎣🎤🎥🎦🎧🎨🎩🎪🎫🎬🎭🎮🎯🎰🎱🎲🎳🎴🎵🎶🎷🎸🎹🎺🎻🎼🎽🎾🎿🏀🏁🏂🏃🏄🏅🏆🏇🏈🏉🏊🏋🏌🏍🏎🏏🏐🏑🏒🏓🏔🏕🏖🏗🏘🏙🏚🏛🏜🏝🏞🏟🏠🏡🏢🏣🏤🏥🏦🏧🏨🏩🏪🏫🏬🏭🏮🏯🏰🏱🏲🏳🏴🏵🏶🏷🏸🏹🏺🏻🏼🏽🏾🏿]/g, '').trim();
+        return firstLine.replace(this.EMOJI_PREFIX_REGEX, '').trim();
     },
 
     extractDate(content, tags) {
@@ -3062,31 +3021,42 @@ const views = {
     },
 
     createEventCard(event) {
+        // Safely parse date - handle both string and Date object
+        let time = '--:--';
+        if (event.date) {
+            try {
+                const dateObj = typeof event.date === 'string' ? new Date(event.date) : event.date;
+                if (!isNaN(dateObj.getTime())) {
+                    time = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                }
+            } catch (e) {
+                // If date parsing fails, keep default
+            }
+        }
+        
+        // Get title - try multiple possible field names
+        const title = event.title || event.name || 'Event';
+        
         return `
-            <div class="event-card">
-                <h2>${event.title}</h2>
-                <p class="date">${event.date}</p>
-                <p class="location">${event.location}</p>
-                <p class="type">${event.type}</p>
-                <p class="music">${event.music}</p>
-                <p class="dj">DJ: <span class="dj-name" onclick="router.showDJProfileView('${event.dj}')" style="color: #007bff; cursor: pointer; text-decoration: underline;">${event.dj}</span></p>
-                <p class="friends-attending">👥 ${event.friendsGoing || 0}/${event.attending || 0} friends going</p>
-                <button class="learn-more">Learn More</button>
+            <div class="event-listing">
+                <span class="time">${time}</span>
+                <span class="type">[${(event.type || 'EVENT').toUpperCase()}]</span>
+                <span>${title}</span>
+                <span class="location">${event.location || 'Location TBD'}</span>
+                ${event.dj ? `<span class="dj">DJ: <span class="dj-name" onclick="router.showDJProfileView('${event.dj}')" style="cursor: pointer; text-decoration: underline;">${event.dj}</span></span>` : ''}
+                ${event.friendsGoing !== undefined ? `<span class="friends-attending">[${event.friendsGoing || 0}/${event.attending || 0}]</span>` : ''}
+                <a href="#" class="details-link" onclick="event.preventDefault(); router.showEventDetailsView('${title}'); return false;">[DETAILS]</a>
             </div>
         `;
     },
 
     createDJCard(profile) {
         return `
-            <div class="dj-card" onclick="router.showDJProfileView('${profile.name}')" style="cursor: pointer;">
-                <h3 class="dj-name">🎧 ${profile.name}</h3>
-                <p class="dj-pubkey">🔑 ${profile.pubkey}</p>
-                <p class="dj-about">${profile.about || 'Electronic music artist'}</p>
-                <div class="dj-social">
-                    ${profile.soundcloud ? `<p>🎵 SoundCloud: <a href="https://soundcloud.com/${profile.soundcloud}" target="_blank" onclick="event.stopPropagation()">${profile.soundcloud}</a></p>` : ''}
-                    ${profile.instagram ? `<p>📸 Instagram: <a href="https://instagram.com/${profile.instagram.replace('@', '')}" target="_blank" onclick="event.stopPropagation()">${profile.instagram}</a></p>` : ''}
-                </div>
-                <p class="click-hint">Click to view full profile</p>
+            <div class="dj-listing" onclick="router.showDJProfileView('${profile.name}')" style="cursor: pointer;">
+                <span class="dj-name">${profile.name}</span>
+                ${profile.pubkey ? `<span class="dj-pubkey">${profile.pubkey.substring(0, 16)}...</span>` : ''}
+                ${profile.about ? `<div class="dj-about">${profile.about}</div>` : ''}
+                ${profile.soundcloud || profile.instagram ? `<a href="#" class="details-link" onclick="event.stopPropagation(); router.showDJProfileView('${profile.name}'); return false;">[PROFILE]</a>` : '<a href="#" class="details-link" onclick="event.stopPropagation(); router.showDJProfileView(\'' + profile.name + '\'); return false;">[PROFILE]</a>'}
             </div>
         `;
     },
@@ -3099,22 +3069,18 @@ const views = {
         }
 
         if (!events || events.length === 0) {
-            container.innerHTML = '<p>No events found in database.</p>';
+            container.innerHTML = `
+                <div class="empty-state">
+                    > No events found. Use refresh to reload data.
+                </div>
+            `;
             return;
         }
 
-        // Clear container and add events
+        // Clear container and add events as flat list
         container.innerHTML = events.map(this.createEventCard).join('');
         
-        // Add event listeners to all buttons
-        document.querySelectorAll('.learn-more').forEach(button => {
-            button.addEventListener('click', function() {
-                const eventTitle = this.parentElement.querySelector('h2').textContent;
-                router.showEventDetailsView(eventTitle);
-            });
-        });
-        
-        console.log('Events rendered successfully!');
+        if (CONFIG.flags.debug) console.log('Events rendered');
     },
 
     renderDJProfiles(profiles, highlightName = null) {
@@ -3133,7 +3099,7 @@ const views = {
         const cardsHTML = profiles.map(this.createDJCard).join('');
         container.innerHTML = cardsHTML;
         
-        console.log('DJ profiles rendered successfully!');
+        if (CONFIG.flags.debug) console.log('DJ profiles rendered');
         
         // Highlight specific DJ if requested
         if (highlightName) {
@@ -3172,8 +3138,8 @@ const views = {
         container.innerHTML = `
             <div class="dj-profile-card">
                 <div class="dj-profile-header">
-                    <h1 class="dj-profile-name">🎧 ${profile.name}</h1>
-                    <p class="dj-profile-pubkey">🔑 ${profile.pubkey}</p>
+                    <h1 class="dj-profile-name">${profile.name}</h1>
+                    <p class="dj-profile-pubkey">${profile.pubkey}</p>
                 </div>
                 
                 <div class="dj-profile-content">
@@ -3187,12 +3153,12 @@ const views = {
                         <div class="social-links">
                             ${profile.soundcloud ? `
                                 <a href="https://soundcloud.com/${profile.soundcloud}" target="_blank" class="social-link soundcloud">
-                                    🎵 SoundCloud: ${profile.soundcloud}
+                                    SOUNDCLOUD: ${profile.soundcloud}
                                 </a>
                             ` : ''}
                             ${profile.instagram ? `
                                 <a href="https://instagram.com/${profile.instagram.replace('@', '')}" target="_blank" class="social-link instagram">
-                                    📸 Instagram: ${profile.instagram}
+                                    INSTAGRAM: ${profile.instagram}
                                 </a>
                             ` : ''}
                         </div>
@@ -3214,7 +3180,7 @@ const views = {
             </div>
         `;
         
-        console.log('DJ profile rendered successfully!');
+        if (CONFIG.flags.debug) console.log('DJ profile rendered');
     },
 
     renderSocialMentions(djName) {
@@ -3269,7 +3235,7 @@ const views = {
         const cardsHTML = venues.map(this.createVenueCard).join('');
         container.innerHTML = cardsHTML;
         
-        console.log('Venues rendered successfully!');
+        if (CONFIG.flags.debug) console.log('Venues rendered');
     },
 
     renderVenueDetails(venue) {
@@ -3316,7 +3282,7 @@ const views = {
             </div>
         `;
         
-        console.log('Venue details rendered successfully!');
+        if (CONFIG.flags.debug) console.log('Venue details rendered');
     },
 
     createSoundSystemCard(soundSystem) {
@@ -3351,7 +3317,7 @@ const views = {
         const cardsHTML = soundSystems.map(this.createSoundSystemCard).join('');
         container.innerHTML = cardsHTML;
         
-        console.log('Sound systems rendered successfully!');
+        if (CONFIG.flags.debug) console.log('Sound systems rendered');
     },
 
     renderSoundSystemDetails(soundSystem) {
@@ -3399,7 +3365,7 @@ const views = {
             </div>
         `;
         
-        console.log('Sound system details rendered successfully!');
+        if (CONFIG.flags.debug) console.log('Sound system details rendered');
     },
 
     createFriendCard(friend) {
@@ -3433,7 +3399,7 @@ const views = {
         const cardsHTML = friends.map(this.createFriendCard).join('');
         container.innerHTML = cardsHTML;
         
-        console.log('Friends rendered successfully!');
+        if (CONFIG.flags.debug) console.log('Friends rendered');
     },
 
     renderFriendProfile(friend) {
@@ -3480,7 +3446,7 @@ const views = {
             </div>
         `;
         
-        console.log('Friend profile rendered successfully!');
+        if (CONFIG.flags.debug) console.log('Friend profile rendered');
     },
 
     createSocialMessageCard(message) {
@@ -3522,7 +3488,7 @@ const views = {
         const cardsHTML = messages.map(this.createSocialMessageCard).join('');
         container.innerHTML = cardsHTML;
         
-        console.log('Social feed rendered successfully!');
+        if (CONFIG.flags.debug) console.log('Social feed rendered');
     },
 
     formatTimestamp(timestamp) {
@@ -3588,64 +3554,56 @@ const views = {
             return;
         }
 
-        // Create detailed event HTML
+        // Create detailed event HTML - Terminal style
+        // Safely parse date - handle both string and Date object
+        let eventDate = 'Date TBD';
+        let eventTime = '--:--';
+        if (event.date) {
+            try {
+                const dateObj = typeof event.date === 'string' ? new Date(event.date) : event.date;
+                if (!isNaN(dateObj.getTime())) {
+                    eventDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+                    eventTime = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                }
+            } catch (e) {
+                // Keep defaults if parsing fails
+            }
+        }
+        
+        // Get title - try multiple possible field names
+        const title = event.title || event.name || 'Event';
+        
         container.innerHTML = `
             <div class="event-details-card">
                 <div class="event-details-header">
-                    <h1 class="event-details-title">🎵 ${event.title}</h1>
-                    <p class="event-details-date">📅 ${event.date}</p>
-                    <p class="event-details-location">📍 ${event.location}</p>
+                    <h1 class="event-details-title">${title}</h1>
+                    <p class="event-details-date">${eventDate} ${eventTime}</p>
+                    <p class="event-details-location">${event.location || 'Location TBD'}</p>
                 </div>
                 
                 <div class="event-details-content">
                     <div class="event-details-info">
-                        <div class="event-info-item">
-                            <h4>Type</h4>
-                            <p>${event.type}</p>
-                        </div>
-                        <div class="event-info-item">
-                            <h4>Music Style</h4>
-                            <p>${event.music}</p>
-                        </div>
-                        <div class="event-info-item">
-                            <h4>Friends Going</h4>
-                            <p>👥 ${event.friendsGoing || 0}/${event.attending || 0}</p>
-                        </div>
+                        <p><strong>TYPE:</strong> ${(event.type || 'EVENT').toUpperCase()}</p>
+                        <p><strong>MUSIC:</strong> ${event.music || 'Electronic'}</p>
+                        <p><strong>ATTENDANCE:</strong> ${event.friendsGoing || 0}/${event.attending || 0}</p>
                     </div>
                     
+                    ${event.dj ? `
                     <div class="event-details-dj">
-                        <h4>🎧 Featured DJ</h4>
-                        <p><strong>${event.dj}</strong></p>
-                        <p>Click to view DJ profile: <a href="#" onclick="router.showDJProfileView('${event.dj}')">View ${event.dj}'s Profile</a></p>
+                        <p><strong>DJ:</strong> <a href="#" onclick="router.showDJProfileView('${event.dj}'); return false;" style="color: var(--text-primary); text-decoration: underline;">${event.dj}</a></p>
                     </div>
+                    ` : ''}
                     
-                    <div class="event-details-description">
-                        <h3>About This Event</h3>
-                        <p>Join us for an incredible night of ${event.music.toLowerCase()} music featuring ${event.dj} at ${event.location}. This ${event.type.toLowerCase()} event promises to deliver an unforgettable experience with amazing sound and atmosphere.</p>
-                        <p>Don't miss out on this special ${event.music.toLowerCase()} showcase!</p>
-                    </div>
-                    
-                    <div class="event-details-social">
-                        <h3>Social Activity</h3>
-                        <p>Check out what people are saying about this event in our social feed!</p>
-                        <button class="event-action-button secondary" onclick="router.switchTab('social')">
-                            💬 View Social Feed
+                    <div class="event-details-actions">
+                        <button class="event-action-button secondary" onclick="router.switchTab('events')">
+                            [BACK]
                         </button>
                     </div>
-                </div>
-                
-                <div class="event-details-actions">
-                    <button class="event-action-button" onclick="alert('🎵 Welcome to ${event.title}!\\n\\nGet ready for an amazing night!')">
-                        🎵 I'm Going!
-                    </button>
-                    <button class="event-action-button secondary" onclick="router.switchTab('events')">
-                        ← Back to Events
-                    </button>
                 </div>
             </div>
         `;
         
-        console.log('Event details rendered successfully!');
+        if (CONFIG.flags.debug) console.log('Event details rendered');
     }
 };
 
@@ -4164,11 +4122,11 @@ const router = {
             
             // Refresh events from Nostr
             const events = await social.fetchSocialFeed();
-            console.log('Refreshed events from Nostr:', events.length);
+            if (CONFIG.flags.debug) console.log('Refreshed events from Nostr:', events.length);
             
             // Refresh profiles from Nostr
             const profiles = await social.fetchProfilesFromNostr();
-            console.log('Refreshed profiles from Nostr:', profiles.length);
+            if (CONFIG.flags.debug) console.log('Refreshed profiles from Nostr:', profiles.length);
             
             // Re-render current view to show new data
             if (state.currentView === 'events') {
