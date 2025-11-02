@@ -7,7 +7,7 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
 
 /* ========================================
-   CSS VARIABLES - Greyscale Dark Mode
+   CSS VARIABLES - Greyscale Dark Mode (Default)
    ======================================== */
 :root {
     --bg-primary: #000000;
@@ -21,6 +21,23 @@
     --border-subtle: #0a0a0a;
     --accent: #ffffff;
     --accent-hover: #d0d0d0;
+}
+
+/* ========================================
+   CSS VARIABLES - Light Mode (Warm Paper Tone)
+   ======================================== */
+body.light-mode {
+    --bg-primary: #faf8f5;
+    --bg-secondary: #f5f3f0;
+    --bg-tertiary: #efedea;
+    --text-primary: #2a2a2a;
+    --text-secondary: #5a5a5a;
+    --text-muted: #8a8a8a;
+    --border-primary: #d4d0ca;
+    --border-secondary: #e8e4df;
+    --border-subtle: #f0ede8;
+    --accent: #4a5568;
+    --accent-hover: #3a4558;
 }
 
 /* ========================================
@@ -880,11 +897,25 @@ body {
     fill: currentColor;
 }
 
-/* Smooth transition for mode switch */
-body {
-    transition: background-color 0.3s ease, color 0.3s ease;
+/* Enhanced hover warmth in light mode */
+body.light-mode .event-listing:hover,
+body.light-mode .dj-listing:hover {
+    background: var(--bg-tertiary);
+    border-left: 2px solid var(--border-primary);
 }
 
+body.light-mode .tab-button:hover {
+    background: var(--bg-tertiary);
+}
+
+body.light-mode .location-select-button:hover,
+body.light-mode .learn-more:hover,
+body.light-mode .back-button:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent);
+}
+
+/* Smooth transitions */
 body * {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
