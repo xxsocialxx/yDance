@@ -2,6 +2,10 @@
 
 Electronic music event discovery platform with equal-value tabs for Events, DJs, Venues, Sound Systems, and Friends - a Progressive Web App built with vanilla JavaScript and Supabase.
 
+## 📚 Documentation
+
+- **[Supabase Operations Guide](docs/SUPABASE_OPERATIONS.md)** - Complete guide for database schema updates, data population, and troubleshooting
+
 ## 🚨 For AI Agents
 
 **BEFORE MAKING ANY CHANGES**, read: [`AI_DEVELOPMENT_GUIDELINES.md`](./AI_DEVELOPMENT_GUIDELINES.md)
