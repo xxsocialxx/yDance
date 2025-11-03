@@ -56,6 +56,10 @@ const CONFIG = {
         enableReviewQueue: true,
         // Flip to run a quick Nostr connect→disconnect sanity check in dev
         nostrHealthCheck: false,
+        // NEW: Enable isolated nostr module (Phase 2+)
+        nostrIsolated: false, // When true: use isolated nostr module, separate auth
+        // NEW: Show NOSTR dev tab for testing (Phase 4+)
+        nostrDevTab: true, // When true: show NOSTR tab (dev/testing only)
         // Verbose console logging during development
         debug: false,
         allowClientSensitiveWrites: false
