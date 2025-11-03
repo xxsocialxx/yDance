@@ -4262,6 +4262,10 @@ const router = {
             case 'events':
                 document.getElementById('events-view').style.display = 'block';
                 state.currentView = 'events';
+                // Ensure all events are displayed (no city filtering)
+                if (state.eventsData && state.eventsData.length > 0) {
+                    views.renderEvents(state.eventsData);
+                }
                 break;
             case 'djs':
                 document.getElementById('dj-view').style.display = 'block';
