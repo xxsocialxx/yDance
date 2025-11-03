@@ -4656,8 +4656,8 @@ const router = {
             
             // Re-render current view to show new data
             if (state.currentView === 'events') {
-                const filteredEvents = filterEventsByCity(state.events);
-                views.renderEvents(filteredEvents);
+                // Main Events tab shows ALL events (no city filtering)
+                views.renderEvents(state.events || state.eventsData || []);
             } else if (state.currentView === 'djs') {
                 views.renderDJs(state.djs);
             } else if (state.currentView === 'venues') {
@@ -5147,11 +5147,10 @@ function initLocationSelection() {
         
         if (CONFIG.flags.debug) console.log('City selected:', selectedCity);
         
-        // Re-filter and re-render events with new city selection
-        if (state.eventsData && state.eventsData.length > 0) {
-            const filteredEvents = filterEventsByCity();
-            views.renderEvents(filteredEvents);
-        }
+        // City selection doesn't filter main Events tab
+        // It's used for DJ tab and profile views only
+        // If currently on Events tab, no need to re-render (shows all events)
+        // If on DJ tab, DJ list will be filtered on next refresh
     }
     
     locationSelectBtn.addEventListener('click', selectCity);
