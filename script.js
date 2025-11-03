@@ -91,19 +91,22 @@ const state = {
     operatorsData: [],
     friendsData: [],
     // Social layer state
-    nostrClient: null,
-    userAuth: null,
     socialFeed: [],
     moderationQueue: [],
     linkedAttributes: {},
-    // Auth state
+    // Auth state (Supabase - independent of nostr)
     currentUser: null,
-    userKeys: null,
     isAuthenticated: false,
     authSession: null,
     authModalMode: 'login',
     // Location state
-    userCity: null
+    userCity: null,
+    // Nostr state (DEPRECATED - use state.nostr when nostrIsolated = true)
+    nostrClient: null, // Migrated to state.nostr.client
+    userAuth: null, // Migrated to state.nostr.auth
+    userKeys: null, // Migrated to state.nostr.keys
+    // Nostr isolated namespace (when CONFIG.flags.nostrIsolated = true)
+    nostr: null // Initialized by migration function
 };
 
 // ============================================================================
@@ -3039,6 +3042,555 @@ const nostrAuthAdapter = {
             console.error('Nostr adapter: Signout error:', error);
             throw error;
         }
+    }
+};
+
+// ============================================================================
+// 4.5. NOSTR MODULE (Isolated Nostr Functionality)
+// ============================================================================
+// 🎯 PURPOSE: All Nostr-specific functionality isolated from main app
+// ✅ ADD HERE: Nostr connections, key management, message publishing
+// ❌ DON'T ADD: Main app dependencies, DOM manipulation, or Supabase calls
+// 
+// NOTE: This module is isolated - main app can work without it
+// When CONFIG.flags.nostrIsolated = true, use this module
+// When false, legacy code in SOCIAL layer handles nostr
+// ============================================================================
+
+// State migration helper (runs on init if nostrIsolated = true)
+function migrateNostrState() {
+    if (!CONFIG.flags.nostrIsolated) {
+        return; // No migration needed - use legacy state
+    }
+    
+    // Initialize nostr namespace if not exists
+    if (!state.nostr) {
+        state.nostr = {
+            client: null,
+            keys: null,
+            auth: null,
+            feed: [],
+            connected: false,
+            relay: null,
+            lastSync: null
+        };
+    }
+    
+    // Migrate existing data (if any exists)
+    if (state.nostrClient && !state.nostr.client) {
+        state.nostr.client = state.nostrClient;
+        state.nostr.connected = state.nostrClient.connected || false;
+        state.nostr.relay = state.nostrClient.relay || null;
+        // Keep old reference for backward compat during transition
+    }
+    
+    if (state.userKeys && !state.nostr.keys) {
+        state.nostr.keys = state.userKeys;
+        // Keep old reference for backward compat during transition
+    }
+    
+    if (state.userAuth && !state.nostr.auth) {
+        // Only migrate if it's nostr-specific auth
+        // (userAuth may contain Supabase auth, verify before migrating)
+        state.nostr.auth = state.userAuth;
+        // Keep old reference for backward compat during transition
+    }
+    
+    // Sync feed from nostr to socialFeed (if needed)
+    if (state.nostr.feed.length > 0 && state.socialFeed.length === 0) {
+        state.socialFeed = [...state.nostr.feed];
+    }
+    
+    if (CONFIG.flags.debug) console.log('Nostr state migrated to isolated namespace');
+}
+
+// Safe accessor functions (work in both isolated and legacy modes)
+function getNostrClient() {
+    if (CONFIG.flags.nostrIsolated && state.nostr) {
+        return state.nostr.client;
+    }
+    return state.nostrClient;
+}
+
+function getNostrKeys() {
+    if (CONFIG.flags.nostrIsolated && state.nostr) {
+        return state.nostr.keys;
+    }
+    return state.userKeys;
+}
+
+function setNostrClient(client) {
+    if (CONFIG.flags.nostrIsolated) {
+        if (!state.nostr) {
+            state.nostr = { client: null, keys: null, auth: null, feed: [], connected: false, relay: null, lastSync: null };
+        }
+        state.nostr.client = client;
+        state.nostr.connected = client?.connected || false;
+        state.nostr.relay = client?.relay || null;
+    } else {
+        state.nostrClient = client;
+    }
+}
+
+function setNostrKeys(keys) {
+    if (CONFIG.flags.nostrIsolated) {
+        if (!state.nostr) {
+            state.nostr = { client: null, keys: null, auth: null, feed: [], connected: false, relay: null, lastSync: null };
+        }
+        state.nostr.keys = keys;
+    } else {
+        state.userKeys = keys;
+    }
+}
+
+const nostr = {
+    async init() {
+        if (CONFIG.flags.debug) console.log('Initializing isolated Nostr module...');
+        
+        // Run migration first
+        migrateNostrState();
+        
+        try {
+            if (!CONFIG.flags.nostrRealClient) {
+                if (!state.nostr) {
+                    state.nostr = { client: null, keys: null, auth: null, feed: [], connected: false, relay: null, lastSync: null };
+                }
+                state.nostr.client = { connected: false, relay: 'disabled' };
+                if (CONFIG.flags.debug) console.log('Nostr module initialized (nostr disabled by flag)');
+                return true;
+            }
+            
+            // Initialize nostr client
+            const urlParams = new URLSearchParams(window.location.search);
+            const relayOverride = urlParams.get('relay');
+            const relayUrl = relayOverride || CONFIG.nostrRelayUrl;
+            
+            const client = await nostrClient.connect(relayUrl);
+            setNostrClient(client);
+            
+            // Initialize data fetching
+            await this.initDataFetching();
+            
+            if (CONFIG.flags.debug) console.log('Nostr module initialized with client at', relayUrl);
+            
+            // Health check if flag enabled
+            if (CONFIG.flags.nostrHealthCheck) {
+                try {
+                    await this.healthCheck(relayUrl);
+                } catch (e) {
+                    console.warn('Nostr health check failed:', e && e.message ? e.message : e);
+                }
+            }
+            
+            // Expose dev hook
+            if (typeof window !== 'undefined') {
+                window.nostr = this;
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error initializing Nostr module:', error);
+            return false;
+        }
+    },
+    
+    async initDataFetching() {
+        if (CONFIG.flags.debug) console.log('Initializing Nostr data fetching...');
+        
+        try {
+            // Fetch feed
+            const feed = await this.fetchFeed();
+            if (state.nostr) {
+                state.nostr.feed = feed;
+                state.nostr.lastSync = new Date().toISOString();
+            }
+            
+            // Sync to socialFeed for SOCIAL layer
+            state.socialFeed = [...feed];
+            
+            // Fetch profiles
+            await this.fetchProfiles();
+            
+            // Set up periodic refresh (every 5 minutes)
+            setInterval(async () => {
+                if (CONFIG.flags.debug) console.log('Refreshing Nostr data...');
+                const feed = await this.fetchFeed();
+                if (state.nostr) {
+                    state.nostr.feed = feed;
+                    state.nostr.lastSync = new Date().toISOString();
+                }
+                state.socialFeed = [...feed];
+                await this.fetchProfiles();
+            }, 5 * 60 * 1000);
+            
+            if (CONFIG.flags.debug) console.log('Nostr data fetching initialized');
+        } catch (error) {
+            console.error('Error initializing Nostr data fetching:', error);
+        }
+    },
+    
+    // Connection Management
+    async connect(relayUrl = CONFIG.nostrRelayUrl) {
+        if (CONFIG.flags.debug) console.log('Connecting to Nostr relay:', relayUrl);
+        
+        try {
+            const client = await nostrClient.connect(relayUrl);
+            setNostrClient(client);
+            if (state.nostr) {
+                state.nostr.connected = client?.connected || false;
+                state.nostr.relay = relayUrl;
+            }
+            return client;
+        } catch (error) {
+            console.error('Error connecting to Nostr relay:', error);
+            throw error;
+        }
+    },
+    
+    async disconnect() {
+        if (CONFIG.flags.debug) console.log('Disconnecting from Nostr relay...');
+        
+        try {
+            const client = getNostrClient();
+            if (client && client.disconnect) {
+                await client.disconnect();
+            }
+            setNostrClient({ connected: false, relay: null });
+            if (state.nostr) {
+                state.nostr.connected = false;
+                state.nostr.relay = null;
+            }
+            if (CONFIG.flags.debug) console.log('Disconnected from Nostr relay');
+        } catch (error) {
+            console.error('Error disconnecting from Nostr relay:', error);
+            throw error;
+        }
+    },
+    
+    async healthCheck(relayUrl = CONFIG.nostrRelayUrl) {
+        if (CONFIG.flags.debug) console.log('Nostr health check starting...');
+        try {
+            const client = getNostrClient();
+            if (client && client.connected) {
+                if (CONFIG.flags.debug) console.log('Nostr health: already connected to', client.relay || relayUrl);
+                return { ok: true, relay: client.relay || relayUrl, reused: true };
+            }
+            const temp = await nostrClient.connect(relayUrl);
+            const connected = !!(temp && temp.connected);
+            if (!connected) throw new Error('Temp connection did not report connected');
+            await nostrClient.disconnect();
+            if (CONFIG.flags.debug) console.log('Nostr health: connect/disconnect OK for', relayUrl);
+            return { ok: true, relay: relayUrl, reused: false };
+        } catch (error) {
+            console.error('Nostr health: failed for', relayUrl, error);
+            return { ok: false, relay: relayUrl, error: (error && error.message) ? error.message : String(error) };
+        }
+    },
+    
+    // Key Management (ISOLATED - no main app dependency)
+    async generateKeys() {
+        if (CONFIG.flags.debug) console.log('NOSTR: Generating key pair...');
+        const keys = await nostrKeys.generateKeyPair();
+        return {
+            publicKey: keys.publicKey,
+            privateKey: keys.privateKey,
+            npub: keys.npub,
+            nsec: keys.nsec
+        };
+    },
+    
+    async encryptKeys(keys, password) {
+        if (CONFIG.flags.debug) console.log('NOSTR: Encrypting keys...');
+        return keyEncryption.encryptData(keys.privateKey, password);
+    },
+    
+    async decryptKeys(encrypted, password) {
+        if (CONFIG.flags.debug) console.log('NOSTR: Decrypting keys...');
+        const decryptedPrivateKey = await keyEncryption.decryptData(encrypted, password);
+        return {
+            privateKey: decryptedPrivateKey,
+            publicKey: nostrKeys.decodePublicKey(nostrKeys.encodePublicKey(decryptedPrivateKey)),
+            npub: nostrKeys.encodePublicKey(nostrKeys.decodePublicKey(decryptedPrivateKey)),
+            nsec: nostrKeys.encodePrivateKey(decryptedPrivateKey)
+        };
+    },
+    
+    validateKeyFormat(key) {
+        return nostrKeys.validateKeyFormat(key);
+    },
+    
+    generateRecoveryPhrase() {
+        return nostrKeys.generateRecoveryPhrase();
+    },
+    
+    validateRecoveryPhrase(phrase) {
+        return nostrKeys.validateRecoveryPhrase(phrase);
+    },
+    
+    // Authentication (Nostr-only, separate from main app auth)
+    async signIn(email, password) {
+        if (CONFIG.flags.debug) console.log('NOSTR: Signing in user:', email);
+        
+        try {
+            // This is nostr-specific signin - different from main app auth
+            // For now, this handles nostr key recovery
+            // Main app auth should use Supabase directly
+            
+            // TODO: Implement nostr-specific signin logic
+            // This may involve checking nostr keys in database and decrypting
+            throw new Error('Nostr signIn not yet implemented in isolated module');
+        } catch (error) {
+            console.error('Error in Nostr signIn:', error);
+            throw error;
+        }
+    },
+    
+    async signUp(email, password) {
+        if (CONFIG.flags.debug) console.log('NOSTR: Signing up user:', email);
+        
+        try {
+            // Generate keys
+            const keys = await this.generateKeys();
+            const recoveryPhrase = this.generateRecoveryPhrase();
+            
+            // Store keys (encrypted) - would use nostr-specific storage
+            // For now, store in nostr namespace
+            const encryptedKeys = await this.encryptKeys(keys, password);
+            
+            // Update nostr state
+            setNostrKeys(keys);
+            if (state.nostr) {
+                state.nostr.keys = keys;
+            }
+            
+            if (CONFIG.flags.debug) console.log('NOSTR: User signed up with keys');
+            return { 
+                success: true, 
+                keys: keys,
+                recoveryPhrase: recoveryPhrase
+            };
+        } catch (error) {
+            console.error('Error in Nostr signUp:', error);
+            throw error;
+        }
+    },
+    
+    async signUpLight(email, password) {
+        // Light mode: Generate keys but don't require full recovery setup
+        const keys = await this.generateKeys();
+        setNostrKeys(keys);
+        if (state.nostr) {
+            state.nostr.keys = keys;
+        }
+        return { success: true, keys: keys };
+    },
+    
+    async recoverKeysWithRecoveryPhrase(email, recoveryPhrase, password) {
+        // Nostr-specific key recovery
+        // TODO: Implement when nostrIsolated = true
+        throw new Error('Nostr recoverKeysWithRecoveryPhrase not yet implemented in isolated module');
+    },
+    
+    // Data Operations
+    async fetchFeed(filter = { kinds: [1], '#t': ['ydance', 'event'], limit: 100 }) {
+        if (CONFIG.flags.debug) console.log('NOSTR: Fetching feed...');
+        
+        try {
+            if (!CONFIG.flags.nostrRealClient) {
+                return this.getPlaceholderFeed();
+            }
+            
+            const client = getNostrClient();
+            if (!client || !client.connected) {
+                if (CONFIG.flags.debug) console.log('Nostr client not connected, returning placeholder feed');
+                return this.getPlaceholderFeed();
+            }
+            
+            // Query events
+            const events = await nostrClient.queryEvents(filter);
+            
+            // Parse events
+            const parsedEvents = events.map(event => nostrEventParser.parseEvent(event));
+            
+            return parsedEvents;
+        } catch (error) {
+            console.error('Error fetching Nostr feed:', error);
+            return this.getPlaceholderFeed();
+        }
+    },
+    
+    async sendMessage(content, keys = null) {
+        if (CONFIG.flags.debug) console.log('NOSTR: Sending message...');
+        
+        try {
+            if (!CONFIG.flags.nostrRealClient) {
+                return { success: false, disabled: true };
+            }
+            
+            const client = getNostrClient();
+            if (!client || !client.connected) {
+                return { success: false, queued: true };
+            }
+            
+            // Use provided keys or get from state
+            const messageKeys = keys || getNostrKeys();
+            if (!messageKeys) {
+                return { success: false, error: 'No keys available' };
+            }
+            
+            // TODO: Implement actual nostr message publishing
+            // This would use nostr client to publish Kind 1 event
+            if (CONFIG.flags.debug) console.log('NOSTR: Message would be sent');
+            return { success: true, messageId: 'placeholder-id' };
+        } catch (error) {
+            console.error('Error sending Nostr message:', error);
+            throw error;
+        }
+    },
+    
+    async queryEvents(filter) {
+        const client = getNostrClient();
+        if (!client || !client.connected) {
+            return this.getPlaceholderNostrEvents();
+        }
+        return await nostrClient.queryEvents(filter);
+    },
+    
+    async queryProfiles(filter = { kinds: [0], '#t': ['ydance'], limit: 50 }) {
+        const client = getNostrClient();
+        if (!client || !client.connected) {
+            return this.getPlaceholderNostrProfiles();
+        }
+        // TODO: Implement actual profile query
+        return this.getPlaceholderNostrProfiles();
+    },
+    
+    async fetchProfiles() {
+        if (CONFIG.flags.debug) console.log('NOSTR: Fetching profiles...');
+        const profiles = await this.queryProfiles();
+        // Parse profiles (similar to social layer)
+        return profiles.map(profile => this.parseProfile(profile));
+    },
+    
+    parseEvent(nostrEvent) {
+        return nostrEventParser.parseEvent(nostrEvent);
+    },
+    
+    parseProfile(nostrProfile) {
+        const content = JSON.parse(nostrProfile.content);
+        const tags = nostrProfile.tags;
+        
+        // Determine profile type from tags
+        const profileType = this.determineProfileType(tags);
+        
+        return {
+            id: nostrProfile.id,
+            name: content.name || content.display_name,
+            bio: content.about,
+            image: content.picture,
+            website: content.website,
+            type: profileType,
+            source: 'nostr',
+            nostrEventId: nostrProfile.id,
+            nostrPubkey: nostrProfile.pubkey
+        };
+    },
+    
+    determineProfileType(tags) {
+        const typeTag = tags.find(tag => tag[0] === 'type');
+        if (typeTag) return typeTag[1];
+        if (tags.some(tag => tag[0] === 't' && tag[1] === 'dj')) return 'dj';
+        if (tags.some(tag => tag[0] === 't' && tag[1] === 'venue')) return 'venue';
+        if (tags.some(tag => tag[0] === 't' && tag[1] === 'soundsystem')) return 'soundsystem';
+        return 'unknown';
+    },
+    
+    // Placeholder data (for testing/fallback)
+    getPlaceholderFeed() {
+        return [
+            {
+                id: 1,
+                type: 'event_announcement',
+                content: 'Amazing night at The Warehouse!',
+                author: 'DJ_Alice',
+                timestamp: new Date().toISOString(),
+                linkedEvent: null
+            }
+        ];
+    },
+    
+    getPlaceholderNostrEvents() {
+        return [
+            {
+                id: 'nostr-event-1',
+                content: '🎵 Underground Techno Night\n📅 2024-01-15\n📍 Warehouse 23\n🎧 DJ Shadow',
+                tags: [
+                    ['t', 'ydance'],
+                    ['t', 'event'],
+                    ['dj', 'DJ Shadow'],
+                    ['location', 'Warehouse 23']
+                ],
+                pubkey: 'npub1placeholder1',
+                created_at: Math.floor(Date.now() / 1000)
+            }
+        ];
+    },
+    
+    getPlaceholderNostrProfiles() {
+        return [
+            {
+                id: 'nostr-profile-1',
+                content: JSON.stringify({
+                    name: 'DJ Shadow',
+                    about: 'Underground techno DJ',
+                    picture: 'https://example.com/dj-shadow.jpg'
+                }),
+                tags: [['t', 'ydance'], ['t', 'dj'], ['type', 'dj']],
+                pubkey: 'npub1djshadow',
+                created_at: Math.floor(Date.now() / 1000)
+            }
+        ];
+    },
+    
+    // Dev Tools
+    async testConnection() {
+        return await this.healthCheck();
+    },
+    
+    async testKeyGeneration() {
+        const keys = await this.generateKeys();
+        const validPub = this.validateKeyFormat(keys.publicKey);
+        const validPriv = this.validateKeyFormat(keys.privateKey);
+        return {
+            success: true,
+            keys: keys,
+            validation: { publicKey: validPub, privateKey: validPriv }
+        };
+    },
+    
+    async testEncryption() {
+        const keys = await this.generateKeys();
+        const password = 'TestPassword123!';
+        const encrypted = await this.encryptKeys(keys, password);
+        const decrypted = await this.decryptKeys(encrypted, password);
+        return {
+            success: decrypted.privateKey === keys.privateKey,
+            keys: keys,
+            encrypted: encrypted,
+            decrypted: decrypted
+        };
+    },
+    
+    // Status getters
+    getStatus() {
+        const client = getNostrClient();
+        return {
+            connected: client?.connected || false,
+            relay: client?.relay || state.nostr?.relay || null,
+            hasKeys: !!getNostrKeys(),
+            feedCount: state.nostr?.feed?.length || 0,
+            lastSync: state.nostr?.lastSync || null
+        };
     }
 };
 
