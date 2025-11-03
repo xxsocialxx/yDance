@@ -370,37 +370,70 @@ body {
 .event-details-view,
 .venue-details-view,
 .sound-system-details-view {
+    width: 100%;
+    min-height: 100vh;
+}
 
 .dj-profile-container,
 .event-details-container,
 .venue-details-container,
-.sound-system-details-container,
+.sound-system-details-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
 
 .dj-profile-card,
 .event-details-card,
 .venue-details-card,
-.sound-system-details-card,
+.sound-system-details-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    padding: 25px;
+    margin-bottom: 20px;
+}
 
 .dj-profile-header,
 .event-details-header,
 .venue-details-header,
-.sound-system-details-header,
+.sound-system-details-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px dashed var(--border-primary);
+}
 
 .dj-profile-name,
 .event-details-title,
 .venue-details-name,
-.sound-system-details-name,
+.sound-system-details-name {
+    color: var(--accent);
+    font-size: 1.5rem;
+    margin: 0 0 10px 0;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
 
 .dj-profile-pubkey,
 .event-details-date,
 .event-details-location,
 .venue-details-location,
-.sound-system-details-brand,
+.sound-system-details-brand {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin: 0;
+    font-family: 'IBM Plex Mono', monospace;
+}
 
 .dj-profile-content p,
 .event-details-content p,
 .venue-details-content p,
-.sound-system-details-content p,
+.sound-system-details-content p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 10px 0;
+}
 
 /* ========================================
    BUTTONS - Terminal Style
