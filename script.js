@@ -3322,22 +3322,70 @@ const views = {
             </div>`;
         }
 
-        // Upcoming events (only if upcoming events exist)
+        // Upcoming events - city-specific (only next 3 in user's city)
         if (stats && stats.upcomingEvents && stats.upcomingEvents.length > 0) {
-            html += `
-            <div class="dj-profile-section">
-                <div class="section-label">UPCOMING</div>
-                <div class="section-content">`;
-            stats.upcomingEvents.forEach(event => {
+            // Filter by user's city if set
+            let cityUpcoming = [];
+            let allUpcoming = stats.upcomingEvents;
+            
+            if (state.userCity) {
+                const userCityLower = state.userCity.toLowerCase().trim();
+                cityUpcoming = stats.upcomingEvents.filter(event => {
+                    if (!event.city) return false;
+                    const eventCity = event.city.toLowerCase().trim();
+                    return eventCity === userCityLower || 
+                           eventCity.includes(userCityLower) || 
+                           userCityLower.includes(eventCity);
+                }).slice(0, 3); // Next 3 in user's city
+            } else {
+                // No city selected, show next 3 overall
+                cityUpcoming = stats.upcomingEvents.slice(0, 3);
+            }
+            
+            // Show city-specific upcoming if we have any
+            if (cityUpcoming.length > 0) {
                 html += `
+            <div class="dj-profile-section">
+                <div class="section-label">UPCOMING${state.userCity ? ` [${state.userCity.toUpperCase()}]` : ''}</div>
+                <div class="section-content">`;
+                cityUpcoming.forEach(event => {
+                    html += `
                 <div class="upcoming-event">
                     <span class="event-date">${formatDate(event.date)}</span>
                     <span class="event-venue">${event.venue}</span>
                     ${event.city ? `<span class="event-city">[${event.city}]</span>` : ''}
                     <a href="#" class="details-link" onclick="router.showEventDetailsView('${event.title}'); return false;">[DETAILS]</a>
                 </div>`;
-            });
-            html += `</div></div>`;
+                });
+                
+                // Show "view all" link if there are more events (all cities)
+                if (allUpcoming.length > cityUpcoming.length) {
+                    html += `
+                <div class="upcoming-event" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-primary);">
+                    <a href="#" class="reviews-link" onclick="router.showDJUpcomingAll('${profile.name}'); return false;">
+                        [VIEW ALL UPCOMING] (${allUpcoming.length} total)
+                    </a>
+                </div>`;
+                }
+                
+                html += `</div></div>`;
+            } else if (allUpcoming.length > 0 && state.userCity) {
+                // No events in user's city, but there are events elsewhere
+                html += `
+            <div class="dj-profile-section">
+                <div class="section-label">UPCOMING [${state.userCity.toUpperCase()}]</div>
+                <div class="section-content">
+                    <div style="color: var(--text-muted); margin-bottom: 12px;">
+                        No upcoming events in ${state.userCity}
+                    </div>
+                    <div>
+                        <a href="#" class="reviews-link" onclick="router.showDJUpcomingAll('${profile.name}'); return false;">
+                            [VIEW ALL UPCOMING] (${allUpcoming.length} total)
+                        </a>
+                    </div>
+                </div>
+            </div>`;
+            }
         }
 
         // Venue history (only if venues exist)
@@ -3879,6 +3927,15 @@ const router = {
         } catch (error) {
             views.showError('dj-profile-container', error.message);
         }
+    },
+
+    showDJUpcomingAll(djName) {
+        // Show all upcoming events for DJ (all cities) - could be a modal or expanded view
+        // For now, filter events tab to show this DJ's upcoming events
+        console.log('Showing all upcoming events for:', djName);
+        router.switchTab('events');
+        // TODO: Implement filtering events by DJ and future date
+        // For now, just switch to events tab
     },
 
     async showEventDetailsView(eventTitle) {
