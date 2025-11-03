@@ -248,7 +248,7 @@ body {
 .events-container,
 .dj-profiles-container,
 .venues-container,
-.sound-systems-container,
+.operators-container,
 .friends-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -308,7 +308,7 @@ body {
 .event-card,
 .dj-card,
 .venue-card,
-.sound-system-card,
+.operator-card,
 .friend-card {
     display: none; /* Hide all card-based layouts */
 }

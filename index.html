@@ -33,8 +33,8 @@
                 <button class="tab-button" data-tab="venues" id="tab-venues">
                     <span class="tab-label">Venues</span>
                 </button>
-                <button class="tab-button" data-tab="sound-systems" id="tab-sound-systems">
-                    <span class="tab-label">Sound Systems</span>
+                <button class="tab-button" data-tab="operators" id="tab-operators">
+                    <span class="tab-label">OPERATORS</span>
                 </button>
                 <button class="tab-button" data-tab="friends" id="tab-friends">
                     <span class="tab-label">Friends</span>
@@ -127,15 +127,6 @@
         </div>
         
         <!-- Individual Sound System Details View -->
-        <div class="sound-system-details-view" id="sound-system-details-view" style="display: none;">
-            <div class="view-header">
-                <button id="back-to-sound-systems" class="back-button">← Back to Sound Systems</button>
-                <h2 id="sound-system-details-title">Sound System Details</h2>
-            </div>
-            <div class="sound-system-details-container" id="sound-system-details-container">
-                <!-- Individual sound system details will be loaded here -->
-            </div>
-        </div>
         
         <!-- Individual Friend Profile View -->
         <div class="friend-profile-view" id="friend-profile-view" style="display: none;">
@@ -159,14 +150,24 @@
             </div>
         </div>
         
-        <!-- Sound Systems View -->
-        <div class="sound-systems-view" id="sound-systems-view" style="display: none;">
+        <!-- Operators View -->
+        <div class="operators-view" id="operators-view" style="display: none;">
             <div class="view-header">
-                <h2>Sound Systems</h2>
+                <h2>OPERATORS</h2>
             </div>
-            <div class="sound-systems-container" id="sound-systems-container">
-                <!-- Sound systems will be loaded here when implemented -->
-                <p class="coming-soon">Coming Soon - Sound system listings</p>
+            <div class="operators-container" id="operators-container">
+                <!-- Operators will be loaded here dynamically -->
+            </div>
+        </div>
+        
+        <!-- Individual Operator Profile View -->
+        <div class="operator-profile-view" id="operator-profile-view" style="display: none;">
+            <div class="view-header">
+                <button id="back-to-operators" class="back-button">← Back to Operators</button>
+                <h2 id="operator-profile-title">Operator Profile</h2>
+            </div>
+            <div class="operator-profile-container" id="operator-profile-container">
+                <!-- Individual operator profile will be loaded here -->
             </div>
         </div>
         

@@ -76,6 +76,7 @@ const state = {
     eventsData: [],
     djProfilesData: [],
     selectedDJ: null,
+    selectedOperator: null,
     selectedEvent: null,
     
     // Account Mode Management
@@ -83,7 +84,7 @@ const state = {
     userAccountMode: null, // 'light' or 'bold' (for current user)
     currentDJProfile: null,
     venuesData: [],
-    soundSystemsData: [],
+    operatorsData: [],
     friendsData: [],
     // Social layer state
     nostrClient: null,
@@ -3789,39 +3790,95 @@ const views = {
         if (CONFIG.flags.debug) console.log('Venue details rendered');
     },
 
-    createSoundSystemCard(soundSystem) {
+    createOperatorCard(operatorInfo) {
+        // operatorInfo can be a profile object OR a week activity object with {name, eventCount, venues, events, specialty}
+        const operatorName = operatorInfo.name;
+        const eventCount = operatorInfo.eventCount || 0;
+        const venues = operatorInfo.venues || [];
+        const venueList = venues.length > 0 ? venues.join(', ') : 'TBD';
+        const specialty = operatorInfo.specialty || operatorInfo.role || 'Operator';
+        
         return `
-            <div class="sound-system-card" onclick="router.showSoundSystemDetails('${soundSystem.name}')" style="cursor: pointer;">
-                <h3 class="sound-system-name">🔊 ${soundSystem.name}</h3>
-                <p class="sound-system-brand">🏷️ ${soundSystem.brand}</p>
-                <p class="sound-system-power">⚡ Power: ${soundSystem.power}</p>
-                <p class="sound-system-type">🎵 Type: ${soundSystem.type}</p>
-                <p class="sound-system-about">${soundSystem.about}</p>
-                <div class="sound-system-features">
-                    <strong>Features:</strong> ${soundSystem.features.join(', ')}
-                </div>
-                <p class="click-hint">Click to view sound system details</p>
+            <div class="operator-listing" onclick="router.showOperatorProfileView('${operatorName}')" style="cursor: pointer;">
+                <span class="operator-name">${operatorName}</span>
+                <span class="operator-specialty">[${specialty}]</span>
+                ${eventCount > 0 ? `<span class="operator-event-count">${eventCount} ${eventCount === 1 ? 'event' : 'events'}</span>` : ''}
+                ${venues.length > 0 ? `<span class="operator-venues">${venueList}</span>` : ''}
+                <a href="#" class="details-link" onclick="event.stopPropagation(); router.showOperatorProfileView('${operatorName}'); return false;">[PROFILE]</a>
             </div>
         `;
     },
 
-    renderSoundSystems(soundSystems) {
-        const container = document.getElementById('sound-systems-container');
+    renderOperators(operators) {
+        const container = document.getElementById('operators-container');
         if (!container) {
-            console.error('Sound systems container not found!');
+            console.error('Operators container not found!');
             return;
         }
 
-        if (!soundSystems || soundSystems.length === 0) {
-            container.innerHTML = '<p>No sound systems found.</p>';
+        if (!operators || operators.length === 0) {
+            const cityContext = state.userCity ? ` in ${state.userCity}` : '';
+            container.innerHTML = `
+                <div class="empty-state">
+                    > No operators active in the next 7 days${cityContext}.
+                </div>
+            `;
             return;
         }
 
-        // Create sound system cards
-        const cardsHTML = soundSystems.map(this.createSoundSystemCard).join('');
-        container.innerHTML = cardsHTML;
+        container.innerHTML = operators.map(this.createOperatorCard).join('');
         
-        if (CONFIG.flags.debug) console.log('Sound systems rendered');
+        console.log(`✅ Rendered ${operators.length} operators`);
+        if (CONFIG.flags.debug) console.log('Operators rendered');
+    },
+
+    renderOperatorProfile(operator) {
+        // Placeholder - will be expanded with editorial attributes similar to DJ profiles
+        const container = document.getElementById('operator-profile-container');
+        if (!container) {
+            console.error('Operator profile container not found!');
+            return;
+        }
+
+        // For now, basic profile structure
+        // Future: add specialties, contact info, reputation metrics, events worked
+        const html = `
+            <div class="operator-profile-terminal">
+                <div class="operator-profile-header">
+                    <div class="operator-name-large">${operator.name}</div>
+                    <div class="operator-specialty-display">${operator.specialty || 'Operator'}</div>
+                </div>
+                
+                <div class="operator-profile-info">
+                    <div class="profile-section">
+                        <div class="profile-line">
+                            <span class="profile-label">ROLE:</span>
+                            <span class="profile-value">${operator.specialty || 'General Operator'}</span>
+                        </div>
+                        ${operator.eventCount ? `
+                        <div class="profile-line">
+                            <span class="profile-label">UPCOMING EVENTS:</span>
+                            <span class="profile-value">${operator.eventCount}</span>
+                        </div>
+                        ` : ''}
+                        ${operator.venues && operator.venues.length > 0 ? `
+                        <div class="profile-line">
+                            <span class="profile-label">VENUES:</span>
+                            <span class="profile-value">${operator.venues.join(', ')}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    
+                    <div class="operator-profile-actions">
+                        <button class="back-button" onclick="router.switchTab('operators')">[BACK]</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = html;
+        
+        if (CONFIG.flags.debug) console.log('Operator profile rendered');
     },
 
     renderSoundSystemDetails(soundSystem) {
@@ -4249,8 +4306,8 @@ const router = {
         document.getElementById('event-details-view').style.display = 'none';
         document.getElementById('venue-details-view').style.display = 'none';
         document.getElementById('venues-view').style.display = 'none';
-        document.getElementById('sound-system-details-view').style.display = 'none';
-        document.getElementById('sound-systems-view').style.display = 'none';
+        document.getElementById('operator-profile-view').style.display = 'none';
+        document.getElementById('operators-view').style.display = 'none';
         document.getElementById('friend-profile-view').style.display = 'none';
         document.getElementById('friends-view').style.display = 'none';
         document.getElementById('social-view').style.display = 'none';
@@ -4295,19 +4352,17 @@ const router = {
                     views.renderVenues(state.venuesData);
                 }
                 break;
-            case 'sound-systems':
-                document.getElementById('sound-systems-view').style.display = 'block';
-                state.currentView = 'sound-systems';
-                // Load sound systems if not already loaded
-                if (state.soundSystemsData.length === 0) {
-                    views.showLoading('sound-systems-container');
-                    api.fetchSoundSystems().then(soundSystems => {
-                        views.renderSoundSystems(soundSystems);
-                    }).catch(error => {
-                        views.showError('sound-systems-container', error.message);
-                    });
+            case 'operators':
+                document.getElementById('operators-view').style.display = 'block';
+                state.currentView = 'operators';
+                // Show only operators active in next 7 days (similar to DJs)
+                views.showLoading('operators-container');
+                const activeOperators = getOperatorsActiveThisWeek();
+                if (activeOperators.length === 0) {
+                    const cityContext = state.userCity ? ` in ${state.userCity}` : '';
+                    views.showEmpty('operators-container', `> No operators active in the next 7 days${cityContext}.`);
                 } else {
-                    views.renderSoundSystems(state.soundSystemsData);
+                    views.renderOperators(activeOperators);
                 }
                 break;
             case 'friends':
@@ -4371,33 +4426,44 @@ const router = {
         }
     },
 
-    async showSoundSystemDetails(soundSystemName) {
-        console.log('Switching to sound system details view for:', soundSystemName);
-        state.currentView = 'sound-system-details';
+    async showOperatorProfileView(operatorName) {
+        console.log('Switching to operator profile view for:', operatorName);
+        state.currentView = 'operator-profile';
+        state.selectedOperator = operatorName;
         
         // Hide all other views
         document.getElementById('events-view').style.display = 'none';
         document.getElementById('dj-view').style.display = 'none';
         document.getElementById('dj-profile-view').style.display = 'none';
-        document.getElementById('venue-details-view').style.display = 'none';
+        document.getElementById('event-details-view').style.display = 'none';
         document.getElementById('venues-view').style.display = 'none';
-        document.getElementById('sound-system-details-view').style.display = 'block';
-        document.getElementById('sound-systems-view').style.display = 'none';
+        document.getElementById('operator-profile-view').style.display = 'block';
+        document.getElementById('operators-view').style.display = 'none';
         document.getElementById('friends-view').style.display = 'none';
+        const djUpcomingView = document.getElementById('dj-upcoming-view');
+        if (djUpcomingView) djUpcomingView.style.display = 'none';
         
         // Update the title
-        const titleElement = document.getElementById('sound-system-details-title');
+        const titleElement = document.getElementById('operator-profile-title');
         if (titleElement) {
-            titleElement.textContent = `${soundSystemName} - Details`;
+            titleElement.textContent = `${operatorName} - Profile`;
         }
         
-        // Find and render the sound system details
-        const soundSystem = state.soundSystemsData.find(s => s.name === soundSystemName);
-        if (soundSystem) {
-            views.renderSoundSystemDetails(soundSystem);
-        } else {
-            views.showError('sound-system-details-container', 'Sound system not found');
+        // Get operator data from active operators or create basic profile
+        const activeOperators = getOperatorsActiveThisWeek();
+        let operator = activeOperators.find(op => op.name === operatorName);
+        
+        if (!operator) {
+            // Create basic operator object if not found in active list
+            operator = {
+                name: operatorName,
+                specialty: 'Operator',
+                eventCount: 0,
+                venues: []
+            };
         }
+        
+        views.renderOperatorProfile(operator);
     },
 
     async showFriendProfile(friendName) {
@@ -4410,8 +4476,8 @@ const router = {
         document.getElementById('dj-profile-view').style.display = 'none';
         document.getElementById('venue-details-view').style.display = 'none';
         document.getElementById('venues-view').style.display = 'none';
-        document.getElementById('sound-system-details-view').style.display = 'none';
-        document.getElementById('sound-systems-view').style.display = 'none';
+        document.getElementById('operator-profile-view').style.display = 'none';
+        document.getElementById('operators-view').style.display = 'none';
         document.getElementById('friend-profile-view').style.display = 'block';
         document.getElementById('friends-view').style.display = 'none';
         
@@ -4529,9 +4595,9 @@ const router = {
         }
         
         // Back to sound systems button
-        const backToSoundSystemsButton = document.getElementById('back-to-sound-systems');
-        if (backToSoundSystemsButton) {
-            backToSoundSystemsButton.addEventListener('click', () => this.switchTab('sound-systems'));
+        const backToOperatorsButton = document.getElementById('back-to-operators');
+        if (backToOperatorsButton) {
+            backToOperatorsButton.addEventListener('click', () => this.switchTab('operators'));
         }
         
         // Back to friends button
@@ -4666,8 +4732,9 @@ const router = {
                 views.renderDJs(state.djs);
             } else if (state.currentView === 'venues') {
                 views.renderVenues(state.venues);
-            } else if (state.currentView === 'sound-systems') {
-                views.renderSoundSystems(state.soundSystems);
+            } else if (state.currentView === 'operators') {
+                const activeOperators = getOperatorsActiveThisWeek();
+                views.renderOperators(activeOperators);
             }
             
             // Show success message
@@ -5341,6 +5408,86 @@ function getDJsActiveThisWeek() {
             eventCount: dj.eventCount,
             venues: Array.from(dj.venues),
             events: dj.events.sort((a, b) => a.date - b.date)
+        }))
+        .sort((a, b) => b.eventCount - a.eventCount);
+}
+
+// Helper function to get Operators active in next 7 days
+// Operators are extracted from events (sound, security, bartenders, organizers, etc.)
+// Future: will be linked to operator_profiles table with specialties, contact info, reputation
+function getOperatorsActiveThisWeek() {
+    const now = new Date();
+    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    // Get all events in next 7 days
+    const upcomingEvents = state.eventsData.filter(event => {
+        const date = event.date || event.start;
+        if (!date) return false;
+        const eventDate = new Date(date);
+        return eventDate >= now && eventDate <= sevenDaysLater;
+    });
+    
+    // Extract operators from events
+    // Operators can be: sound engineer, bartender, security, safety liaison, organizer, event manager, etc.
+    // For now, we'll extract from event metadata (organizer, soundSystem, etc.)
+    // Future: events will have explicit operator relationships
+    
+    const operatorMap = {};
+    
+    upcomingEvents.forEach(event => {
+        // Extract potential operators from event data
+        const operators = [];
+        
+        // Organizer/Event Manager
+        if (event.organizer?.name) {
+            operators.push({ name: event.organizer.name, specialty: 'Organizer' });
+        }
+        
+        // Sound System Operator
+        if (event.soundSystem || event.soundEngineer) {
+            const soundOp = event.soundEngineer || event.soundSystem || 'Sound Engineer';
+            operators.push({ name: soundOp, specialty: 'Sound Engineer' });
+        }
+        
+        // Venue staff (if specified)
+        if (event.venue?.manager) {
+            operators.push({ name: event.venue.manager, specialty: 'Venue Manager' });
+        }
+        
+        // Process each operator
+        operators.forEach(op => {
+            if (!op.name) return;
+            
+            if (!operatorMap[op.name]) {
+                operatorMap[op.name] = {
+                    name: op.name,
+                    specialty: op.specialty || 'Operator',
+                    eventCount: 0,
+                    venues: new Set(),
+                    events: []
+                };
+            }
+            
+            operatorMap[op.name].eventCount++;
+            const venue = event.venue?.name || event.location || 'TBD';
+            operatorMap[op.name].venues.add(venue);
+            operatorMap[op.name].events.push({
+                date: new Date(event.date || event.start),
+                title: event.title || event.name,
+                venue: venue,
+                city: event.city || event.venue?.city
+            });
+        });
+    });
+    
+    // Convert to array and sort by event count (most active first)
+    return Object.values(operatorMap)
+        .map(op => ({
+            name: op.name,
+            specialty: op.specialty,
+            eventCount: op.eventCount,
+            venues: Array.from(op.venues),
+            events: op.events.sort((a, b) => a.date - b.date)
         }))
         .sort((a, b) => b.eventCount - a.eventCount);
 }
