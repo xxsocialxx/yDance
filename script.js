@@ -5374,19 +5374,19 @@ function calculateUserDJStats(djName, currentUser) {
 // ============================================================================
 // LOCATION MANAGEMENT
 // ============================================================================
-// Location filtering function (currently disabled for testing)
-// All cities show the same general database events
-// City selection is saved in localStorage for future filtering implementation
-function filterEventsByCity(events = null) {
+// Location filtering function
+// NOTE: Main Events tab shows ALL events regardless of city (for now)
+// City filtering is only applied to DJ tab (DJs active in user's city)
+function filterEventsByCity(events = null, applyFilter = false) {
     // Use provided events or fall back to state.eventsData
     const eventsToFilter = events || state.eventsData;
     
-    // If no city selected, return all events
-    if (!state.userCity) {
+    // If filter disabled or no city selected, return all events
+    if (!applyFilter || !state.userCity) {
         return eventsToFilter;
     }
     
-    // Filter events by city
+    // Filter events by city (only used for DJ-specific views)
     // Events can have city field directly or nested in venue.city
     const filtered = eventsToFilter.filter(event => {
         // Check direct city field
@@ -5464,9 +5464,9 @@ async function init() {
     views.showLoading('events-container');
     try {
         const events = await api.fetchEvents();
-        // Apply city filtering if city is selected
-        const filteredEvents = filterEventsByCity(events);
-        views.renderEvents(filteredEvents);
+        // Main Events tab shows ALL events (no city filtering)
+        // City is used for DJ tab and profile-specific views only
+        views.renderEvents(events);
     } catch (error) {
         views.showError('events-container', error.message);
     }
