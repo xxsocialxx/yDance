@@ -1067,3 +1067,99 @@ body * {
     color: var(--text-primary);
     border-color: var(--accent);
 }
+
+/* ========================================
+   DJ UPCOMING EVENTS VIEW
+   ======================================== */
+.dj-upcoming-view {
+    padding: 20px;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.dj-upcoming-terminal {
+    padding: 20px 0;
+}
+
+.dj-upcoming-header {
+    border-bottom: 1px solid var(--border-primary);
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+}
+
+.upcoming-summary {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.summary-label {
+    color: var(--text-muted);
+    margin-right: 10px;
+}
+
+.upcoming-event-detail {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px dotted var(--border-primary);
+}
+
+.upcoming-event-detail:last-child {
+    border-bottom: none;
+}
+
+.event-detail-header {
+    margin-bottom: 12px;
+}
+
+.event-number {
+    color: var(--text-muted);
+    margin-right: 10px;
+}
+
+.event-title {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.event-detail-info {
+    margin-left: 20px;
+}
+
+.event-detail-line {
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.detail-label {
+    color: var(--text-secondary);
+    margin-right: 10px;
+}
+
+.event-detail-actions {
+    margin-top: 12px;
+}
+
+.details-link {
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.details-link:hover {
+    color: var(--text-primary);
+}
+
+/* DJ listing enhancements for week activity */
+.dj-event-count {
+    color: var(--accent);
+    font-weight: 700;
+    margin-left: 15px;
+}
+
+.dj-venues {
+    color: var(--text-secondary);
+    margin-left: 15px;
+    font-size: 0.9rem;
+}
