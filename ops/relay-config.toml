@@ -1,0 +1,17 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+
+[options]
+whitelist = ["HEX_PUBKEY_A","HEX_PUBKEY_B"]
+read = true
+write = true
+
+
+
+
+
+
+
+
+

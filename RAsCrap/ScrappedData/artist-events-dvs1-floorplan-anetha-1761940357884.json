@@ -1,0 +1,46 @@
+[
+  {
+    "id": "2032866",
+    "title": "DVS1 x WORK present The Wall Of Sound: DVS1 & Traxx (Extended Sets)",
+    "date": "2025-01-24T00:00:00.000",
+    "venue": "TBA - Los Angeles",
+    "artists": [
+      "DVS1",
+      "Traxx"
+    ],
+    "url": "https://ra.co/events/2032866",
+    "dataSource": "api-only",
+    "error": "Could not extract text - only got 0 characters"
+  },
+  {
+    "id": "2073587",
+    "title": "Endzeit x DTE: DVS1 // Sybil // more",
+    "date": "2025-01-25T00:00:00.000",
+    "venue": "TBA - Oakland",
+    "artists": [
+      "DVS1",
+      "Sybil",
+      "Max Gardner",
+      "Sentient",
+      "9-System",
+      "Kudeki",
+      "monosym",
+      "Tariq"
+    ],
+    "url": "https://ra.co/events/2073587",
+    "dataSource": "api-only",
+    "error": "Could not extract text - only got 0 characters"
+  },
+  {
+    "id": "2180150",
+    "title": "S Λ V (w/Friends) Open Air",
+    "date": "2025-06-07T00:00:00.000",
+    "venue": "TBA - Folsom, CA",
+    "artists": [
+      "V"
+    ],
+    "url": "https://ra.co/events/2180150",
+    "dataSource": "api-only",
+    "error": "Could not extract text - only got 0 characters"
+  }
+]

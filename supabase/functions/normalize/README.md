@@ -27,3 +27,12 @@ supabase functions invoke normalize
 - Replace `tryParseRaw` with full schema validation against `schema/event.schema.json`.
 - Add review queue integration for low-confidence cases.
 - Extend adapters to handle form/import sources.
+
+
+
+
+
+
+
+
+

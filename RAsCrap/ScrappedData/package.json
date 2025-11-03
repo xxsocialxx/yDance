@@ -1,0 +1,25 @@
+{
+  "name": "ra-scraper",
+  "version": "1.0.0",
+  "description": "Scraper for ra.co events (development purposes only)",
+  "main": "ra-scraper.js",
+  "scripts": {
+    "scrape": "node ra-scraper.js",
+    "scrape:ca": "node ra-scraper.js us/california",
+    "scrape:ny": "node ra-scraper.js us/new-york",
+    "scrape:london": "node ra-scraper.js gb/london"
+  },
+  "keywords": [
+    "scraper",
+    "events",
+    "ra.co"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.1",
+    "playwright": "^1.40.0",
+    "sharp": "^0.33.0",
+    "tesseract.js": "^5.0.4"
+  }
+}

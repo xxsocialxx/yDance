@@ -1,0 +1,374 @@
+{
+  "url": "https://ra.co/events/2292678",
+  "timestamp": "2025-10-31T18:08:12.067Z",
+  "pageType": "event-detail",
+  "eventId": "2292678",
+  "summary": {
+    "workingFields": 3,
+    "totalFields": 9,
+    "percentage": 33
+  },
+  "fieldStatus": {
+    "title": {
+      "working": true,
+      "bestSelector": "title",
+      "bestResult": {
+        "found": true,
+        "text": "El Techo Halloween  at El Techo, Washington DC",
+        "value": null,
+        "textLength": 46,
+        "visible": false,
+        "inViewport": true,
+        "opacity": 1,
+        "hasText": true,
+        "hasValue": false,
+        "tagName": "TITLE",
+        "className": ""
+      }
+    },
+    "date": {
+      "working": false,
+      "bestSelector": null,
+      "bestResult": null
+    },
+    "venue": {
+      "working": true,
+      "bestSelector": "a[href*=\"/clubs/\"]",
+      "bestResult": {
+        "found": true,
+        "text": "El Techo",
+        "value": "https://ra.co/clubs/150115",
+        "textLength": 8,
+        "visible": true,
+        "inViewport": true,
+        "opacity": 1,
+        "hasText": true,
+        "hasValue": true,
+        "tagName": "A",
+        "className": "Link__AnchorWrapper-sc-1huefnz-1 gXGLRM"
+      }
+    },
+    "artists": {
+      "working": false,
+      "bestSelector": null,
+      "bestResult": null
+    },
+    "promoter": {
+      "working": true,
+      "bestSelector": "a[href*=\"/promoters/\"]",
+      "bestResult": {
+        "found": true,
+        "text": "Good House Musik",
+        "value": "https://ra.co/promoters/92779",
+        "textLength": 16,
+        "visible": true,
+        "inViewport": true,
+        "opacity": 1,
+        "hasText": true,
+        "hasValue": true,
+        "tagName": "A",
+        "className": "Link__AnchorWrapper-sc-1huefnz-1 fxyHWA"
+      }
+    },
+    "genre": {
+      "working": false,
+      "bestSelector": null,
+      "bestResult": null
+    },
+    "description": {
+      "working": false,
+      "bestSelector": null,
+      "bestResult": null
+    },
+    "price": {
+      "working": false,
+      "bestSelector": null,
+      "bestResult": null
+    },
+    "image": {
+      "working": false,
+      "bestSelector": null,
+      "bestResult": null
+    }
+  },
+  "allResults": {
+    "title": {
+      "selectors": [
+        "h1",
+        "[data-pw-test-id=\"event-title\"]",
+        "[data-testid=\"event-title\"]",
+        "h1[class*=\"title\"]",
+        "article h1",
+        ".event-title",
+        "title"
+      ],
+      "results": {
+        "h1": {
+          "found": true,
+          "text": "El Techo Halloween",
+          "value": null,
+          "textLength": 18,
+          "visible": true,
+          "inViewport": true,
+          "opacity": 1,
+          "hasText": true,
+          "hasValue": false,
+          "tagName": "H1",
+          "className": "Box-sc-abq4qd-0 Heading__StyledBox-rnlmr6-0 gPUtrM"
+        },
+        "[data-pw-test-id=\"event-title\"]": {
+          "found": true,
+          "text": "El Techo Halloween",
+          "value": null,
+          "textLength": 18,
+          "visible": true,
+          "inViewport": true,
+          "opacity": 1,
+          "hasText": true,
+          "hasValue": false,
+          "tagName": "H3",
+          "className": "Box-sc-abq4qd-0 Heading__StyledBox-rnlmr6-0 daeYCM"
+        },
+        "[data-testid=\"event-title\"]": {
+          "found": false
+        },
+        "h1[class*=\"title\"]": {
+          "found": false
+        },
+        "article h1": {
+          "found": false
+        },
+        ".event-title": {
+          "found": false
+        },
+        "title": {
+          "found": true,
+          "text": "El Techo Halloween  at El Techo, Washington DC",
+          "value": null,
+          "textLength": 46,
+          "visible": false,
+          "inViewport": true,
+          "opacity": 1,
+          "hasText": true,
+          "hasValue": false,
+          "tagName": "TITLE",
+          "className": ""
+        }
+      }
+    },
+    "date": {
+      "selectors": [
+        "time[datetime]",
+        "[data-testid=\"event-date\"]",
+        "[data-pw-test-id=\"event-date\"]",
+        "[class*=\"date\"]",
+        "time"
+      ],
+      "results": {
+        "time[datetime]": {
+          "found": false
+        },
+        "[data-testid=\"event-date\"]": {
+          "found": false
+        },
+        "[data-pw-test-id=\"event-date\"]": {
+          "found": false
+        },
+        "[class*=\"date\"]": {
+          "found": false
+        },
+        "time": {
+          "found": false
+        }
+      }
+    },
+    "venue": {
+      "selectors": [
+        "a[href*=\"/clubs/\"]",
+        "[data-pw-test-id=\"event-venue\"]",
+        "[data-testid=\"event-venue\"]",
+        "[class*=\"venue\"]",
+        "a[href*=\"/clubs\"]"
+      ],
+      "results": {
+        "a[href*=\"/clubs/\"]": {
+          "found": true,
+          "text": "El Techo",
+          "value": "https://ra.co/clubs/150115",
+          "textLength": 8,
+          "visible": true,
+          "inViewport": true,
+          "opacity": 1,
+          "hasText": true,
+          "hasValue": true,
+          "tagName": "A",
+          "className": "Link__AnchorWrapper-sc-1huefnz-1 gXGLRM"
+        },
+        "[data-pw-test-id=\"event-venue\"]": {
+          "found": false
+        },
+        "[data-testid=\"event-venue\"]": {
+          "found": false
+        },
+        "[class*=\"venue\"]": {
+          "found": false
+        },
+        "a[href*=\"/clubs\"]": {
+          "found": true,
+          "text": "El Techo",
+          "value": "https://ra.co/clubs/150115",
+          "textLength": 8,
+          "visible": true,
+          "inViewport": true,
+          "opacity": 1,
+          "hasText": true,
+          "hasValue": true,
+          "tagName": "A",
+          "className": "Link__AnchorWrapper-sc-1huefnz-1 gXGLRM"
+        }
+      }
+    },
+    "artists": {
+      "selectors": [
+        "[data-pw-test-id=\"event-artists\"]",
+        "[data-testid=\"event-artists\"]",
+        "[class*=\"artist\"]",
+        "[class*=\"lineup\"]",
+        "article [class*=\"lineup\"]"
+      ],
+      "results": {
+        "[data-pw-test-id=\"event-artists\"]": {
+          "found": false
+        },
+        "[data-testid=\"event-artists\"]": {
+          "found": false
+        },
+        "[class*=\"artist\"]": {
+          "found": false
+        },
+        "[class*=\"lineup\"]": {
+          "found": false
+        },
+        "article [class*=\"lineup\"]": {
+          "found": false
+        }
+      }
+    },
+    "promoter": {
+      "selectors": [
+        "a[href*=\"/promoters/\"]",
+        "[data-pw-test-id=\"event-promoter\"]",
+        "[class*=\"promoter\"]"
+      ],
+      "results": {
+        "a[href*=\"/promoters/\"]": {
+          "found": true,
+          "text": "Good House Musik",
+          "value": "https://ra.co/promoters/92779",
+          "textLength": 16,
+          "visible": true,
+          "inViewport": true,
+          "opacity": 1,
+          "hasText": true,
+          "hasValue": true,
+          "tagName": "A",
+          "className": "Link__AnchorWrapper-sc-1huefnz-1 fxyHWA"
+        },
+        "[data-pw-test-id=\"event-promoter\"]": {
+          "found": false
+        },
+        "[class*=\"promoter\"]": {
+          "found": false
+        }
+      }
+    },
+    "genre": {
+      "selectors": [
+        "[data-pw-test-id=\"event-genre\"]",
+        "[class*=\"genre\"]",
+        "[class*=\"tag\"]"
+      ],
+      "results": {
+        "[data-pw-test-id=\"event-genre\"]": {
+          "found": false
+        },
+        "[class*=\"genre\"]": {
+          "found": false
+        },
+        "[class*=\"tag\"]": {
+          "found": false
+        }
+      }
+    },
+    "description": {
+      "selectors": [
+        "[data-testid=\"event-description\"]",
+        "[data-pw-test-id=\"event-description\"]",
+        "[class*=\"description\"]",
+        "article [class*=\"description\"]"
+      ],
+      "results": {
+        "[data-testid=\"event-description\"]": {
+          "found": false
+        },
+        "[data-pw-test-id=\"event-description\"]": {
+          "found": false
+        },
+        "[class*=\"description\"]": {
+          "found": false
+        },
+        "article [class*=\"description\"]": {
+          "found": false
+        }
+      }
+    },
+    "price": {
+      "selectors": [
+        "[data-testid=\"event-price\"]",
+        "[data-pw-test-id=\"event-price\"]",
+        "[class*=\"price\"]",
+        "[class*=\"ticket\"]"
+      ],
+      "results": {
+        "[data-testid=\"event-price\"]": {
+          "found": false
+        },
+        "[data-pw-test-id=\"event-price\"]": {
+          "found": false
+        },
+        "[class*=\"price\"]": {
+          "found": false
+        },
+        "[class*=\"ticket\"]": {
+          "found": false
+        }
+      }
+    },
+    "image": {
+      "selectors": [
+        "[data-testid=\"event-image\"] img",
+        "[data-pw-test-id=\"event-image\"] img",
+        "article img",
+        "img[alt*=\"event\"]",
+        "img[src*=\"events\"]"
+      ],
+      "results": {
+        "[data-testid=\"event-image\"] img": {
+          "found": false
+        },
+        "[data-pw-test-id=\"event-image\"] img": {
+          "found": false
+        },
+        "article img": {
+          "found": false
+        },
+        "img[alt*=\"event\"]": {
+          "found": false
+        },
+        "img[src*=\"events\"]": {
+          "found": false
+        }
+      }
+    }
+  }
+}

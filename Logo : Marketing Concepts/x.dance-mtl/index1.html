@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x.dance | The Dance</title>
+    <meta name="description" content="x.dance: Your definitive resource to locate 'the dance'. A revolutionary platform for dance enthusiasts focused on utility and pure passion.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50%25' y='50%25' font-size='80' text-anchor='middle' dominant-baseline='central'%3Ex%3C/text%3E%3C/svg%3E" type="image/svg+xml">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;700&display=swap');
+
+        /* --- Dark Mode Variables (Default) --- */
+        :root {
+            --bg-color: #000000;
+            --text-color: #F0F0F0;
+            --terminal-border: #1a1a1a;
+            --terminal-glow: #00ff66; /* Subtle green for terminal elements */
+            --x-inner-color: #FFFFFF;
+            --x-border-color: #000000;
+            --tab-hover-bg: rgba(0, 255, 102, 0.1);
+            --header-shadow: rgba(0, 0, 0, 0.5);
+            --subtle-divider: rgba(240, 240, 240, 0.1);
+            --terminal-text-hover: #ffffff; /* For hover on mode toggle */
+        }
+
+        /* --- Light Mode Variables --- */
+        body.light-mode {
+            --bg-color: #FFFFFF;
+            --text-color: #333333;
+            --terminal-border: #BBBBBB;
+            --terminal-glow: #008000; /* Darker green for contrast */
+            --x-inner-color: #333333; /* Darker X for contrast */
+            --x-border-color: #FFFFFF;
+            --tab-hover-bg: rgba(0, 128, 0, 0.05);
+            --header-shadow: rgba(0, 0, 0, 0.1);
+            --subtle-divider: rgba(51, 51, 51, 0.1);
+            --terminal-text-hover: #000000;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'IBM Plex Mono', monospace; /* Primary font for terminal feel */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden; /* Hide potential scrollbars from animations */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            transition: background-color 0.5s ease, color 0.5s ease; /* Smooth transition for theme change */
+        }
+
+        .container {
+            text-align: center;
+            width: 90%;
+            max-width: 800px;
+            box-sizing: border-box;
+            padding: 20px;
+            position: relative; /* For the industrial border/shadow */
+        }
+
+        /* Industrial Edge/Border effect (subtle) */
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border: 1px solid var(--terminal-border); /* Dynamic color */
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.1), inset 0 0 10px rgba(0, 255, 102, 0.1);
+            pointer-events: none;
+            z-index: -1;
+            animation: industrialGlow 5s infinite alternate ease-in-out;
+            transition: border-color 0.5s ease, box-shadow 0.5s ease; /* Smooth transition */
+        }
+
+        @keyframes industrialGlow {
+            0% { box-shadow: 0 0 10px rgba(0, 255, 102, 0.1), inset 0 0 10px rgba(0, 255, 102, 0.1); }
+            50% { box-shadow: 0 0 15px rgba(0, 255, 102, 0.2), inset 0 0 15px rgba(0, 255, 102, 0.2); }
+            100% { box-shadow: 0 0 10px rgba(0, 255, 102, 0.1), inset 0 0 10px rgba(0, 255, 102, 0.1); }
+        }
+        body.light-mode .container::before {
+            animation: lightModeIndustrialGlow 5s infinite alternate ease-in-out;
+        }
+        @keyframes lightModeIndustrialGlow {
+            0% { box-shadow: 0 0 10px rgba(0, 128, 0, 0.1), inset 0 0 10px rgba(0, 128, 0, 0.1); }
+            50% { box-shadow: 0 0 15px rgba(0, 128, 0, 0.2), inset 0 0 15px rgba(0, 128, 0, 0.2); }
+            100% { box-shadow: 0 0 10px rgba(0, 128, 0, 0.1), inset 0 0 10px rgba(0, 128, 0, 0.1); }
+        }
+
+
+        /* --- X Logo Styling --- */
+        .x-logo {
+            font-family: 'Rajdhani', sans-serif; /* A more modern, strong font for 'X' */
+            font-size: 10em; /* Large size */
+            font-weight: 700;
+            line-height: 0.8; /* Adjust vertical alignment */
+            position: relative;
+            display: inline-block;
+            text-align: center;
+            width: 1em; /* Make width equal to height to contain 'X' */
+            height: 1em;
+            overflow: hidden; /* Crucial for clipping the inner color effect */
+            animation: xFightBack 6s infinite ease-in-out; /* The core X animation */
+        }
+
+        .x-logo::before {
+            content: 'x';
+            color: var(--x-inner-color); /* Dynamic color */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2; /* Ensures 'x' is on top */
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+        body.light-mode .x-logo::before {
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.2); /* Darker shadow for light mode */
+        }
+
+
+        .x-logo::after {
+            content: ''; /* This creates the colored background layer */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, #FF00FF, #00FFFF, #FFFF00); /* Vibrant gradient */
+            opacity: 0; /* Starts invisible */
+            z-index: 1; /* Behind the 'x' text */
+            transition: opacity 0.5s ease-out; /* Smooth transition for color flash */
+        }
+
+        @keyframes xFightBack {
+            0%, 100% { opacity: 1; filter: grayscale(0); } /* Fully black and white */
+            20% { opacity: 1; filter: grayscale(1); } /* Ensure grayscaled start */
+            25% { opacity: 0.5; filter: grayscale(0); } /* Brief color "flash" */
+            30% { opacity: 1; filter: grayscale(1); } /* Snaps back to B&W */
+            70% { opacity: 1; filter: grayscale(1); } /* Stays B&W for a while */
+            75% { opacity: 0.5; filter: grayscale(0); } /* Another brief color "flash" */
+            80% { opacity: 1; filter: grayscale(1); } /* Snaps back to B&W */
+        }
+        /* Make grayscale color dependent on theme for light mode*/
+        body.light-mode .x-logo {
+            animation: xFightBackLight 6s infinite ease-in-out;
+        }
+        @keyframes xFightBackLight {
+            0%, 100% { opacity: 1; filter: grayscale(0); }
+            20% { opacity: 1; filter: grayscale(1); }
+            25% { opacity: 0.5; filter: grayscale(0); }
+            30% { opacity: 1; filter: grayscale(1); }
+            70% { opacity: 1; filter: grayscale(1); }
+            75% { opacity: 0.5; filter: grayscale(0); }
+            80% { opacity: 1; filter: grayscale(1); }
+        }
+
+
+        /* --- Dance Subtitle Styling --- */
+        .subtitle {
+            font-family: 'IBM Plex Mono', monospace; /* Keep 'dance' with terminal font */
+            font-size: 1.5em;
+            margin-top: -30px; /* Pull it up closer to 'x' */
+            letter-spacing: 0.1em;
+            color: var(--text-color); /* Dynamic color */
+            white-space: nowrap; /* Prevent line breaks for animation */
+        }
+
+        .subtitle span {
+            opacity: 0; /* Start invisible */
+            animation: revealLetter 0.5s forwards; /* Animation for each letter */
+            animation-timing-function: ease-out;
+            transition: color 0.5s ease; /* Smooth transition for theme change */
+        }
+        /* Delay each letter's animation */
+        .subtitle span:nth-child(1) { animation-delay: 0.5s; }
+        .subtitle span:nth-child(2) { animation-delay: 0.6s; }
+        .subtitle span:nth-child(3) { animation-delay: 0.7s; }
+        .subtitle span:nth-child(4) { animation-delay: 0.8s; }
+        .subtitle span:nth-child(5) { animation-delay: 0.9s; }
+
+        @keyframes revealLetter {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Terminal Content Area Styling --- */
+        .terminal-output {
+            background-color: var(--bg-color); /* Dynamic color */
+            border: 1px solid var(--terminal-border); /* Dynamic color */
+            padding: 25px;
+            margin-top: 50px;
+            min-height: 150px;
+            text-align: left;
+            font-size: 0.9em;
+            line-height: 1.6;
+            box-shadow: 0 0 15px rgba(0, 255, 102, 0.1), inset 0 0 15px rgba(0, 255, 102, 0.1); /* Dynamic color in JS */
+            overflow: hidden; /* For typing effect */
+            white-space: pre-wrap; /* Preserve formatting and wrap text */
+            position: relative;
+            width: calc(100% - 50px); /* Adjust for padding */
+            transition: background-color 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease; /* Smooth transition */
+        }
+        body.light-mode .terminal-output { /* Adjust light mode glow */
+            box-shadow: 0 0 15px rgba(0, 128, 0, 0.1), inset 0 0 15px rgba(0, 128, 0, 0.1);
+        }
+
+        .terminal-output code {
+            display: block; /* Treat code as block for lines */
+            color: var(--text-color); /* Dynamic color */
+            font-family: 'IBM Plex Mono', monospace;
+            padding-right: 1ch; /* Space for cursor */
+            opacity: 0; /* Hidden by default, revealed by JS */
+            transition: color 0.5s ease; /* Smooth transition */
+        }
+
+        /* Blinking cursor effect */
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 1.1em; /* Adjust to match line-height */
+            background-color: var(--text-color); /* Dynamic color */
+            vertical-align: text-bottom;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            from, to { background-color: transparent; }
+            50% { background-color: var(--text-color); }
+        }
+
+        /* Blinking cursor for the prompt line specifically */
+        .prompt .cursor {
+            background-color: var(--terminal-glow); /* Dynamic color */
+            box-shadow: 0 0 5px var(--terminal-glow); /* Dynamic color */
+        }
+
+        /* --- Dancity Dropdown Styling --- */
+        .dancity-dropdown-container {
+            display: flex;
+            align-items: center;
+            margin-top: 20px; /* Space after terminal lines */
+            opacity: 0; /* Hidden by default, revealed by JS */
+            transition: opacity 0.5s ease; /* Smooth appearance */
+        }
+
+        .dancity-dropdown {
+            background-color: var(--bg-color); /* Dynamic color */
+            border: 1px solid var(--terminal-glow); /* Dynamic color */
+            color: var(--terminal-glow); /* Dynamic color */
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1em;
+            padding: 5px 10px;
+            appearance: none; /* Remove default dropdown arrow */
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            cursor: pointer;
+            outline: none;
+            box-shadow: 0 0 5px rgba(0, 255, 102, 0.3);
+            transition: all 0.3s ease-in-out;
+            pointer-events: none; /* Not clickable until visible by JS */
+            position: relative;
+            z-index: 10;
+        }
+
+        .dancity-dropdown option {
+            background-color: var(--bg-color); /* Dynamic color */
+            color: var(--terminal-glow); /* Dynamic color */
+            padding: 5px;
+        }
+
+        .dancity-dropdown:hover,
+        .dancity-dropdown:focus {
+            box-shadow: 0 0 10px var(--terminal-glow); /* Dynamic color */
+        }
+        body.light-mode .dancity-dropdown { /* Adjust light mode glow */
+            box-shadow: 0 0 5px rgba(0, 128, 0, 0.3);
+        }
+        body.light-mode .dancity-dropdown:hover,
+        body.light-mode .dancity-dropdown:focus {
+            box-shadow: 0 0 10px rgba(0, 128, 0, 0.6);
+        }
+
+
+        /* --- Footer for blockchain hint --- */
+        .footer {
+            margin-top: 40px;
+            font-size: 0.7em;
+            color: rgba(240, 240, 240, 0.5); /* Dynamic color */
+            letter-spacing: 0.05em;
+            opacity: 0;
+            animation: fadeIn 1s forwards;
+            animation-delay: 5s; /* Appear after main content and dropdown cycle */
+            transition: color 0.5s ease; /* Smooth transition */
+        }
+        body.light-mode .footer {
+            color: rgba(51, 51, 51, 0.5);
+        }
+
+        .footer span {
+            color: var(--terminal-glow); /* Dynamic color */
+            transition: color 0.5s ease; /* Smooth transition */
+        }
+
+        /* --- Mode Toggle --- */
+        .mode-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 0.8em;
+            color: var(--text-color); /* Dynamic color */
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s ease;
+        }
+        .mode-toggle:hover {
+            color: var(--terminal-text-hover); /* For a subtle change on hover */
+        }
+
+        /* General Fade-In Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .x-logo {
+                font-size: 7em;
+            }
+            .subtitle {
+                font-size: 1.2em;
+                margin-top: -20px;
+            }
+            .terminal-output {
+                font-size: 0.8em;
+                padding: 15px;
+                min-height: 120px; /* Adjust min-height for smaller screens */
+            }
+            .dancity-dropdown-container {
+                flex-direction: column; /* Stack on smaller screens */
+                align-items: flex-start; /* Align dropdown to left within its flex container */
+            }
+            .dancity-dropdown {
+                width: 100%; /* Full width dropdown */
+                margin-top: 10px; /* Space from prompt if stacked */
+                margin-left: 0;
+            }
+            .mode-toggle {
+                top: 10px;
+                right: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="mode-toggle" id="mode-toggle">[MODE: DARK]</div>
+    <div class="container">
+        <div class="x-logo"></div>
+        <div class="subtitle" id="subtitle-animation">
+            <span>D</span><span>A</span><span>N</span><span>C</span><span>E</span>
+        </div>
+
+        <div class="terminal-output" id="terminal-output">
+            <!-- Filler text lines, will be typed by JS -->
+            <code id="line1">> Initializing // secure connection established.<br></code>
+            <code id="line2">> Status: Online. Operational mode: Purist.<br><br></code>
+            <code id="line3">> Welcome, initiate.<br></code>
+            <code id="line4">> This is a nexus where utility facilitates pure passion.<br></code>
+            <code id="line5">> Discover: where is the dance?<br></code>
+            
+            <div class="dancity-dropdown-container" id="dancity-dropdown-container">
+                <select class="dancity-dropdown" id="dancity-dropdown">
+                    <option value="">-- select a dancity --</option>
+                    <option value="amsterdam">Amsterdam</option>
+                    <option value="barcelona">Barcelona</option>
+                    <option value="berlin">Berlin</option>
+                    <option value="london">London</option>
+                    <option value="los-angeles">Los Angeles</option>
+                    <option value="madrid">Madrid</option>
+                    <option value="melbourne">Melbourne</option>
+                    <option value="mexico-city">Mexico City</option>
+                    <option value="montreal">Montreal</option>
+                    <option value="new-york">New York</option>
+                    <option value="paris">Paris</option>
+                    <option value="rome">Rome</option>
+                    <option value="sao-paulo">São Paulo</option>
+                    <option value="sydney">Sydney</option>
+                    <option value="tokyo">Tokyo</option>
+                    <option value="toronto">Toronto</option>
+                    <option value="vancouver">Vancouver</option>
+                </select>
+            </div>
+            <!-- Cursor will blink after dropdown disappears or during text typing -->
+            <span class="cursor prompt" id="terminal-cursor"></span>
+        </div>
+        <div class="footer">
+            [x.dance] - built on <span>radical</span> simplicity & <span>distributed</span> passion.
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const terminalOutput = document.getElementById('terminal-output');
+            const subtitleAnimation = document.getElementById('subtitle-animation');
+            const terminalCursor = document.getElementById('terminal-cursor');
+            const dancityDropdownContainer = document.getElementById('dancity-dropdown-container');
+            const dancityDropdown = document.getElementById('dancity-dropdown');
+            const modeToggle = document.getElementById('mode-toggle');
+            const body = document.body;
+
+            const fillerLines = [
+                document.getElementById('line1'),
+                document.getElementById('line2'),
+                document.getElementById('line3'),
+                document.getElementById('line4'),
+                document.getElementById('line5')
+            ];
+
+            const DANCITIES_DROPDOWN_LOOP_INTERVAL = 8000; // Total duration of one cycle
+            const DROPDOWN_APPEAR_DELAY_AFTER_TEXT = 1000; // Delay after all filler text is typed
+            const DROPDOWN_DISPLAY_DURATION = 5000; // How long dropdown stays visible
+
+            let typingTimeout;
+            let dropdownLoopTimeout;
+
+            // --- Theme Toggle Logic ---
+            function setPreferredTheme(theme) {
+                if (theme === 'light') {
+                    body.classList.add('light-mode');
+                    modeToggle.textContent = '[MODE: LIGHT]';
+                    localStorage.setItem('x.dance-theme', 'light');
+                } else {
+                    body.classList.remove('light-mode');
+                    modeToggle.textContent = '[MODE: DARK]';
+                    localStorage.removeItem('x.dance-theme'); 
+                }
+            }
+
+            modeToggle.addEventListener('click', () => {
+                if (body.classList.contains('light-mode')) {
+                    setPreferredTheme('dark');
+                } else {
+                    setPreferredTheme('light');
+                }
+            });
+
+            // Load saved theme preference on initial load
+            const savedTheme = localStorage.getItem('x.dance-theme');
+            if (savedTheme === 'light') {
+                setPreferredTheme('light');
+            } else {
+                setPreferredTheme('dark'); 
+            }
+
+            // --- Terminal Typing Animation Logic ---
+            let currentLineIndex = 0;
+            let currentCharIndex = 0;
+            const typingSpeed = 30; // ms per char
+            const lineBreakDelay = 500; // ms between lines
+
+            function typeNextChar() {
+                if (currentLineIndex < fillerLines.length) {
+                    const currentLineElement = fillerLines[currentLineIndex];
+                    const fullText = currentLineElement.textContent.trim(); // Get full text from the code tag
+                    
+                    if (currentCharIndex < fullText.length) {
+                        // Display character by character
+                        currentLineElement.textContent = fullText.substring(0, currentCharIndex + 1);
+                        currentLineElement.style.opacity = '1'; // Ensure line is visible as it types
+                        currentCharIndex++;
+                        typingTimeout = setTimeout(typeNextChar, typingSpeed);
+                    } else {
+                        // Line complete
+                        currentLineIndex++;
+                        currentCharIndex = 0;
+                        if (currentLineIndex < fillerLines.length) {
+                            typingTimeout = setTimeout(typeNextChar, lineBreakDelay);
+                        } else {
+                            // All filler lines typed, now start dropdown loop
+                            startDropdownLoop();
+                        }
+                    }
+                }
+            }
+
+            // Initially hide filler lines from HTML, they will be typed by JS
+            fillerLines.forEach(line => {
+                line.textContent = ''; // Clear content
+                line.style.opacity = '0'; // Hide
+            });
+
+            // --- Dancity Dropdown Loop Logic ---
+            function startDropdownLoop() {
+                clearTimeout(dropdownLoopTimeout); // Clear any existing loop
+
+                // Ensure cursor is visible before dropdown appears
+                terminalCursor.style.opacity = '1';
+                terminalCursor.style.display = 'inline-block';
+
+                // Step 1: Show dropdown after a delay
+                setTimeout(() => {
+                    dancityDropdownContainer.style.opacity = '1';
+                    dancityDropdown.style.pointerEvents = 'auto'; // Make clickable
+                    terminalCursor.style.opacity = '0'; // Hide cursor when dropdown is visible
+                }, DROPDOWN_APPEAR_DELAY_AFTER_TEXT);
+
+                // Step 2: Hide dropdown and restart loop after its display duration
+                setTimeout(() => {
+                    dancityDropdownContainer.style.opacity = '0';
+                    dancityDropdown.style.pointerEvents = 'none'; // Make unclickable
+                    dancityDropdown.value = ''; // Reset selection
+                    terminalCursor.style.opacity = '1'; // Show cursor again
+                    dropdownLoopTimeout = setTimeout(startDropdownLoop, DANCITIES_DROPDOWN_LOOP_INTERVAL - DROPDOWN_APPEAR_DELAY_AFTER_TEXT - DROPDOWN_DISPLAY_DURATION);
+                }, DROPDOWN_APPEAR_DELAY_AFTER_TEXT + DROPDOWN_DISPLAY_DURATION);
+            }
+
+            // --- Initial Page Load Sequence ---
+            const subtitleSpans = subtitleAnimation.querySelectorAll('span');
+            const lastSubtitleDelay = parseFloat(subtitleSpans[subtitleSpans.length - 1].style.animationDelay || '0');
+            const subtitleAnimationDuration = parseFloat(getComputedStyle(subtitleSpans[0]).animationDuration || '0');
+            const totalSubtitleRevealTime = (lastSubtitleDelay + subtitleAnimationDuration) * 1000;
+
+            setTimeout(() => {
+                typeNextChar(); // Start typing filler text
+            }, totalSubtitleRevealTime + 500); // Start after subtitle animation plus a small pause
+
+            // --- Dropdown Change Handler ---
+            dancityDropdown.addEventListener('change', function() {
+                const selectedDancity = this.value; 
+
+                if (selectedDancity) {
+                    clearTimeout(typingTimeout);       // Stop any ongoing typing
+                    clearTimeout(dropdownLoopTimeout); // Stop the dropdown loop
+                    terminalCursor.style.display = 'none'; // Hide cursor definitively
+                    dancityDropdownContainer.style.opacity = '1'; // Ensure it stays visible for navigation
+                    dancityDropdown.style.pointerEvents = 'none'; // Disable further clicks during redirect
+
+                    // Redirect to the selected dancity page
+                    window.location.href = `${selectedDancity}.html`;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

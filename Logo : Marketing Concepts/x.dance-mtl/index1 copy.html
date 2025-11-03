@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x.dance | The Dance</title>
+    <meta name="description" content="x.dance: Your definitive resource to locate 'the dance'. A revolutionary platform for dance enthusiasts focused on utility and pure passion.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50%25' y='50%25' font-size='80' text-anchor='middle' dominant-baseline='central'%3Ex%3C/text%3E%3C/svg%3E" type="image/svg+xml">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;700&display=swap');
+
+        /* --- Grayscale Dark Mode Variables (Default) --- */
+        :root {
+            --bg-color: #000000;
+            --text-color: #F0F0F0;
+            --terminal-border: #1a1a1a;
+            --terminal-glow: #A0A0A0; /* Grayscale equivalent of original bright green */
+            --x-inner-color: #FFFFFF;
+            --x-border-color: #000000;
+            --tab-hover-bg: rgba(160, 160, 160, 0.1); /* Grayscale transparent */
+            --header-shadow: rgba(0, 0, 0, 0.5);
+            --subtle-divider: rgba(240, 240, 240, 0.1);
+            --terminal-text-hover: #ffffff;
+        }
+
+        /* --- Grayscale Light Mode Variables --- */
+        body.light-mode {
+            --bg-color: #FFFFFF;
+            --text-color: #333333;
+            --terminal-border: #BBBBBB;
+            --terminal-glow: #4B4B4B; /* Grayscale equivalent of original darker green */
+            --x-inner-color: #333333;
+            --x-border-color: #FFFFFF;
+            --tab-hover-bg: rgba(75, 75, 75, 0.05); /* Grayscale transparent */
+            --header-shadow: rgba(0, 0, 0, 0.1);
+            --subtle-divider: rgba(51, 51, 51, 0.1);
+            --terminal-text-hover: #000000;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'IBM Plex Mono', monospace;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            transition: background-color 0.5s ease, color 0.5s ease;
+        }
+
+        .container {
+            text-align: center;
+            width: 90%;
+            max-width: 800px;
+            box-sizing: border-box;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* Industrial Edge/Border effect (subtle) */
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border: 1px solid var(--terminal-border);
+            /* Updated rgba values for grayscale glow */
+            box-shadow: 0 0 10px rgba(160, 160, 160, 0.1), inset 0 0 10px rgba(160, 160, 160, 0.1);
+            pointer-events: none;
+            z-index: -1;
+            animation: industrialGlow 5s infinite alternate ease-in-out;
+            transition: border-color 0.5s ease, box-shadow 0.5s ease;
+        }
+
+        @keyframes industrialGlow {
+            /* Updated rgba values for grayscale glow */
+            0% { box-shadow: 0 0 10px rgba(160, 160, 160, 0.1), inset 0 0 10px rgba(160, 160, 160, 0.1); }
+            50% { box-shadow: 0 0 15px rgba(160, 160, 160, 0.2), inset 0 0 15px rgba(160, 160, 160, 0.2); }
+            100% { box-shadow: 0 0 10px rgba(160, 160, 160, 0.1), inset 0 0 10px rgba(160, 160, 160, 0.1); }
+        }
+        body.light-mode .container::before {
+            animation: lightModeIndustrialGlow 5s infinite alternate ease-in-out;
+        }
+        @keyframes lightModeIndustrialGlow {
+            /* Updated rgba values for light grayscale glow */
+            0% { box-shadow: 0 0 10px rgba(75, 75, 75, 0.1), inset 0 0 10px rgba(75, 75, 75, 0.1); }
+            50% { box-shadow: 0 0 15px rgba(75, 75, 75, 0.2), inset 0 0 15px rgba(75, 75, 75, 0.2); }
+            100% { box-shadow: 0 0 10px rgba(75, 75, 75, 0.1), inset 0 0 10px rgba(75, 75, 75, 0.1); }
+        }
+
+
+        /* --- X Logo Styling --- */
+        .x-logo {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 10em;
+            font-weight: 700;
+            line-height: 0.8;
+            position: relative;
+            display: inline-block;
+            text-align: center;
+            width: 1em;
+            height: 1em;
+            overflow: hidden;
+            animation: xFightBack 6s infinite ease-in-out;
+        }
+
+        .x-logo::before {
+            content: 'x';
+            color: var(--x-inner-color);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+        body.light-mode .x-logo::before {
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        }
+
+
+        .x-logo::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, #FF00FF, #00FFFF, #FFFF00); /* Retained as is, but effectively hidden by opacity: 0; */
+            opacity: 0;
+            z-index: 1;
+            transition: opacity 0.5s ease-out;
+        }
+
+        /* xFightBack already uses filter: grayscale(1) so it will render grayscale naturally */
+        @keyframes xFightBack {
+            0%, 100% { opacity: 1; filter: grayscale(0); }
+            20% { opacity: 1; filter: grayscale(1); }
+            25% { opacity: 0.5; filter: grayscale(0); }
+            30% { opacity: 1; filter: grayscale(1); }
+            70% { opacity: 1; filter: grayscale(1); }
+            75% { opacity: 0.5; filter: grayscale(0); }
+            80% { opacity: 1; filter: grayscale(1); }
+        }
+        body.light-mode .x-logo {
+            animation: xFightBackLight 6s infinite ease-in-out;
+        }
+        @keyframes xFightBackLight {
+            0%, 100% { opacity: 1; filter: grayscale(0); }
+            20% { opacity: 1; filter: grayscale(1); }
+            25% { opacity: 0.5; filter: grayscale(0); }
+            30% { opacity: 1; filter: grayscale(1); }
+            70% { opacity: 1; filter: grayscale(1); }
+            75% { opacity: 0.5; filter: grayscale(0); }
+            80% { opacity: 1; filter: grayscale(1); }
+        }
+
+
+        /* --- Dance Subtitle Styling --- */
+        .subtitle {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1.5em;
+            margin-top: -30px;
+            letter-spacing: 0.1em;
+            color: var(--text-color);
+            white-space: nowrap;
+        }
+
+        .subtitle span {
+            opacity: 0;
+            animation: revealLetter 0.5s forwards;
+            animation-timing-function: ease-out;
+            transition: color 0.5s ease;
+        }
+        /* Delay each letter's animation */
+        .subtitle span:nth-child(1) { animation-delay: 0.5s; }
+        .subtitle span:nth-child(2) { animation-delay: 0.6s; }
+        .subtitle span:nth-child(3) { animation-delay: 0.7s; }
+        .subtitle span:nth-child(4) { animation-delay: 0.8s; }
+        .subtitle span:nth-child(5) { animation-delay: 0.9s; }
+
+        @keyframes revealLetter {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Terminal Content Area Styling --- */
+        .terminal-output {
+            background-color: var(--bg-color);
+            border: 1px solid var(--terminal-border);
+            padding: 25px;
+            margin-top: 50px;
+            min-height: 150px;
+            text-align: left;
+            font-size: 0.9em;
+            line-height: 1.6;
+            /* Updated rgba values for grayscale glow */
+            box-shadow: 0 0 15px rgba(160, 160, 160, 0.1), inset 0 0 15px rgba(160, 160, 160, 0.1);
+            overflow: hidden;
+            white-space: pre-wrap;
+            position: relative;
+            width: calc(100% - 50px);
+            transition: background-color 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
+        }
+        body.light-mode .terminal-output {
+            /* Updated rgba values for light grayscale glow */
+            box-shadow: 0 0 15px rgba(75, 75, 75, 0.1), inset 0 0 15px rgba(75, 75, 75, 0.1);
+        }
+
+        .terminal-output code {
+            display: block;
+            color: var(--text-color);
+            font-family: 'IBM Plex Mono', monospace;
+            padding-right: 1ch;
+            opacity: 0;
+            transition: color 0.5s ease;
+        }
+
+        /* Blinking cursor effect */
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 1.1em;
+            background-color: var(--text-color);
+            vertical-align: text-bottom;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            from, to { background-color: transparent; }
+            50% { background-color: var(--text-color); }
+        }
+
+        /* Blinking cursor for the prompt line specifically */
+        .prompt .cursor {
+            background-color: var(--terminal-glow);
+            box-shadow: 0 0 5px var(--terminal-glow);
+        }
+
+        /* --- Dancity Dropdown Styling --- */
+        .dancity-dropdown-container {
+            display: flex;
+            align-items: center;
+            margin-top: 20px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .dancity-dropdown {
+            background-color: var(--bg-color);
+            border: 1px solid var(--terminal-glow);
+            color: var(--terminal-glow);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1em;
+            padding: 5px 10px;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            cursor: pointer;
+            outline: none;
+            /* Updated rgba values for grayscale glow */
+            box-shadow: 0 0 5px rgba(160, 160, 160, 0.3);
+            transition: all 0.3s ease-in-out;
+            pointer-events: none;
+            position: relative;
+            z-index: 10;
+        }
+
+        .dancity-dropdown option {
+            background-color: var(--bg-color);
+            color: var(--terminal-glow);
+            padding: 5px;
+        }
+
+        .dancity-dropdown:hover,
+        .dancity-dropdown:focus {
+            box-shadow: 0 0 10px var(--terminal-glow);
+        }
+        body.light-mode .dancity-dropdown {
+            /* Updated rgba values for light grayscale glow */
+            box-shadow: 0 0 5px rgba(75, 75, 75, 0.3);
+        }
+        body.light-mode .dancity-dropdown:hover,
+        body.light-mode .dancity-dropdown:focus {
+            box-shadow: 0 0 10px rgba(75, 75, 75, 0.6);
+        }
+
+
+        /* --- Footer for blockchain hint --- */
+        .footer {
+            margin-top: 40px;
+            font-size: 0.7em;
+            color: rgba(240, 240, 240, 0.5);
+            letter-spacing: 0.05em;
+            opacity: 0;
+            animation: fadeIn 1s forwards;
+            animation-delay: 5s;
+            transition: color 0.5s ease;
+        }
+        body.light-mode .footer {
+            color: rgba(51, 51, 51, 0.5);
+        }
+
+        .footer span {
+            color: var(--terminal-glow);
+            transition: color 0.5s ease;
+        }
+
+        /* --- Mode Toggle --- */
+        .mode-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 0.8em;
+            color: var(--text-color);
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s ease;
+        }
+        .mode-toggle:hover {
+            color: var(--terminal-text-hover);
+        }
+
+        /* General Fade-In Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .x-logo {
+                font-size: 7em;
+            }
+            .subtitle {
+                font-size: 1.2em;
+                margin-top: -20px;
+            }
+            .terminal-output {
+                font-size: 0.8em;
+                padding: 15px;
+                min-height: 120px;
+            }
+            .dancity-dropdown-container {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .dancity-dropdown {
+                width: 100%;
+                margin-top: 10px;
+                margin-left: 0;
+            }
+            .mode-toggle {
+                top: 10px;
+                right: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="mode-toggle" id="mode-toggle">[MODE: GRAYSCALE DARK]</div> <!-- Updated text here -->
+    <div class="container">
+        <div class="x-logo"></div>
+        <div class="subtitle" id="subtitle-animation">
+            <span>D</span><span>A</span><span>N</span><span>C</span><span>E</span>
+        </div>
+
+        <div class="terminal-output" id="terminal-output">
+            <!-- Filler text lines, will be typed by JS -->
+            <code id="line1">> Initializing // secure connection established.<br></code>
+            <code id="line2">> Status: Online. Operational mode: Purist.<br><br></code>
+            <code id="line3">> Welcome, initiate.<br></code>
+            <code id="line4">> This is a nexus where utility facilitates pure passion.<br></code>
+            <code id="line5">> Discover: where is the dance?<br></code>
+            
+            <div class="dancity-dropdown-container" id="dancity-dropdown-container">
+                <select class="dancity-dropdown" id="dancity-dropdown">
+                    <option value="">-- select a dancity --</option>
+                    <option value="amsterdam">Amsterdam</option>
+                    <option value="barcelona">Barcelona</option>
+                    <option value="berlin">Berlin</option>
+                    <option value="london">London</option>
+                    <option value="los-angeles">Los Angeles</option>
+                    <option value="madrid">Madrid</option>
+                    <option value="melbourne">Melbourne</option>
+                    <option value="mexico-city">Mexico City</option>
+                    <option value="montreal">Montreal</option>
+                    <option value="new-york">New York</option>
+                    <option value="paris">Paris</option>
+                    <option value="rome">Rome</option>
+                    <option value="sao-paulo">São Paulo</option>
+                    <option value="sydney">Sydney</option>
+                    <option value="tokyo">Tokyo</option>
+                    <option value="toronto">Toronto</option>
+                    <option value="vancouver">Vancouver</option>
+                </select>
+            </div>
+            <!-- Cursor will blink after dropdown disappears or during text typing -->
+            <span class="cursor prompt" id="terminal-cursor"></span>
+        </div>
+        <div class="footer">
+            [x.dance] - built on <span>radical</span> simplicity & <span>distributed</span> passion.
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const terminalOutput = document.getElementById('terminal-output');
+            const subtitleAnimation = document.getElementById('subtitle-animation');
+            const terminalCursor = document.getElementById('terminal-cursor');
+            const dancityDropdownContainer = document.getElementById('dancity-dropdown-container');
+            const dancityDropdown = document.getElementById('dancity-dropdown');
+            const modeToggle = document.getElementById('mode-toggle');
+            const body = document.body;
+
+            const fillerLines = [
+                document.getElementById('line1'),
+                document.getElementById('line2'),
+                document.getElementById('line3'),
+                document.getElementById('line4'),
+                document.getElementById('line5')
+            ];
+
+            const DANCITIES_DROPDOWN_LOOP_INTERVAL = 8000;
+            const DROPDOWN_APPEAR_DELAY_AFTER_TEXT = 1000;
+            const DROPDOWN_DISPLAY_DURATION = 5000;
+
+            let typingTimeout;
+            let dropdownLoopTimeout;
+
+            // --- Grayscale Mode Toggle Logic ---
+            const THEME_STORAGE_KEY = 'x.dance-grayscale-theme-preference'; // Updated storage key
+
+            function setPreferredTheme(theme) {
+                if (theme === 'light-grayscale') { // Now explicitly "light-grayscale"
+                    body.classList.add('light-mode');
+                    modeToggle.textContent = '[MODE: GRAYSCALE LIGHT]'; // Updated text
+                    localStorage.setItem(THEME_STORAGE_KEY, 'light-grayscale');
+                } else { // This branch is now the "dark-grayscale" default
+                    body.classList.remove('light-mode');
+                    modeToggle.textContent = '[MODE: GRAYSCALE DARK]'; // Updated text
+                    localStorage.removeItem(THEME_STORAGE_KEY); // Or set to 'dark-grayscale' for clarity if preferred
+                }
+            }
+
+            modeToggle.addEventListener('click', () => {
+                if (body.classList.contains('light-mode')) {
+                    setPreferredTheme('dark-grayscale'); // Toggle to the dark grayscale mode
+                } else {
+                    setPreferredTheme('light-grayscale'); // Toggle to the light grayscale mode
+                }
+            });
+
+            // Load saved theme preference on initial load
+            const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+            if (savedTheme === 'light-grayscale') {
+                setPreferredTheme('light-grayscale');
+            } else {
+                setPreferredTheme('dark-grayscale'); // Default to dark grayscale
+            }
+
+            // --- Terminal Typing Animation Logic ---
+            let currentLineIndex = 0;
+            let currentCharIndex = 0;
+            const typingSpeed = 30; // ms per char
+            const lineBreakDelay = 500; // ms between lines
+
+            function typeNextChar() {
+                if (currentLineIndex < fillerLines.length) {
+                    const currentLineElement = fillerLines[currentLineIndex];
+                    const fullText = currentLineElement.textContent.trim();
+                    
+                    if (currentCharIndex < fullText.length) {
+                        currentLineElement.textContent = fullText.substring(0, currentCharIndex + 1);
+                        currentLineElement.style.opacity = '1';
+                        currentCharIndex++;
+                        typingTimeout = setTimeout(typeNextChar, typingSpeed);
+                    } else {
+                        currentLineIndex++;
+                        currentCharIndex = 0;
+                        if (currentLineIndex < fillerLines.length) {
+                            typingTimeout = setTimeout(typeNextChar, lineBreakDelay);
+                        } else {
+                            startDropdownLoop();
+                        }
+                    }
+                }
+            }
+
+            // Initially hide filler lines from HTML, they will be typed by JS
+            fillerLines.forEach(line => {
+                line.textContent = '';
+                line.style.opacity = '0';
+            });
+
+            // --- Dancity Dropdown Loop Logic ---
+            function startDropdownLoop() {
+                clearTimeout(dropdownLoopTimeout);
+
+                terminalCursor.style.opacity = '1';
+                terminalCursor.style.display = 'inline-block';
+
+                setTimeout(() => {
+                    dancityDropdownContainer.style.opacity = '1';
+                    dancityDropdown.style.pointerEvents = 'auto';
+                    terminalCursor.style.opacity = '0';
+                }, DROPDOWN_APPEAR_DELAY_AFTER_TEXT);
+
+                setTimeout(() => {
+                    dancityDropdownContainer.style.opacity = '0';
+                    dancityDropdown.style.pointerEvents = 'none';
+                    dancityDropdown.value = '';
+                    terminalCursor.style.opacity = '1';
+                    dropdownLoopTimeout = setTimeout(startDropdownLoop, DANCITIES_DROPDOWN_LOOP_INTERVAL - DROPDOWN_APPEAR_DELAY_AFTER_TEXT - DROPDOWN_DISPLAY_DURATION);
+                }, DROPDOWN_APPEAR_DELAY_AFTER_TEXT + DROPDOWN_DISPLAY_DURATION);
+            }
+
+            // --- Initial Page Load Sequence ---
+            const subtitleSpans = subtitleAnimation.querySelectorAll('span');
+            const lastSubtitleDelay = parseFloat(subtitleSpans[subtitleSpans.length - 1].style.animationDelay || '0');
+            const subtitleAnimationDuration = parseFloat(getComputedStyle(subtitleSpans[0]).animationDuration || '0');
+            const totalSubtitleRevealTime = (lastSubtitleDelay + subtitleAnimationDuration) * 1000;
+
+            setTimeout(() => {
+                typeNextChar();
+            }, totalSubtitleRevealTime + 500);
+
+            // --- Dropdown Change Handler ---
+            dancityDropdown.addEventListener('change', function() {
+                const selectedDancity = this.value; 
+
+                if (selectedDancity) {
+                    clearTimeout(typingTimeout);
+                    clearTimeout(dropdownLoopTimeout);
+                    terminalCursor.style.display = 'none';
+                    dancityDropdownContainer.style.opacity = '1';
+                    dancityDropdown.style.pointerEvents = 'none';
+
+                    window.location.href = `${selectedDancity}.html`;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

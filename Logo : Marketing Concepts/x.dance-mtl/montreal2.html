@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x.dance // MONTREAL</title>
+    <meta name="description" content="x.dance: Operational Protocol for Montreal Dance Access. Your comprehensive resource to locate 'the dance' in Montreal.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50%25' y='50%25' font-size='80' text-anchor='middle' dominant-baseline='central'%3Ex%3C/text%3E%3C/svg%3E" type="image/svg+xml">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;700&display=swap');
+
+        :root {
+            --bg-color: #000000;
+            --text-color: #F0F0F0;
+            --terminal-border: #1a1a1a;
+            --terminal-glow: #00ff66; /* Subtle green for terminal elements */
+            --x-inner-color: #FFFFFF;
+            --x-border-color: #000000;
+            --selected-day-bg: rgba(0, 255, 102, 0.2); /* Highlight for selected day */
+            --today-mark-color: yellow; /* Mark for "today" specifically */
+            --tab-hover-bg: rgba(0, 255, 102, 0.1);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'IBM Plex Mono', monospace; /* Primary font for terminal feel */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* --- Fixed Header Section --- */
+        .header-fixed {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: var(--bg-color);
+            z-index: 1000; /* Ensure it stays on top */
+            padding: 20px 0; /* Vertical padding */
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5); /* Subtle shadow for fixed header */
+            text-align: center;
+            border-bottom: 1px solid var(--terminal-border); /* Subtle separator */
+            box-sizing: border-box; /* Include padding in width */
+            
+            /* Apply the industrial glow ONLY to this header section */
+            border: 1px solid var(--terminal-border); /* Main border */
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.1), inset 0 0 10px rgba(0, 255, 102, 0.1);
+            animation: industrialGlow 5s infinite alternate ease-in-out;
+        }
+
+        @keyframes industrialGlow {
+            0% { box-shadow: 0 0 10px rgba(0, 255, 102, 0.1), inset 0 0 10px rgba(0, 255, 102, 0.1); }
+            50% { box-shadow: 0 0 15px rgba(0, 255, 102, 0.2), inset 0 0 15px rgba(0, 255, 102, 0.2); }
+            100% { box-shadow: 0 0 10px rgba(0, 255, 102, 0.1), inset 0 0 10px rgba(0, 255, 102, 0.1); }
+        }
+
+        /* --- X Logo Styling (Copied from index.html) --- */
+        .x-logo {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 5em; /* Slightly smaller for header, but still prominent */
+            font-weight: 700;
+            line-height: 0.8;
+            position: relative;
+            display: inline-block;
+            text-align: center;
+            width: 1em;
+            height: 1em;
+            overflow: hidden;
+            animation: xFightBack 6s infinite ease-in-out;
+            margin-bottom: 10px; /* Space below logo */
+        }
+
+        .x-logo::before {
+            content: 'x';
+            color: var(--x-inner-color);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        .x-logo::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, #FF00FF, #00FFFF, #FFFF00);
+            opacity: 0;
+            z-index: 1;
+            transition: opacity 0.5s ease-out;
+        }
+
+        @keyframes xFightBack {
+            0%, 100% { opacity: 1; filter: grayscale(0); }
+            20% { opacity: 1; filter: grayscale(1); }
+            25% { opacity: 0.5; filter: grayscale(0); }
+            30% { opacity: 1; filter: grayscale(1); }
+            70% { opacity: 1; filter: grayscale(1); }
+            75% { opacity: 0.5; filter: grayscale(0); }
+            80% { opacity: 1; filter: grayscale(1); }
+        }
+
+        /* --- Page Title / Subtitle --- */
+        .page-title {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1.8em;
+            color: var(--text-color);
+            margin-bottom: 20px;
+            letter-spacing: 0.05em;
+        }
+        .page-title span { /* For the city name glow */
+            color: var(--terminal-glow);
+            text-shadow: 0 0 5px var(--terminal-glow);
+        }
+
+        /* --- Date Bar --- */
+        .date-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto;
+            max-width: 600px;
+            padding: 10px 0;
+            font-size: 0.9em;
+        }
+
+        .date-bar .day-option {
+            padding: 8px 15px;
+            margin: 0 5px;
+            border: 1px solid var(--terminal-border);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            color: var(--text-color);
+            position: relative; /* For the 'today' mark */
+            user-select: none; /* Prevent text selection */
+        }
+
+        .date-bar .day-option:hover {
+            background-color: var(--selected-day-bg);
+            box-shadow: 0 0 8px rgba(0, 255, 102, 0.4);
+            color: var(--terminal-glow);
+        }
+
+        .date-bar .day-option.selected {
+            background-color: var(--selected-day-bg);
+            border-color: var(--terminal-glow);
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.6);
+            color: var(--terminal-glow);
+        }
+
+        .date-bar .day-option.is-today::after {
+            content: '*'; /* A simple mark for 'today' */
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 0.8em;
+            color: var(--today-mark-color);
+        }
+
+        .date-bar .date-dropdown {
+            background-color: var(--bg-color);
+            border: 1px solid var(--terminal-glow);
+            color: var(--terminal-glow);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1em;
+            padding: 5px 10px;
+            margin-left: 20px; /* Space from day options */
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            cursor: pointer;
+            outline: none;
+            box-shadow: 0 0 5px rgba(0, 255, 102, 0.3);
+            transition: all 0.3s ease-in-out;
+        }
+
+        .date-bar .date-dropdown option {
+            background-color: var(--bg-color);
+            color: var(--terminal-glow);
+        }
+
+        .date-bar .date-dropdown:hover,
+        .date-bar .date-dropdown:focus {
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.6);
+        }
+
+        /* --- Sort/Filter Bar --- */
+        .sort-filter-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px auto 0 auto; /* Space from date bar, centered */
+            max-width: 600px;
+            border-top: 1px dashed var(--terminal-border); /* Divider from date bar */
+            padding-top: 15px;
+            font-size: 0.9em;
+        }
+
+        .sort-filter-bar .tab-option {
+            padding: 8px 15px;
+            margin: 0 5px;
+            border: 1px solid transparent; /* No border by default */
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            color: var(--text-color);
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 5px; /* Space between text and arrow */
+        }
+
+        .sort-filter-bar .tab-option:hover {
+            background-color: var(--tab-hover-bg);
+            color: var(--terminal-glow);
+        }
+
+        .sort-filter-bar .tab-option.active {
+            border-color: var(--terminal-glow);
+            box-shadow: 0 0 8px rgba(0, 255, 102, 0.4);
+            color: var(--terminal-glow);
+        }
+
+        .sort-filter-bar .tab-option .arrow {
+            font-family: 'IBM Plex Mono', monospace; /* Ensure monospace arrow */
+            font-size: 0.8em;
+            line-height: 1;
+            width: 1em; /* Fixed width for arrow */
+            text-align: center;
+            color: var(--terminal-glow);
+        }
+
+        /* --- Main Content Area --- */
+        .main-content {
+            margin-top: 290px; /* Adjust this value to be below your fixed header */
+            padding: 40px 20px;
+            width: 90%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            box-sizing: border-box;
+            color: var(--text-color);
+            font-size: 0.9em;
+            line-height: 1.8; /* More space for readability */
+        }
+
+        .section-heading {
+            font-size: 1.4em;
+            color: var(--terminal-glow);
+            text-shadow: 0 0 5px var(--terminal-glow);
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed var(--terminal-border); /* Subtle divider */
+            padding-bottom: 5px;
+            letter-spacing: 0.03em;
+        }
+
+        .event-listing {
+            margin-bottom: 25px; /* Space between events */
+            padding: 10px 0;
+            border-bottom: 1px dotted rgba(240, 240, 240, 0.1); /* Very subtle separator */
+        }
+
+        .event-listing:last-child {
+            border-bottom: none; /* No border for the last one */
+        }
+
+        .event-listing .time {
+            color: var(--terminal-glow);
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .event-listing .type, .event-listing .location {
+            color: var(--text-color);
+        }
+        
+        .event-listing .status {
+            color: var(--today-mark-color); /* Use yellow for active status */
+            margin-left: 10px;
+            font-weight: bold;
+        }
+
+        .event-listing .details-link {
+            color: var(--terminal-glow);
+            text-decoration: none;
+            margin-left: 15px;
+            white-space: nowrap; /* Keep link on one line */
+        }
+        .event-listing .details-link:hover {
+            text-decoration: underline;
+        }
+
+        /* For grouped sections */
+        .group-heading {
+            font-size: 1.2em;
+            color: var(--terminal-glow);
+            margin-top: 40px;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(0, 255, 102, 0.3); /* Stronger divider for groups */
+        }
+
+
+        /* --- End of Content Marker --- */
+        .end-marker {
+            text-align: center;
+            margin-top: 80px;
+            margin-bottom: 100px; /* Space at bottom to ensure it's visible */
+            color: rgba(240, 240, 240, 0.4);
+            font-size: 0.8em;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .x-logo {
+                font-size: 3.5em; /* Smaller on mobile */
+            }
+            .page-title {
+                font-size: 1.4em;
+            }
+            .date-bar {
+                flex-wrap: wrap; /* Allow wrapping on smaller screens */
+                justify-content: center;
+                font-size: 0.8em;
+            }
+            .date-bar .day-option {
+                padding: 6px 10px;
+                margin: 5px;
+            }
+            .date-bar .date-dropdown {
+                margin-left: 0;
+                margin-top: 10px;
+                width: 80%;
+            }
+            .sort-filter-bar {
+                flex-wrap: wrap;
+                justify-content: center;
+                font-size: 0.8em;
+                margin-top: 10px;
+            }
+            .sort-filter-bar .tab-option {
+                padding: 6px 10px;
+                margin: 5px;
+            }
+            .main-content {
+                margin-top: 260px; /* Adjusted for smaller header content */
+                padding: 20px 10px;
+                font-size: 0.8em;
+            }
+            .section-heading {
+                font-size: 1.2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header-fixed">
+        <div class="x-logo"></div>
+        <h1 class="page-title">x.dance // <span>MONTREAL</span></h1>
+        <div class="date-bar" id="date-bar">
+            <!-- Day options will be generated here by JavaScript -->
+        </div>
+        <div class="sort-filter-bar" id="sort-filter-bar">
+            <div class="tab-option" data-sort-key="time" data-sort-state="asc">TIME <span class="arrow">▲</span></div>
+            <div class="tab-option" data-sort-key="type" data-sort-state="neutral">GENRE <span class="arrow"></span></div>
+            <div class="tab-option" data-sort-key="location" data-sort-state="neutral">VENUE <span class="arrow"></span></div>
+            <div class="tab-option" data-sort-key="status" data-sort-state="neutral">STATUS <span class="arrow"></span></div>
+        </div>
+    </div>
+
+    <div class="main-content" id="main-content">
+        <h2 class="section-heading" id="current-date-heading">DANCES TODAY</h2>
+        <div class="events-list" id="events-list">
+            <!-- Event listings will be generated/manipulated by JavaScript -->
+        </div>
+        <div class="end-marker">
+            &lt;END OF DANCE LOG&gt;
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dateBar = document.getElementById('date-bar');
+            const sortFilterBar = document.getElementById('sort-filter-bar');
+            const eventsListContainer = document.getElementById('events-list');
+            const currentDateHeading = document.getElementById('current-date-heading');
+
+            const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+            const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+            let today = new Date(); // Represents the actual current day
+            today.setHours(0, 0, 0, 0); // Normalize to start of day
+            let currentSelectedDate = new Date(today); // Represents the date currently displayed
+            currentSelectedDate.setHours(0, 0, 0, 0); // Normalize
+
+            // Current sort/group state
+            let currentSortKey = 'time';
+            let currentSortState = 'asc'; // 'asc', 'desc', 'neutral'
+
+            // --- MOCK DATA FOR EVENTS ---
+            // In a real application, this would come from an API/database for the selected date
+            const allMockEvents = [
+                // Events for Today (Saturday, Oct 26, 2024 - if run today)
+                // Adjust event dates to match actual 'today' for testing realism
+                { time: '22:00', type: 'TECHNO_INDUSTRIAL', location: 'Concrete Factory', status: 'ACTIVE', date: '2024-10-26' },
+                { time: '23:30', type: 'ACID_HOUSE', location: 'Underground Warehouse X', status: 'ACTIVE', date: '2024-10-26' },
+                { time: '21:00', type: 'DEEP_MINIMAL', location: 'The Sound Chamber', status: 'ENDED', date: '2024-10-26' },
+                { time: '00:00', type: 'BREAKBEAT_NIGHT', location: 'Lost Alley Club', status: 'CANCELLED', date: '2024-10-26' },
+                { time: '20:00', type: 'HOUSE_GROOVE', location: 'Rooftop Garden', status: 'SOLD_OUT', date: '2024-10-26' },
+                { time: '18:00', type: 'TECHNO_INDUSTRIAL', location: 'Old Power Plant', status: 'ACTIVE', date: '2024-10-26' },
+                { time: '23:00', type: 'ACID_HOUSE', location: 'The Boiler Room', status: 'ACTIVE', date: '2024-10-26' },
+                { time: '19:00', type: 'HOUSE_GROOVE', location: 'Hidden Loft', status: 'ENDED', date: '2024-10-26' },
+
+                // Events for Tomorrow (Sunday, Oct 27, 2024)
+                { time: '14:00', type: 'AMBIENT_SESSIONS', location: 'Botanical Dome', status: 'ACTIVE', date: '2024-10-27' },
+                { time: '22:00', type: 'DISCO_FUNK', location: 'Glitter Ball Club', status: 'ACTIVE', date: '2024-10-27' },
+
+                // Events for a future Friday (Nov 1, 2024 - assuming today is Saturday Oct 26)
+                { time: '20:00', type: 'TRANCE_CLASSICS', location: 'Cosmic Arena', status: 'ACTIVE', date: '2024-11-01' },
+                { time: '23:00', type: 'TECHNO_INDUSTRIAL', location: 'Old Power Plant', status: 'ACTIVE', date: '2024-11-01' },
+
+                // Events for a future Saturday (Nov 2, 2024)
+                { time: '22:00', type: 'EXPERIMENTAL_SOUND', location: 'The Lab', status: 'ACTIVE', date: '2024-11-02' },
+                { time: '23:00', type: 'HOUSE_GROOVE', location: 'The Terrace', status: 'ACTIVE', date: '2024-11-02' },
+
+                // Events for a future Sunday (Nov 3, 2024)
+                { time: '15:00', type: 'DRUM_AND_BASS', location: 'The Bassment', status: 'ACTIVE', date: '2024-11-03' },
+            ];
+            // Adjust mock event dates to align with "today" for dynamic testing
+            // This is a simple adjustment for demonstration, you'd load actual data for specific dates
+            const currentYear = today.getFullYear();
+            const currentMonth = today.getMonth();
+            const currentDay = today.getDate();
+
+            allMockEvents.forEach(event => {
+                const eventDate = new Date(event.date);
+                eventDate.setFullYear(currentYear, currentMonth, currentDay + (eventDate.getDate() - new Date('2024-10-26').getDate())); // Adjust day relative to mock current date
+                event.date = eventDate.toISOString().split('T')[0]; // Update string date
+                // For simplified time sorting, convert "HH:MM" to sortable number
+                const [hours, minutes] = event.time.split(':').map(Number);
+                event.timeSortable = hours * 60 + minutes;
+            });
+
+
+            function formatDateToDDMM(date) {
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = monthNames[date.getMonth()];
+                return `${day} ${month}`;
+            }
+
+            function getRelativeDay(baseDate, targetDayName) {
+                const date = new Date(baseDate);
+                date.setHours(0, 0, 0, 0); // Normalize to start of day
+                let dayCounter = 0;
+                while (daysOfWeek[date.getDay()] !== targetDayName && dayCounter < 7) {
+                    date.setDate(date.getDate() + 1);
+                    dayCounter++;
+                }
+                if (dayCounter >= 7 && daysOfWeek[date.getDay()] !== targetDayName) {
+                    // Fallback for cases where targetDayName might not be found in 7 days (shouldn't happen with correct input)
+                    return null;
+                }
+                return date;
+            }
+
+            function updateDateBar() {
+                dateBar.innerHTML = ''; // Clear existing days
+
+                const displayDays = [];
+                const actualToday = new Date(today); // Use a clone to not modify the global 'today'
+                actualToday.setHours(0,0,0,0);
+
+                // Add "TODAY" option (always the first)
+                displayDays.push({ label: 'TODAY', date: new Date(actualToday) });
+
+                // Find next Friday, Saturday, Sunday relative to today
+                let pointerDate = new Date(actualToday);
+                for (const dayName of ['FRI', 'SAT', 'SUN']) {
+                    const nextTargetDay = getRelativeDay(pointerDate, dayName);
+                    if (nextTargetDay && nextTargetDay.getTime() >= actualToday.getTime()) { // Ensure it's not a past day
+                        displayDays.push({ label: dayName, date: nextTargetDay });
+                        pointerDate = nextTargetDay; // Advance pointer for the next search
+                    } else if (!nextTargetDay) { // If getRelativeDay returned null, stop
+                        break;
+                    }
+                }
+                
+                // Ensure only 4 unique days are shown if any of the F/S/S are the same as TODAY or each other
+                const uniqueDisplayDays = [];
+                const seenDates = new Set();
+                displayDays.forEach(dayInfo => {
+                    const dateISO = dayInfo.date.toISOString().split('T')[0];
+                    if (!seenDates.has(dateISO)) {
+                        uniqueDisplayDays.push(dayInfo);
+                        seenDates.add(dateISO);
+                    }
+                });
+
+
+                // Add the day options to the DOM
+                uniqueDisplayDays.forEach(dayInfo => {
+                    const dayElement = document.createElement('div');
+                    dayElement.className = 'day-option';
+                    
+                    const dayLabel = dayInfo.label;
+                    const displayDate = formatDateToDDMM(dayInfo.date);
+                    
+                    dayElement.textContent = `${dayLabel} (${displayDate})`;
+                    dayElement.dataset.fullDate = dayInfo.date.toISOString().split('T')[0]; // Store full date for filtering
+
+                    if (currentSelectedDate.toDateString() === dayInfo.date.toDateString()) {
+                        dayElement.classList.add('selected');
+                    }
+
+                    if (actualToday.toDateString() === dayInfo.date.toDateString()) {
+                        dayElement.classList.add('is-today');
+                    }
+
+                    dayElement.addEventListener('click', () => {
+                        currentSelectedDate = new Date(dayInfo.date);
+                        currentSelectedDate.setHours(0,0,0,0);
+                        updateDateBar();
+                        updateEventsDisplay(); // Update events for the newly selected date
+                    });
+                    dateBar.appendChild(dayElement);
+                });
+
+                // Create the future dates dropdown
+                const futureDropdown = document.createElement('select');
+                futureDropdown.className = 'date-dropdown';
+                futureDropdown.id = 'future-date-dropdown';
+                let defaultOption = document.createElement('option');
+                defaultOption.value = "";
+                defaultOption.textContent = "Future Dates...";
+                defaultOption.disabled = true;
+                defaultOption.selected = true;
+                futureDropdown.appendChild(defaultOption);
+
+                let futureDateCursor = new Date(today);
+                futureDateCursor.setHours(0,0,0,0);
+
+                for (let i = 0; i < 60; i++) { // Next 60 days
+                    futureDateCursor.setDate(futureDateCursor.getDate() + 1); // Increment day
+                    const option = document.createElement('option');
+                    const formattedOptionDate = futureDateCursor.toISOString().split('T')[0];
+                    option.value = formattedOptionDate;
+                    option.textContent = `${daysOfWeek[futureDateCursor.getDay()]} (${formatDateToDDMM(futureDateCursor)})`;
+                    futureDropdown.appendChild(option);
+                }
+
+                futureDropdown.addEventListener('change', function() {
+                    const selectedDateValue = this.value;
+                    if (selectedDateValue) {
+                        currentSelectedDate = new Date(selectedDateValue);
+                        currentSelectedDate.setHours(0,0,0,0);
+                        updateDateBar(); // Re-render date bar to highlight new selection
+                        updateEventsDisplay(); // Update event listings
+                        this.value = ""; // Reset dropdown to default after selection
+                    }
+                });
+                dateBar.appendChild(futureDropdown);
+            }
+
+            function updateEventsDisplay() {
+                // Filter events based on currentSelectedDate
+                const filteredEvents = allMockEvents.filter(event => 
+                    new Date(event.date).toDateString() === currentSelectedDate.toDateString()
+                );
+
+                // Update heading text
+                let headingText;
+                if (currentSelectedDate.toDateString() === today.toDateString()) {
+                    headingText = 'DANCES TODAY';
+                } else {
+                    const dayLabel = daysOfWeek[currentSelectedDate.getDay()];
+                    const displayDate = formatDateToDDMM(currentSelectedDate);
+                    headingText = `DANCES for ${dayLabel} (${displayDate})`;
+                }
+                currentDateHeading.textContent = headingText;
+
+                // Sort and group events based on currentSortKey and currentSortState
+                renderEvents(filteredEvents);
+            }
+
+            function renderEvents(eventsToRender) {
+                eventsListContainer.innerHTML = ''; // Clear current listings
+
+                if (currentSortState === 'neutral' || currentSortKey === 'time') {
+                    // Default or time-based sort: just sort by time
+                    eventsToRender.sort((a, b) => a.timeSortable - b.timeSortable);
+                    eventsToRender.forEach(event => eventsListContainer.appendChild(createEventElement(event)));
+                } else {
+                    // Grouping logic for 'type', 'location', 'status'
+                    const groupedEvents = {};
+                    eventsToRender.forEach(event => {
+                        const groupKey = event[currentSortKey];
+                        if (!groupedEvents[groupKey]) {
+                            groupedEvents[groupKey] = [];
+                        }
+                        groupedEvents[groupKey].push(event);
+                    });
+
+                    // Sort group keys alphabetically
+                    const sortedGroupKeys = Object.keys(groupedEvents).sort();
+
+                    sortedGroupKeys.forEach(groupKey => {
+                        const groupHeading = document.createElement('h3');
+                        groupHeading.className = 'group-heading';
+                        groupHeading.textContent = `${currentSortKey.toUpperCase()}: ${groupKey.toUpperCase()}`;
+                        eventsListContainer.appendChild(groupHeading);
+
+                        // Sort events within each group by time
+                        groupedEvents[groupKey].sort((a, b) => a.timeSortable - b.timeSortable);
+                        groupedEvents[groupKey].forEach(event => eventsListContainer.appendChild(createEventElement(event)));
+                    });
+                }
+                
+                if (eventsToRender.length === 0) {
+                    const noEventsMessage = document.createElement('div');
+                    noEventsMessage.textContent = '> No dances found for this date. Explore other dates or contribute to the scene.';
+                    noEventsMessage.style.marginTop = '20px';
+                    noEventsMessage.style.color = 'var(--text-color)';
+                    eventsListContainer.appendChild(noEventsMessage);
+                }
+            }
+
+            function createEventElement(event) {
+                const eventDiv = document.createElement('div');
+                eventDiv.className = 'event-listing';
+                eventDiv.innerHTML = `
+                    <span class="time">${event.time}</span>
+                    <span class="type">[${event.type}]</span>
+                    <span class="location">${event.location}</span>
+                    <span class="status">[${event.status}]</span>
+                    <a href="#" class="details-link">[PROTOCOL_DETAILS]</a>
+                `;
+                return eventDiv;
+            }
+
+            // --- Sort/Filter Bar Logic ---
+            sortFilterBar.querySelectorAll('.tab-option').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const key = tab.dataset.sortKey; // 'time', 'type', 'location', 'status'
+                    let state = tab.dataset.sortState; // 'asc', 'desc', 'neutral'
+
+                    // Determine next state
+                    if (key === 'time') {
+                        if (state === 'asc') state = 'desc';
+                        else if (state === 'desc') state = 'neutral';
+                        else state = 'asc';
+                    } else { // For type, location, status (grouping)
+                        if (state === 'neutral') state = 'group'; // First click groups
+                        else state = 'neutral'; // Second click neutralizes
+                    }
+
+                    // Reset all tabs to neutral first, unless it's the current one
+                    sortFilterBar.querySelectorAll('.tab-option').forEach(otherTab => {
+                        if (otherTab !== tab) {
+                            otherTab.dataset.sortState = 'neutral';
+                            otherTab.classList.remove('active');
+                            otherTab.querySelector('.arrow').textContent = '';
+                        }
+                    });
+
+                    // Set active state for clicked tab
+                    tab.dataset.sortState = state;
+                    tab.classList.toggle('active', state !== 'neutral');
+
+                    // Update arrow
+                    const arrowSpan = tab.querySelector('.arrow');
+                    if (key === 'time') {
+                        arrowSpan.textContent = state === 'asc' ? '▲' : (state === 'desc' ? '▼' : '');
+                    } else { // Grouping tabs just show an indicator when active
+                        arrowSpan.textContent = state === 'group' ? '■' : ''; // Solid square for grouping
+                    }
+                    
+                    // Update global sort variables
+                    currentSortKey = key;
+                    currentSortState = state;
+
+                    // Re-render events
+                    updateEventsDisplay();
+                });
+            });
+
+            // Initial sort state setup for TIME
+            const initialTimeTab = sortFilterBar.querySelector('.tab-option[data-sort-key="time"]');
+            initialTimeTab.classList.add('active'); // Visually activate
+            initialTimeTab.querySelector('.arrow').textContent = '▲'; // Set initial arrow
+
+            // Initial rendering
+            updateDateBar();
+            updateEventsDisplay();
+        });
+    </script>
+</body>
+</html>

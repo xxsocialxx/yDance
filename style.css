@@ -919,3 +919,151 @@ body.light-mode .back-button:hover {
 body * {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
+
+/* ========================================
+   DJ PROFILE - Terminal Style
+   ======================================== */
+.dj-profile-terminal {
+    padding: 20px 0;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.dj-profile-header-terminal {
+    border-bottom: 1px solid var(--border-primary);
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+}
+
+.dj-profile-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 0 0 10px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.dj-profile-url {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.url-label {
+    color: var(--text-muted);
+}
+
+.url-slug {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.dj-profile-section {
+    margin-bottom: 30px;
+    border-bottom: 1px dotted var(--border-primary);
+    padding-bottom: 20px;
+}
+
+.section-label {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+}
+
+.section-content {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    line-height: 1.8;
+}
+
+.stat-line {
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    margin-right: 10px;
+}
+
+.reviews-link {
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.reviews-link:hover {
+    color: var(--text-primary);
+}
+
+.review-count {
+    color: var(--text-muted);
+    margin-left: 8px;
+    font-size: 0.85rem;
+}
+
+.upcoming-event {
+    margin-bottom: 12px;
+    padding: 8px 0;
+    border-bottom: 1px dotted var(--border-subtle);
+}
+
+.upcoming-event:last-child {
+    border-bottom: none;
+}
+
+.event-date {
+    color: var(--text-secondary);
+    margin-right: 15px;
+}
+
+.event-venue {
+    color: var(--text-primary);
+    margin-right: 10px;
+}
+
+.event-city {
+    color: var(--text-muted);
+    margin-right: 15px;
+}
+
+.external-link {
+    margin-bottom: 10px;
+}
+
+.external-link a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.external-link a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.dj-profile-actions {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-primary);
+}
+
+.back-button {
+    background: none;
+    border: 1px solid var(--border-primary);
+    color: var(--text-secondary);
+    padding: 10px 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.back-button:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}

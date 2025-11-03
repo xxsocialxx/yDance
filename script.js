@@ -258,6 +258,50 @@ const api = {
         }
     },
 
+    async fetchDJEditorialAttributes(djName) {
+        if (CONFIG.flags.debug) console.log('Loading editorial attributes for:', djName);
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('dj_editorial_attributes')
+                .select('*')
+                .eq('dj_name', djName)
+                .single();
+            
+            if (error && error.code !== 'PGRST116') { // PGRST116 = not found, which is ok
+                console.error('Error loading editorial attributes:', error);
+                return null;
+            }
+            
+            return data || null;
+        } catch (error) {
+            console.error('Error:', error);
+            return null;
+        }
+    },
+
+    async fetchDJReviewsAggregate(djName) {
+        if (CONFIG.flags.debug) console.log('Loading reviews aggregate for:', djName);
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('dj_reviews_aggregate')
+                .select('*')
+                .eq('dj_name', djName)
+                .single();
+            
+            if (error && error.code !== 'PGRST116') {
+                console.error('Error loading reviews:', error);
+                return null;
+            }
+            
+            return data || null;
+        } catch (error) {
+            console.error('Error:', error);
+            return null;
+        }
+    },
+
     async fetchVenues() {
         if (CONFIG.flags.debug) console.log('Loading venues from database...');
         
@@ -3125,7 +3169,7 @@ const views = {
         });
     },
 
-    renderDJProfile(profile) {
+    async renderDJProfile(profile) {
         const container = document.getElementById('dj-profile-container');
         if (!container) {
             console.error('DJ profile container not found!');
@@ -3137,53 +3181,207 @@ const views = {
             return;
         }
 
-        // Create detailed DJ profile HTML
-        container.innerHTML = `
-            <div class="dj-profile-card">
-                <div class="dj-profile-header">
-                    <h1 class="dj-profile-name">${profile.name}</h1>
-                    <p class="dj-profile-pubkey">${profile.pubkey}</p>
-                </div>
-                
-                <div class="dj-profile-content">
-                    <div class="dj-profile-about">
-                        <h3>About</h3>
-                        <p>${profile.about || 'Electronic music artist'}</p>
-                    </div>
-                    
-                    <div class="dj-profile-social">
-                        <h3>Connect</h3>
-                        <div class="social-links">
-                            ${profile.soundcloud ? `
-                                <a href="https://soundcloud.com/${profile.soundcloud}" target="_blank" class="social-link soundcloud">
-                                    SOUNDCLOUD: ${profile.soundcloud}
-                                </a>
-                            ` : ''}
-                            ${profile.instagram ? `
-                                <a href="https://instagram.com/${profile.instagram.replace('@', '')}" target="_blank" class="social-link instagram">
-                                    INSTAGRAM: ${profile.instagram}
-                                </a>
-                            ` : ''}
-                        </div>
-                    </div>
-                    
-                    <div class="dj-profile-badges">
-                        <h3>Badges</h3>
-                        <div class="badges-container">
-                            <span class="badge nostr-ready">Nostr Ready</span>
-                            <!-- Future badge system will add more badges here -->
-                        </div>
-                    </div>
-                    
-                    <div class="dj-profile-social-mentions">
-                        <h3>Recent Social Mentions</h3>
-                        ${this.renderSocialMentions(profile.name)}
-                    </div>
-                </div>
-            </div>
-        `;
+        // Load editorial attributes and reviews in parallel
+        const [editorial, reviews] = await Promise.all([
+            api.fetchDJEditorialAttributes(profile.name),
+            api.fetchDJReviewsAggregate(profile.name)
+        ]);
         
-        if (CONFIG.flags.debug) console.log('DJ profile rendered');
+        // Aggregate statistics from events
+        const stats = aggregateDJStats(profile.name);
+        
+        // Calculate user stats (Seen count, By Friends)
+        const userStats = calculateUserDJStats(profile.name, state.currentUser);
+        
+        // Generate x.dance URL
+        const xDanceSlug = generateXDanceSlug(profile.name);
+        
+        // Format date helper
+        const formatDate = (date) => {
+            if (!date) return null;
+            return date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric' 
+            });
+        };
+
+        // Build terminal-style profile
+        let html = `
+            <div class="dj-profile-terminal">
+                <div class="dj-profile-header-terminal">
+                    <h1 class="dj-profile-name">${profile.name}</h1>
+                    <div class="dj-profile-url">
+                        <span class="url-label">x.dance/</span><span class="url-slug">${xDanceSlug}</span>
+                    </div>
+                </div>
+        `;
+
+        // User stats (Seen, By Friends) - only show if > 0
+        if (userStats.seenCount > 0 || userStats.friendsCount > 0) {
+            html += `
+            <div class="dj-profile-section">
+                <div class="section-label">YOUR HISTORY</div>
+                <div class="section-content">`;
+            if (userStats.seenCount > 0) {
+                html += `<div class="stat-line"><span class="stat-label">SEEN:</span> ${userStats.seenCount}</div>`;
+            }
+            if (userStats.friendsCount > 0) {
+                html += `<div class="stat-line"><span class="stat-label">BY FRIENDS:</span> ${userStats.friendsCount}</div>`;
+            }
+            html += `</div></div>`;
+        }
+
+        // Editorial attributes
+        if (editorial) {
+            html += `
+            <div class="dj-profile-section">
+                <div class="section-label">EDITORIAL</div>
+                <div class="section-content">`;
+            
+            if (editorial.tribe) {
+                html += `<div class="stat-line"><span class="stat-label">TRIBE:</span> ${editorial.tribe}</div>`;
+            }
+            
+            if (editorial.genres && editorial.genres.length > 0) {
+                html += `<div class="stat-line"><span class="stat-label">GENRES:</span> ${editorial.genres.join(', ')}</div>`;
+            }
+            
+            if (editorial.style_tags && editorial.style_tags.length > 0) {
+                html += `<div class="stat-line"><span class="stat-label">STYLE:</span> ${editorial.style_tags.join(', ')}</div>`;
+            }
+            
+            if (editorial.editorial_rating !== null && editorial.editorial_rating !== undefined) {
+                html += `<div class="stat-line"><span class="stat-label">RATING:</span> ${editorial.editorial_rating}/5</div>`;
+            }
+            
+            if (editorial.price_range_min !== null && editorial.price_range_min !== undefined) {
+                html += `<div class="stat-line"><span class="stat-label">ASKED:</span> $${editorial.price_range_min} - $${editorial.price_range_max}</div>`;
+            }
+            
+            html += `</div></div>`;
+        }
+
+        // Reviews (clickable)
+        if (reviews && reviews.review_count > 0) {
+            html += `
+            <div class="dj-profile-section">
+                <div class="section-label">REVIEWS</div>
+                <div class="section-content">
+                    <a href="#" class="reviews-link" onclick="router.showDJReviews('${profile.name}'); return false;">
+                        ${reviews.average_rating}/5
+                    </a>
+                    <span class="review-count">(${reviews.review_count} reviews)</span>
+                </div>
+            </div>`;
+        }
+
+        // Status (only if we have stats)
+        if (stats && stats.activityStatus) {
+            html += `
+            <div class="dj-profile-section">
+                <div class="section-label">STATUS</div>
+                <div class="section-content">${stats.activityStatus}</div>
+            </div>`;
+        }
+
+        // Statistics section (only show if we have event data)
+        if (stats && stats.totalEvents > 0) {
+            html += `
+            <div class="dj-profile-section">
+                <div class="section-label">STATISTICS</div>
+                <div class="section-content">`;
+
+            if (stats.totalEvents > 0) {
+                html += `<div class="stat-line"><span class="stat-label">EVENTS:</span> ${stats.totalEvents}</div>`;
+            }
+
+            if (stats.firstAppearance) {
+                html += `<div class="stat-line"><span class="stat-label">FIRST APPEARANCE:</span> ${formatDate(stats.firstAppearance)}</div>`;
+            }
+
+            if (stats.lastAppearance) {
+                html += `<div class="stat-line"><span class="stat-label">LAST APPEARANCE:</span> ${formatDate(stats.lastAppearance)}</div>`;
+            }
+
+            if (stats.frequency) {
+                html += `<div class="stat-line"><span class="stat-label">FREQUENCY:</span> ${stats.frequency}</div>`;
+            }
+
+            html += `</div></div>`;
+        }
+
+        // Cities section (only if cities exist)
+        if (stats && stats.cities && stats.cities.length > 0) {
+            html += `
+            <div class="dj-profile-section">
+                <div class="section-label">CITIES</div>
+                <div class="section-content">
+                    ${stats.cities.map(c => `${c.city} (${c.count})`).join(' | ')}
+                </div>
+            </div>`;
+        }
+
+        // Upcoming events (only if upcoming events exist)
+        if (stats && stats.upcomingEvents && stats.upcomingEvents.length > 0) {
+            html += `
+            <div class="dj-profile-section">
+                <div class="section-label">UPCOMING</div>
+                <div class="section-content">`;
+            stats.upcomingEvents.forEach(event => {
+                html += `
+                <div class="upcoming-event">
+                    <span class="event-date">${formatDate(event.date)}</span>
+                    <span class="event-venue">${event.venue}</span>
+                    ${event.city ? `<span class="event-city">[${event.city}]</span>` : ''}
+                    <a href="#" class="details-link" onclick="router.showEventDetailsView('${event.title}'); return false;">[DETAILS]</a>
+                </div>`;
+            });
+            html += `</div></div>`;
+        }
+
+        // Venue history (only if venues exist)
+        if (stats && stats.venueHistory && stats.venueHistory.length > 0) {
+            html += `
+            <div class="dj-profile-section">
+                <div class="section-label">VENUE HISTORY</div>
+                <div class="section-content">
+                    ${stats.venueHistory.slice(0, 10).map(v => `${v.venue} (${v.count}x)`).join(' | ')}
+                </div>
+            </div>`;
+        }
+
+        // External links (only if they exist)
+        const hasLinks = profile.soundcloud || profile.instagram || profile.bandcamp || profile.website;
+        if (hasLinks) {
+            html += `
+            <div class="dj-profile-section">
+                <div class="section-label">EXTERNAL</div>
+                <div class="section-content">`;
+            if (profile.soundcloud) {
+                html += `<div class="external-link"><a href="https://soundcloud.com/${profile.soundcloud}" target="_blank">SOUNDCLOUD: ${profile.soundcloud}</a></div>`;
+            }
+            if (profile.instagram) {
+                html += `<div class="external-link"><a href="https://instagram.com/${profile.instagram.replace('@', '')}" target="_blank">INSTAGRAM: ${profile.instagram.replace('@', '')}</a></div>`;
+            }
+            if (profile.bandcamp) {
+                html += `<div class="external-link"><a href="${profile.bandcamp}" target="_blank">BANDCAMP: ${profile.bandcamp}</a></div>`;
+            }
+            if (profile.website) {
+                html += `<div class="external-link"><a href="${profile.website}" target="_blank">WEBSITE: ${profile.website}</a></div>`;
+            }
+            html += `</div></div>`;
+        }
+
+        html += `
+            <div class="dj-profile-actions">
+                <button class="back-button" onclick="router.switchTab('djs')">[BACK]</button>
+            </div>
+        </div>`;
+
+        container.innerHTML = html;
+        
+        if (CONFIG.flags.debug) console.log('DJ profile rendered with all attributes');
     },
 
     renderSocialMentions(djName) {
@@ -3673,11 +3871,11 @@ const router = {
             titleElement.textContent = `${djName} - Profile`;
         }
         
-        // Load and render the DJ profile
+        // Load and render the DJ profile (now async)
         views.showLoading('dj-profile-container');
         try {
             const profile = await api.fetchDJProfile(djName);
-            views.renderDJProfile(profile);
+            await views.renderDJProfile(profile);
         } catch (error) {
             views.showError('dj-profile-container', error.message);
         }
@@ -4639,6 +4837,167 @@ function initLocationSelection() {
     });
 }
 
+// ============================================================================
+// DJ STATS CALCULATION HELPERS
+// ============================================================================
+
+// Helper function to aggregate DJ statistics from events
+function aggregateDJStats(djName) {
+    const djEvents = state.eventsData.filter(event => {
+        // Check various possible DJ fields
+        const eventDJ = event.dj || event.organizer?.name || '';
+        return eventDJ.toLowerCase().includes(djName.toLowerCase()) ||
+               djName.toLowerCase().includes(eventDJ.toLowerCase());
+    });
+
+    if (djEvents.length === 0) {
+        return null;
+    }
+
+    // Sort events by date
+    const sortedEvents = djEvents
+        .map(e => {
+            const date = e.date || e.start;
+            return {
+                ...e,
+                dateObj: date ? new Date(date) : null
+            };
+        })
+        .filter(e => e.dateObj)
+        .sort((a, b) => a.dateObj - b.dateObj);
+
+    const now = new Date();
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const oneEightyDaysAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+
+    // Calculate stats
+    const totalEvents = sortedEvents.length;
+    const firstEvent = sortedEvents[0];
+    const lastEvent = sortedEvents[sortedEvents.length - 1];
+    const firstAppearance = firstEvent?.dateObj;
+    const lastAppearance = lastEvent?.dateObj;
+
+    // Determine activity status
+    let activityStatus = null;
+    if (lastAppearance && lastAppearance >= ninetyDaysAgo) {
+        activityStatus = 'ACTIVE';
+    } else if (lastAppearance && lastAppearance >= oneEightyDaysAgo) {
+        activityStatus = 'RECENT';
+    } else if (lastAppearance) {
+        activityStatus = `INACTIVE SINCE ${lastAppearance.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+
+    // Get upcoming events (future events)
+    const upcomingEvents = sortedEvents
+        .filter(e => e.dateObj && e.dateObj > now)
+        .slice(0, 5)
+        .map(e => ({
+            date: e.dateObj,
+            title: e.title || e.name || 'Event',
+            venue: e.venue?.name || e.location || 'TBD',
+            city: e.city || e.venue?.city || null
+        }));
+
+    // Aggregate venues
+    const venueCounts = {};
+    sortedEvents.forEach(e => {
+        const venue = e.venue?.name || e.location;
+        if (venue) {
+            venueCounts[venue] = (venueCounts[venue] || 0) + 1;
+        }
+    });
+    const venueHistory = Object.entries(venueCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([venue, count]) => ({ venue, count }));
+
+    // Aggregate cities
+    const cityCounts = {};
+    sortedEvents.forEach(e => {
+        const city = e.city || e.venue?.city;
+        if (city) {
+            cityCounts[city] = (cityCounts[city] || 0) + 1;
+        }
+    });
+    const cities = Object.entries(cityCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([city, count]) => ({ city, count }));
+
+    // Aggregate styles/genres from events
+    const styleCounts = {};
+    sortedEvents.forEach(e => {
+        const styles = e.styles || (e.genre ? [e.genre] : []);
+        styles.forEach(style => {
+            if (style) {
+                styleCounts[style] = (styleCounts[style] || 0) + 1;
+            }
+        });
+    });
+    const topStyles = Object.entries(styleCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([style, count]) => ({ style, count, percentage: Math.round((count / totalEvents) * 100) }));
+
+    // Calculate frequency (events per month in last 6 months)
+    const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+    const recentEvents = sortedEvents.filter(e => e.dateObj && e.dateObj >= sixMonthsAgo);
+    const frequency = recentEvents.length > 0 
+        ? `~${Math.round(recentEvents.length / 6 * 10) / 10} events/month (last 6 months)`
+        : null;
+
+    return {
+        totalEvents,
+        firstAppearance,
+        lastAppearance,
+        activityStatus,
+        upcomingEvents,
+        venueHistory,
+        cities,
+        topStyles,
+        frequency,
+        allEvents: sortedEvents
+    };
+}
+
+// Generate x.dance URL slug from DJ name
+function generateXDanceSlug(name) {
+    return name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+// Calculate user-specific DJ stats (Seen count, Friends count)
+function calculateUserDJStats(djName, currentUser) {
+    // Calculate "Seen" count - events user attended where this DJ played
+    // This requires user attendance tracking - for now return 0 if no user
+    let seenCount = 0;
+    let friendsCount = 0;
+    
+    if (currentUser && state.eventsData) {
+        // Filter events where DJ matches
+        const djEvents = state.eventsData.filter(event => {
+            const eventDJ = event.dj || event.organizer?.name || '';
+            return eventDJ.toLowerCase().includes(djName.toLowerCase()) ||
+                   djName.toLowerCase().includes(eventDJ.toLowerCase());
+        });
+        
+        // Check which events user attended
+        // TODO: This would require attendance tracking in your schema
+        // For now, placeholder logic - would check user_events or similar table
+        
+        // Friends count would require friends data
+        // TODO: friendsCount = calculateFriendsAttendedDJ(djName, state.friendsData);
+    }
+    
+    return {
+        seenCount,
+        friendsCount
+    };
+}
+
+// ============================================================================
+// LOCATION MANAGEMENT
+// ============================================================================
 // Location filtering function (currently disabled for testing)
 // All cities show the same general database events
 // City selection is saved in localStorage for future filtering implementation

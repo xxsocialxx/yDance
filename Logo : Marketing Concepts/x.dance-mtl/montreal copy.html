@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x.dance // MONTREAL</title>
+    <meta name="description" content="x.dance: Operational Protocol for Montreal Dance Access. Your comprehensive resource to locate 'the dance' in Montreal.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50%25' y='50%25' font-size='80' text-anchor='middle' dominant-baseline='central'%3Ex%3C/text%3E%3C/svg%3E" type="image/svg+xml">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;700&display=swap');
+
+        /* --- Grayscale Dark Mode Variables (Default) --- */
+        :root {
+            --bg-color: #000000;
+            --text-color: #F0F0F0;
+            --terminal-border: #1a1a1a;
+            --terminal-glow: #A0A0A0; /* Grayscale equivalent of green */
+            --x-inner-color: #FFFFFF;
+            --x-border-color: #000000;
+            --selected-day-bg: rgba(160, 160, 160, 0.2); /* Grayscale transparent */
+            --today-mark-color: #E0E0E0; /* Grayscale equivalent of yellow */
+            --tab-hover-bg: rgba(160, 160, 160, 0.1);
+            --header-shadow: rgba(0, 0, 0, 0.5);
+            --subtle-divider: rgba(240, 240, 240, 0.1);
+            --terminal-text-hover: #ffffff;
+        }
+
+        /* --- Grayscale Light Mode Variables --- */
+        body.light-mode {
+            --bg-color: #FFFFFF;
+            --text-color: #333333;
+            --terminal-border: #BBBBBB;
+            --terminal-glow: #4B4B4B; /* Grayscale equivalent of darker green */
+            --x-inner-color: #333333; /* Darker X for contrast */
+            --x-border-color: #FFFFFF;
+            --selected-day-bg: rgba(75, 75, 75, 0.1); /* Grayscale transparent */
+            --today-mark-color: #9E9E9E; /* Grayscale equivalent of darker orange */
+            --tab-hover-bg: rgba(75, 75, 75, 0.05);
+            --header-shadow: rgba(0, 0, 0, 0.1);
+            --subtle-divider: rgba(51, 51, 51, 0.1);
+            --terminal-text-hover: #000000;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'IBM Plex Mono', monospace;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            transition: background-color 0.5s ease, color 0.5s ease;
+        }
+
+        /* --- Fixed Header Section --- */
+        .header-fixed {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: var(--bg-color);
+            z-index: 1000;
+            padding: 20px 0;
+            box-shadow: 0 5px 15px var(--header-shadow);
+            text-align: center;
+            border-bottom: 1px solid var(--terminal-border);
+            box-sizing: border-box;
+            
+            /* Apply the industrial glow ONLY to this header section */
+            border: 1px solid var(--terminal-border);
+            box-shadow: 0 0 10px rgba(160, 160, 160, 0.1), inset 0 0 10px rgba(160, 160, 160, 0.1);
+            animation: industrialGlow 5s infinite alternate ease-in-out;
+            transition: background-color 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
+        }
+
+        @keyframes industrialGlow {
+            0% { box-shadow: 0 0 10px rgba(160, 160, 160, 0.1), inset 0 0 10px rgba(160, 160, 160, 0.1); }
+            50% { box-shadow: 0 0 15px rgba(160, 160, 160, 0.2), inset 0 0 15px rgba(160, 160, 160, 0.2); }
+            100% { box-shadow: 0 0 10px rgba(160, 160, 160, 0.1), inset 0 0 10px rgba(160, 160, 160, 0.1); }
+        }
+        /* Make glow color dynamic for light mode */
+        body.light-mode .header-fixed {
+            animation: lightModeIndustrialGlow 5s infinite alternate ease-in-out;
+        }
+        @keyframes lightModeIndustrialGlow {
+            /* Updated rgba values for light grayscale glow */
+            0% { box-shadow: 0 0 10px rgba(75, 75, 75, 0.1), inset 0 0 10px rgba(75, 75, 75, 0.1); }
+            50% { box-shadow: 0 0 15px rgba(75, 75, 75, 0.2), inset 0 0 15px rgba(75, 75, 75, 0.2); }
+            100% { box-shadow: 0 0 10px rgba(75, 75, 75, 0.1), inset 0 0 10px rgba(75, 75, 75, 0.1); }
+        }
+
+
+        /* --- X Logo Styling --- */
+        .x-logo {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 5em;
+            font-weight: 700;
+            line-height: 0.8;
+            position: relative;
+            display: inline-block;
+            text-align: center;
+            width: 1em;
+            height: 1em;
+            overflow: hidden;
+            animation: xFightBack 6s infinite ease-in-out;
+            margin-bottom: 10px;
+        }
+        
+        .x-logo::before {
+            content: 'x';
+            color: var(--x-inner-color);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+        body.light-mode .x-logo::before {
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .x-logo::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* This linear gradient is currently hidden by opacity: 0; */
+            /* If visible, it would need conversion or a filter */
+            background: linear-gradient(45deg, #FF00FF, #00FFFF, #FFFF00);
+            opacity: 0;
+            z-index: 1;
+            transition: opacity 0.5s ease-out;
+        }
+
+        /* xFightBack already uses filter: grayscale(1) so it will render grayscale naturally */
+        @keyframes xFightBack {
+            0%, 100% { opacity: 1; filter: grayscale(0); }
+            20% { opacity: 1; filter: grayscale(1); }
+            25% { opacity: 0.5; filter: grayscale(0); }
+            30% { opacity: 1; filter: grayscale(1); }
+            70% { opacity: 1; filter: grayscale(1); }
+            75% { opacity: 0.5; filter: grayscale(0); }
+            80% { opacity: 1; filter: grayscale(1); }
+        }
+        body.light-mode .x-logo {
+            animation: xFightBackLight 6s infinite ease-in-out;
+        }
+        @keyframes xFightBackLight { /* Identical to xFightBack, works fine in grayscale */
+            0%, 100% { opacity: 1; filter: grayscale(0); }
+            20% { opacity: 1; filter: grayscale(1); }
+            25% { opacity: 0.5; filter: grayscale(0); }
+            30% { opacity: 1; filter: grayscale(1); }
+            70% { opacity: 1; filter: grayscale(1); }
+            75% { opacity: 0.5; filter: grayscale(0); }
+            80% { opacity: 1; filter: grayscale(1); }
+        }
+
+
+        /* --- Page Title / Subtitle & Main Nav Dropdown --- */
+        .page-title-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .page-title {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1.8em;
+            color: var(--text-color);
+            letter-spacing: 0.05em;
+            margin: 0;
+        }
+        .page-title span {
+            color: var(--terminal-glow);
+            text-shadow: 0 0 5px var(--terminal-glow);
+        }
+
+        .main-nav-dropdown {
+            background-color: var(--bg-color);
+            border: 1px solid var(--terminal-glow);
+            color: var(--terminal-glow);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.8em;
+            padding: 5px 10px;
+            margin-left: 15px;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            cursor: pointer;
+            outline: none;
+            box-shadow: 0 0 5px rgba(160, 160, 160, 0.3); /* For grayscale dark mode */
+            transition: all 0.3s ease-in-out;
+            max-width: 150px;
+        }
+        .main-nav-dropdown option {
+            background-color: var(--bg-color);
+            color: var(--terminal-glow);
+        }
+        .main-nav-dropdown:hover,
+        .main-nav-dropdown:focus {
+            box-shadow: 0 0 10px var(--terminal-glow);
+        }
+        body.light-mode .main-nav-dropdown {
+            box-shadow: 0 0 5px rgba(75, 75, 75, 0.3); /* For grayscale light mode */
+        }
+        body.light-mode .main-nav-dropdown:hover,
+        body.light-mode .main-nav-dropdown:focus {
+            box-shadow: 0 0 10px rgba(75, 75, 75, 0.6); /* For grayscale light mode */
+        }
+
+
+        /* --- Date Bar --- */
+        .date-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto;
+            max-width: 600px;
+            padding: 10px 0;
+            font-size: 0.9em;
+        }
+
+        .date-bar .day-option {
+            padding: 8px 15px;
+            margin: 0 5px;
+            border: 1px solid var(--terminal-border);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            color: var(--text-color);
+            position: relative;
+            user-select: none;
+        }
+
+        .date-bar .day-option:hover {
+            background-color: var(--selected-day-bg);
+            box-shadow: 0 0 8px var(--terminal-glow);
+            color: var(--terminal-glow);
+        }
+        body.light-mode .date-bar .day-option:hover {
+             box-shadow: 0 0 8px rgba(75, 75, 75, 0.4); /* For grayscale light mode */
+        }
+
+
+        .date-bar .day-option.selected {
+            background-color: var(--selected-day-bg);
+            border-color: var(--terminal-glow);
+            box-shadow: 0 0 10px var(--terminal-glow);
+            color: var(--terminal-glow);
+        }
+        body.light-mode .date-bar .day-option.selected {
+            box-shadow: 0 0 10px rgba(75, 75, 75, 0.6); /* For grayscale light mode */
+        }
+
+        .date-bar .day-option.is-today::after {
+            content: '*';
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 0.8em;
+            color: var(--today-mark-color);
+        }
+
+        .date-bar .date-dropdown {
+            background-color: var(--bg-color);
+            border: 1px solid var(--terminal-glow);
+            color: var(--terminal-glow);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1em;
+            padding: 5px 10px;
+            margin-left: 20px;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            cursor: pointer;
+            outline: none;
+            box-shadow: 0 0 5px rgba(160, 160, 160, 0.3); /* For grayscale dark mode */
+            transition: all 0.3s ease-in-out;
+        }
+
+        .date-bar .date-dropdown option {
+            background-color: var(--bg-color);
+            color: var(--terminal-glow);
+        }
+
+        .date-bar .date-dropdown:hover,
+        .date-bar .date-dropdown:focus {
+            box-shadow: 0 0 10px var(--terminal-glow);
+        }
+        body.light-mode .date-bar .date-dropdown {
+            box-shadow: 0 0 5px rgba(75, 75, 75, 0.3); /* For grayscale light mode */
+        }
+        body.light-mode .date-bar .date-dropdown:hover,
+        body.light-mode .date-bar .date-dropdown:focus {
+            box-shadow: 0 0 10px rgba(75, 75, 75, 0.6); /* For grayscale light mode */
+        }
+
+        /* --- Sort/Filter Bar --- */
+        .sort-filter-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px auto 0 auto;
+            max-width: 600px;
+            border-top: 1px dashed var(--terminal-border);
+            padding-top: 15px;
+            font-size: 0.9em;
+        }
+
+        .sort-filter-bar .tab-option {
+            padding: 8px 15px;
+            margin: 0 5px;
+            border: 1px solid transparent;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            color: var(--text-color);
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .sort-filter-bar .tab-option:hover {
+            background-color: var(--tab-hover-bg);
+            color: var(--terminal-glow);
+        }
+
+        .sort-filter-bar .tab-option.active {
+            border-color: var(--terminal-glow);
+            box-shadow: 0 0 8px var(--terminal-glow);
+            color: var(--terminal-glow);
+        }
+        body.light-mode .sort-filter-bar .tab-option.active {
+            box-shadow: 0 0 8px rgba(75, 75, 75, 0.4); /* For grayscale light mode */
+        }
+
+
+        .sort-filter-bar .tab-option .arrow {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.8em;
+            line-height: 1;
+            width: 1em;
+            text-align: center;
+            color: var(--terminal-glow);
+        }
+
+        /* --- Mode Toggle --- */
+        .mode-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 0.8em;
+            color: var(--text-color);
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s ease;
+        }
+        .mode-toggle:hover {
+            color: var(--terminal-text-hover);
+        }
+
+
+        /* --- Main Content Area --- */
+        .main-content {
+            margin-top: 340px;
+            padding: 40px 20px;
+            width: 90%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            box-sizing: border-box;
+            color: var(--text-color);
+            font-size: 0.9em;
+            line-height: 1.8;
+        }
+
+        /* All content sections are hidden by default and shown by JS */
+        .content-section {
+            display: none;
+        }
+        .content-section.active {
+            display: block;
+        }
+
+        .section-heading {
+            font-size: 1.4em;
+            color: var(--terminal-glow);
+            text-shadow: 0 0 5px var(--terminal-glow);
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed var(--terminal-border);
+            padding-bottom: 5px;
+            letter-spacing: 0.03em;
+        }
+
+        .event-listing, .venue-item, .dancemaker-profile {
+            margin-bottom: 25px;
+            padding: 10px 0;
+            border-bottom: 1px dotted var(--subtle-divider);
+        }
+
+        .event-listing:last-child, .venue-item:last-child, .dancemaker-profile:last-child {
+            border-bottom: none;
+        }
+
+        .event-listing .time {
+            color: var(--terminal-glow);
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .event-listing .type, .event-listing .location {
+            color: var(--text-color);
+        }
+        
+        .event-listing .status {
+            color: var(--today-mark-color);
+            margin-left: 10px;
+            font-weight: bold;
+        }
+
+        .event-listing .details-link, .venue-item .details-link, .dancemaker-profile .details-link {
+            color: var(--terminal-glow);
+            text-decoration: none;
+            margin-left: 15px;
+            white-space: nowrap;
+        }
+        .event-listing .details-link:hover, .venue-item .details-link:hover, .dancemaker-profile .details-link:hover {
+            text-decoration: underline;
+        }
+
+        /* For grouped sections and individual items */
+        .group-heading {
+            font-size: 1.2em;
+            color: var(--terminal-glow);
+            margin-top: 40px;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--terminal-glow);
+            opacity: 0.5;
+        }
+        body.light-mode .group-heading {
+            border-bottom: 1px solid rgba(75, 75, 75, 0.3); /* For grayscale light mode */
+        }
+
+        .venue-item p, .dancemaker-profile p, .overview-text p {
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        .venue-item .group-heading, .dancemaker-profile .group-heading {
+            font-size: 1.1em;
+            margin-top: 0;
+            border-bottom: none;
+            color: var(--text-color);
+        }
+
+
+        /* --- End of Content Marker --- */
+        .end-marker {
+            text-align: center;
+            margin-top: 80px;
+            margin-bottom: 100px;
+            color: rgba(240, 240, 240, 0.4);
+            font-size: 0.8em;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+        body.light-mode .end-marker {
+            color: rgba(51, 51, 51, 0.4);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .x-logo {
+                font-size: 3.5em;
+            }
+            .page-title {
+                font-size: 1.4em;
+            }
+            .page-title-container {
+                flex-direction: column;
+                margin-bottom: 10px;
+            }
+            .main-nav-dropdown {
+                margin-left: 0;
+                margin-top: 10px;
+                width: 80%;
+            }
+            .date-bar {
+                flex-wrap: wrap;
+                justify-content: center;
+                font-size: 0.8em;
+            }
+            .date-bar .day-option {
+                padding: 6px 10px;
+                margin: 5px;
+            }
+            .date-bar .date-dropdown {
+                margin-left: 0;
+                margin-top: 10px;
+                width: 80%;
+            }
+            .sort-filter-bar {
+                flex-wrap: wrap;
+                justify-content: center;
+                font-size: 0.8em;
+                margin-top: 10px;
+            }
+            .sort-filter-bar .tab-option {
+                padding: 6px 10px;
+                margin: 5px;
+            }
+            .main-content {
+                margin-top: 310px;
+                padding: 20px 10px;
+                font-size: 0.8em;
+            }
+            .section-heading {
+                font-size: 1.2em;
+            }
+            .mode-toggle {
+                top: 10px;
+                right: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header-fixed">
+        <div class="mode-toggle" id="mode-toggle">[MODE: GRAYSCALE DARK]</div> <!-- Updated text -->
+        <div class="x-logo"></div>
+        <div class="page-title-container">
+            <h1 class="page-title">x.dance // <span>MONTREAL</span></h1>
+            <select class="main-nav-dropdown" id="main-nav-dropdown">
+                <option value="dances-section" selected>Dances</option>
+                <option value="overview-section">Overview</option>
+                <option value="venues-section">Venues</option>
+                <option value="dancemakers-section">Dancemakers</option>
+            </select>
+        </div>
+        <div class="date-bar" id="date-bar">
+            <!-- Day options will be generated here by JavaScript -->
+        </div>
+        <div class="sort-filter-bar" id="sort-filter-bar">
+            <div class="tab-option" data-sort-key="time" data-sort-state="asc">TIME <span class="arrow">▲</span></div>
+            <div class="tab-option" data-sort-key="type" data-sort-state="neutral">GENRE <span class="arrow"></span></div>
+            <div class="tab-option" data-sort-key="location" data-sort-state="neutral">VENUE <span class="arrow"></span></div>
+            <div class="tab-option" data-sort-key="status" data-sort-state="neutral">STATUS <span class="arrow"></span></div>
+        </div>
+    </div>
+
+    <div class="main-content" id="main-content">
+        <!-- DANCES SECTION -->
+        <div id="dances-section" class="content-section active">
+            <h2 class="section-heading" id="current-date-heading">DANCES TODAY</h2>
+            <div class="events-list" id="events-list">
+                <!-- Event listings will be generated/manipulated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- OVERVIEW SECTION -->
+        <div id="overview-section" class="content-section">
+            <h2 class="section-heading">OVERVIEW</h2>
+            <div class="overview-text">
+                <p>> Welcome to the Montreal Dance Protocol. This city's pulse is deep, rhythm-driven, and notoriously vibrant. Operations typically conclude around 03:00 local time for alcohol consumption, though after-hours continuity can be found. Strict ID verification is standard across all access points. Key operational zones include: Plateau, Mile End, Griffintown, and various undisclosed warehouse coordinates.</p>
+                <p>> Expect a highly engaged and discerning local user base. Scene consciousness is paramount. New initiates are advised to observe and integrate into the local frequency before attempting high-level engagement.</p>
+                <p>> Current operational temperature: OPTIMAL.</p>
+            </div>
+        </div>
+
+        <!-- VENUES SECTION -->
+        <div id="venues-section" class="content-section">
+            <h2 class="section-heading">VENUES</h2>
+            <div class="venue-item">
+                <h3 class="group-heading">CONCRETE FACTORY</h3>
+                <p>> Location: Industrial Zone 7B. Access Protocol: Discreet. Known for raw, unadulterated techno. Expect powerful sound systems and a focused dancefloor. Identification required. Capacity: High. Operational hours: FRI-SAT 22:00 - 03:00 (primary). Tips: Hydration critical. Ear protection advised.</p>
+            </div>
+            <div class="venue-item">
+                <h3 class="group-heading">THE SOUND CHAMBER</h3>
+                <p>> Location: Downtown Sub-Level. Access Protocol: Standard. Specializes in immersive deep and minimal house experiences. Acoustic engineering optimized for clarity. Identification required. Capacity: Medium. Operational hours: THU-SAT 21:00 - 02:00. Tips: Engage with the sonic landscape. Personal space respected.</p>
+            </div>
+            <div class="venue-item">
+                <h3 class="group-heading">ROOFTOP GARDEN</h3>
+                <p>> Location: Urban Core, Elevated. Access Protocol: Limited. Seasonal operations. Known for open-air house and disco grooves with city skyline data-views. Identification required. Capacity: Low. Operational hours: Seasonal SUN-TUE 19:00 - 01:00. Tips: Arrive early for prime position. Expect high energy and social interface.</p>
+            </div>
+        </div>
+
+        <!-- DANCEMAKERS SECTION -->
+        <div id="dancemakers-section" class="content-section">
+            <h2 class="section-heading">DANCEMAKERS</h2>
+            <div class="dancemaker-profile">
+                <h3 class="group-heading">OPERATOR: SYNTHETIC_MIND</h3>
+                <p>> Role: Primary Sonic Architect (DJ/Producer). Profile: Known for meticulously crafted industrial techno sets, pushing the boundaries of rhythm and texture. Deeply committed to advancing local soundscapes. Affiliation: Concrete Collective. Latest Transmission: 'System Override' EP (Self-Released, 2024). Protocol_Links: [AUDIO_STREAM] [LIVE_PERFORMANCE_LOG]</p>
+            </div>
+            <div class="dancemaker-profile">
+                <h3 class="group-heading">CURATOR: RHYTHM_ENGINE</h3>
+                <p>> Role: Scene Integrator (Promoter/Organizer). Profile: Drives underground house and disco activations in unconventional spaces. Focuses on fostering inclusive dance environments and supporting emerging local talent. Network: Montreal Groove Alliance. Upcoming Operations: 'Warehouse Rejuvenation' (Monthly Series). Protocol_Links: [TRANSMISSION_LOG] [CONTRIBUTION_MANIFEST]</p>
+            </div>
+        </div>
+
+        <div class="end-marker">
+            &lt;END OF DANCE LOG&gt;
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dateBar = document.getElementById('date-bar');
+            const sortFilterBar = document.getElementById('sort-filter-bar');
+            const eventsListContainer = document.getElementById('events-list');
+            const currentDateHeading = document.getElementById('current-date-heading');
+            const mainNavDropdown = document.getElementById('main-nav-dropdown');
+            const contentSections = document.querySelectorAll('.content-section');
+            const modeToggle = document.getElementById('mode-toggle');
+            const body = document.body;
+
+            const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+            const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+            let today = new Date(); 
+            today.setHours(0, 0, 0, 0); 
+            let currentSelectedDate = new Date(today); 
+            currentSelectedDate.setHours(0, 0, 0, 0); 
+
+            let currentSortKey = 'time';
+            let currentSortState = 'asc'; 
+
+            // --- MOCK DATA FOR EVENTS ---
+            const allMockEvents = [
+                // Events for Today (dynamically adjusted below for current date)
+                { time: '22:00', type: 'TECHNO_INDUSTRIAL', location: 'Concrete Factory', status: 'ACTIVE', date: '2024-10-26' },
+                { time: '23:30', type: 'ACID_HOUSE', location: 'Underground Warehouse X', status: 'ACTIVE', date: '2024-10-26' },
+                { time: '21:00', type: 'DEEP_MINIMAL', location: 'The Sound Chamber', status: 'ENDED', date: '2024-10-26' },
+                { time: '00:00', type: 'BREAKBEAT_NIGHT', location: 'Lost Alley Club', status: 'CANCELLED', date: '2024-10-26' },
+                { time: '20:00', type: 'HOUSE_GROOVE', location: 'Rooftop Garden', status: 'SOLD_OUT', date: '2024-10-26' },
+                { time: '18:00', type: 'TECHNO_INDUSTRIAL', location: 'Old Power Plant', status: 'ACTIVE', date: '2024-10-26' },
+                { time: '23:00', type: 'ACID_HOUSE', location: 'The Boiler Room', status: 'ACTIVE', date: '2024-10-26' },
+                { time: '19:00', type: 'HOUSE_GROOVE', location: 'Hidden Loft', status: 'ENDED', date: '2024-10-26' },
+                // Events for Tomorrow (day after mock 2024-10-26)
+                { time: '14:00', type: 'AMBIENT_SESSIONS', location: 'Botanical Dome', status: 'ACTIVE', date: '2024-10-27' },
+                { time: '22:00', type: 'DISCO_FUNK', location: 'Glitter Ball Club', status: 'ACTIVE', date: '2024-10-27' },
+                // Events for a future Friday (day after mock 2024-10-26 + some days to reach next Fri)
+                { time: '20:00', type: 'TRANCE_CLASSICS', location: 'Cosmic Arena', status: 'ACTIVE', date: '2024-11-01' },
+                { time: '23:00', type: 'TECHNO_INDUSTRIAL', location: 'Old Power Plant', status: 'ACTIVE', date: '2024-11-01' },
+                // Events for another future date
+                { time: '22:00', type: 'EXPERIMENTAL_SOUND', location: 'The Lab', status: 'ACTIVE', date: '2024-11-05' },
+                { time: '23:00', type: 'HOUSE_GROOVE', location: 'The Terrace', status: 'ACTIVE', date: '2024-11-05' },
+            ];
+
+            function adjustMockEventDates(events) {
+                const referenceDate = new Date('2024-10-26'); 
+                const diffDays = Math.floor((today.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
+
+                return events.map(event => {
+                    const originalEventDate = new Date(event.date);
+                    const adjustedDate = new Date(originalEventDate);
+                    adjustedDate.setDate(originalEventDate.getDate() + diffDays);
+                    
+                    const [hours, minutes] = event.time.split(':').map(Number);
+                    return {
+                        ...event,
+                        date: adjustedDate.toISOString().split('T')[0],
+                        timeSortable: hours * 60 + minutes, 
+                        fullDateObject: adjustedDate 
+                    };
+                });
+            }
+            const adjustedMockEvents = adjustMockEventDates(allMockEvents);
+
+            // --- Date Bar Functions ---
+            function formatDateToDDMM(date) {
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = monthNames[date.getMonth()];
+                return `${day} ${month}`;
+            }
+
+            function getNextDayOfWeek(startDate, targetDayName) {
+                const date = new Date(startDate);
+                date.setHours(0, 0, 0, 0); 
+                let found = false;
+                for (let i = 0; i < 7; i++) { 
+                    if (daysOfWeek[date.getDay()] === targetDayName && i > 0) { 
+                        found = true;
+                        break;
+                    }
+                    date.setDate(date.getDate() + 1);
+                }
+                return found ? date : null;
+            }
+
+            function updateDateBar() {
+                dateBar.innerHTML = ''; 
+
+                const displayDays = [];
+                const actualToday = new Date(today); 
+                actualToday.setHours(0,0,0,0);
+
+                displayDays.push({ label: 'TODAY', date: new Date(actualToday) });
+
+                let pointerDate = new Date(actualToday);
+                const targetDaysSequence = ['FRI', 'SAT', 'SUN'];
+
+                for (let i = 0; i < targetDaysSequence.length; i++) {
+                    let nextDay = new Date(pointerDate);
+                    let found = false;
+                    for (let j = 1; j <= 7; j++) {
+                        nextDay.setDate(pointerDate.getDate() + j);
+                        if (daysOfWeek[nextDay.getDay()] === targetDaysSequence[i]) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    
+                    if (found && !displayDays.some(d => d.date.toDateString() === nextDay.toDateString())) {
+                        displayDays.push({ label: targetDaysSequence[i], date: new Date(nextDay) });
+                        pointerDate = new Date(nextDay); // Ensure a new date object is used
+                    }
+                }
+                
+                const finalDisplayDays = displayDays.slice(0, 4);
+
+
+                finalDisplayDays.forEach(dayInfo => {
+                    const dayElement = document.createElement('div');
+                    dayElement.className = 'day-option';
+                    
+                    const dayLabel = dayInfo.label;
+                    const displayDate = formatDateToDDMM(dayInfo.date);
+                    
+                    dayElement.textContent = `${dayLabel} (${displayDate})`;
+                    dayElement.dataset.fullDate = dayInfo.date.toISOString().split('T')[0]; 
+
+                    if (currentSelectedDate.toDateString() === dayInfo.date.toDateString()) {
+                        dayElement.classList.add('selected');
+                    }
+
+                    if (actualToday.toDateString() === dayInfo.date.toDateString()) {
+                        dayElement.classList.add('is-today');
+                    }
+
+                    dayElement.addEventListener('click', () => {
+                        currentSelectedDate = new Date(dayInfo.date);
+                        currentSelectedDate.setHours(0,0,0,0);
+                        updateDateBar();
+                        updateEventsDisplay(); 
+                    });
+                    dateBar.appendChild(dayElement);
+                });
+
+                const futureDropdown = document.createElement('select');
+                futureDropdown.className = 'date-dropdown';
+                futureDropdown.id = 'future-date-dropdown';
+                let defaultOption = document.createElement('option');
+                defaultOption.value = "";
+                defaultOption.textContent = "Future Dates...";
+                defaultOption.disabled = true;
+                defaultOption.selected = true;
+                futureDropdown.appendChild(defaultOption);
+
+                let futureDateCursor = new Date(today);
+                futureDateCursor.setHours(0,0,0,0);
+
+                for (let i = 0; i < 60; i++) { 
+                    futureDateCursor.setDate(futureDateCursor.getDate() + 1); 
+                    const option = document.createElement('option');
+                    const formattedOptionDate = futureDateCursor.toISOString().split('T')[0];
+                    option.value = formattedOptionDate;
+                    option.textContent = `${daysOfWeek[futureDateCursor.getDay()]} (${formatDateToDDMM(futureDateCursor)})`;
+                    futureDropdown.appendChild(option);
+                }
+
+                futureDropdown.addEventListener('change', function() {
+                    const selectedDateValue = this.value;
+                    if (selectedDateValue) {
+                        currentSelectedDate = new Date(selectedDateValue);
+                        currentSelectedDate.setHours(0,0,0,0);
+                        updateDateBar(); 
+                        updateEventsDisplay();
+                        this.value = ""; 
+                    }
+                });
+                dateBar.appendChild(futureDropdown);
+            }
+
+            // --- Event Display and Sorting Functions ---
+            function updateEventsDisplay() {
+                const filteredEvents = adjustedMockEvents.filter(event => 
+                    event.fullDateObject.toDateString() === currentSelectedDate.toDateString()
+                );
+
+                let headingText;
+                if (currentSelectedDate.toDateString() === today.toDateString()) {
+                    headingText = 'DANCES TODAY';
+                } else {
+                    const dayLabel = daysOfWeek[currentSelectedDate.getDay()];
+                    const displayDate = formatDateToDDMM(currentSelectedDate);
+                    headingText = `DANCES for ${dayLabel} (${displayDate})`;
+                }
+                currentDateHeading.textContent = headingText;
+
+                renderEvents(filteredEvents);
+            }
+
+            function renderEvents(eventsToRender) {
+                eventsListContainer.innerHTML = ''; 
+
+                if (currentSortState === 'neutral' || currentSortKey === 'time') {
+                    eventsToRender.sort((a, b) => {
+                        if (currentSortState === 'asc') return a.timeSortable - b.timeSortable;
+                        if (currentSortState === 'desc') return b.timeSortable - a.timeSortable;
+                        return a.timeSortable - b.timeSortable; 
+                    });
+                    eventsToRender.forEach(event => eventsListContainer.appendChild(createEventElement(event)));
+                } else {
+                    const groupedEvents = {};
+                    eventsToRender.forEach(event => {
+                        const groupKey = event[currentSortKey];
+                        if (!groupedEvents[groupKey]) {
+                            groupedEvents[groupKey] = [];
+                        }
+                        groupedEvents[groupKey].push(event);
+                    });
+
+                    const sortedGroupKeys = Object.keys(groupedEvents).sort();
+
+                    sortedGroupKeys.forEach(groupKey => {
+                        const groupHeading = document.createElement('h3');
+                        groupHeading.className = 'group-heading';
+                        groupHeading.textContent = `${currentSortKey.toUpperCase()}: ${groupKey.toUpperCase()}`;
+                        eventsListContainer.appendChild(groupHeading);
+
+                        groupedEvents[groupKey].sort((a, b) => a.timeSortable - b.timeSortable);
+                        groupedEvents[groupKey].forEach(event => eventsListContainer.appendChild(createEventElement(event)));
+                    });
+                }
+                
+                if (eventsToRender.length === 0) {
+                    const noEventsMessage = document.createElement('div');
+                    noEventsMessage.textContent = '> No dances found for this date. Explore other dates or contribute to the scene.';
+                    noEventsMessage.style.marginTop = '20px';
+                    noEventsMessage.style.color = 'var(--text-color)';
+                    eventsListContainer.appendChild(noEventsMessage);
+                }
+            }
+
+            function createEventElement(event) {
+                const eventDiv = document.createElement('div');
+                eventDiv.className = 'event-listing';
+                eventDiv.innerHTML = `
+                    <span class="time">${event.time}</span>
+                    <span class="type">[${event.type}]</span>
+                    <span class="location">${event.location}</span>
+                    <span class="status">[${event.status}]</span>
+                    <a href="#" class="details-link">[PROTOCOL_DETAILS]</a>
+                `;
+                return eventDiv;
+            }
+
+            // --- Sort/Filter Bar Logic ---
+            sortFilterBar.querySelectorAll('.tab-option').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const key = tab.dataset.sortKey; 
+                    let state = tab.dataset.sortState; 
+
+                    if (key === 'time') {
+                        if (state === 'asc') state = 'desc';
+                        else if (state === 'desc') state = 'neutral';
+                        else state = 'asc';
+                    } else { 
+                        if (state === 'neutral') state = 'group'; 
+                        else state = 'neutral'; 
+                    }
+
+                    sortFilterBar.querySelectorAll('.tab-option').forEach(otherTab => {
+                        otherTab.dataset.sortState = 'neutral';
+                        otherTab.classList.remove('active');
+                        otherTab.querySelector('.arrow').textContent = '';
+                    });
+
+                    tab.dataset.sortState = state;
+                    tab.classList.toggle('active', state !== 'neutral');
+
+                    const arrowSpan = tab.querySelector('.arrow');
+                    if (key === 'time') {
+                        arrowSpan.textContent = state === 'asc' ? '▲' : (state === 'desc' ? '▼' : '');
+                    } else { 
+                        arrowSpan.textContent = state === 'group' ? '■' : ''; 
+                    }
+                    
+                    currentSortKey = key;
+                    currentSortState = state;
+
+                    updateEventsDisplay();
+                });
+            });
+
+            // --- Main Navigation Dropdown Logic ---
+            mainNavDropdown.addEventListener('change', function() {
+                const selectedSectionId = this.value;
+                const targetSection = document.getElementById(selectedSectionId);
+
+                contentSections.forEach(section => {
+                    section.classList.remove('active');
+                });
+
+                if (targetSection) {
+                    targetSection.classList.add('active');
+                    targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+
+                if (selectedSectionId === 'dances-section') {
+                    dateBar.style.display = 'flex'; 
+                    sortFilterBar.style.display = 'flex'; 
+                    updateEventsDisplay(); 
+                } else {
+                    dateBar.style.display = 'none';
+                    sortFilterBar.style.display = 'none';
+                }
+            });
+
+            // --- Grayscale Mode Toggle Logic ---
+            const THEME_STORAGE_KEY = 'x.dance-grayscale-theme-preference'; // New storage key
+
+            function setPreferredTheme(theme) {
+                if (theme === 'light-grayscale') { // Now explicitly "light-grayscale"
+                    body.classList.add('light-mode');
+                    modeToggle.textContent = '[MODE: GRAYSCALE LIGHT]';
+                    localStorage.setItem(THEME_STORAGE_KEY, 'light-grayscale');
+                } else { // This branch is now the "dark-grayscale" default
+                    body.classList.remove('light-mode');
+                    modeToggle.textContent = '[MODE: GRAYSCALE DARK]';
+                    localStorage.removeItem(THEME_STORAGE_KEY); // Or set to 'dark-grayscale' for clarity if preferred
+                }
+            }
+
+            modeToggle.addEventListener('click', () => {
+                if (body.classList.contains('light-mode')) {
+                    setPreferredTheme('dark-grayscale'); // Toggle to the dark grayscale mode
+                } else {
+                    setPreferredTheme('light-grayscale'); // Toggle to the light grayscale mode
+                }
+            });
+
+            // Load saved theme preference on initial load
+            const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+            if (savedTheme === 'light-grayscale') {
+                setPreferredTheme('light-grayscale');
+            } else {
+                setPreferredTheme('dark-grayscale'); // Default to dark grayscale
+            }
+
+
+            // Initial load setup
+            const initialTimeTab = sortFilterBar.querySelector('.tab-option[data-sort-key="time"]');
+            initialTimeTab.classList.add('active'); 
+            initialTimeTab.querySelector('.arrow').textContent = '▲'; 
+
+            document.getElementById('dances-section').classList.add('active');
+            mainNavDropdown.value = 'dances-section'; 
+
+            updateDateBar();
+            updateEventsDisplay(); 
+        });
+    </script>
+</body>
+</html>

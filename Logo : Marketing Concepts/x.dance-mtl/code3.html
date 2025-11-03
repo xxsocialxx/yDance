@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x.dance | The Dance</title>
+    <meta name="description" content="x.dance: Your definitive resource to locate 'the dance'. A revolutionary platform for dance enthusiasts focused on utility and pure passion.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50%25' y='50%25' font-size='80' text-anchor='middle' dominant-baseline='central'%3Ex%3C/text%3E%3C/svg%3E" type="image/svg+xml">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;700&display=swap');
+
+        :root {
+            --bg-color: #000000;
+            --text-color: #F0F0F0;
+            --terminal-border: #1a1a1a;
+            --terminal-glow: #00ff66; /* Subtle green for terminal elements */
+            --x-inner-color: #FFFFFF;
+            --x-border-color: #000000;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'IBM Plex Mono', monospace; /* Primary font for terminal feel */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden; /* Hide potential scrollbars from animations */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            text-align: center;
+            width: 90%;
+            max-width: 800px;
+            box-sizing: border-box;
+            padding: 20px;
+            position: relative; /* For the industrial border/shadow */
+        }
+
+        /* Industrial Edge/Border effect (subtle) */
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border: 1px solid var(--terminal-border);
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.1), inset 0 0 10px rgba(0, 255, 102, 0.1);
+            pointer-events: none;
+            z-index: -1;
+            animation: industrialGlow 5s infinite alternate ease-in-out;
+        }
+
+        @keyframes industrialGlow {
+            0% { box-shadow: 0 0 10px rgba(0, 255, 102, 0.1), inset 0 0 10px rgba(0, 255, 102, 0.1); }
+            50% { box-shadow: 0 0 15px rgba(0, 255, 102, 0.2), inset 0 0 15px rgba(0, 255, 102, 0.2); }
+            100% { box-shadow: 0 0 10px rgba(0, 255, 102, 0.1), inset 0 0 10px rgba(0, 255, 102, 0.1); }
+        }
+
+        /* --- X Logo Styling --- */
+        .x-logo {
+            font-family: 'Rajdhani', sans-serif; /* A more modern, strong font for 'X' */
+            font-size: 10em; /* Large size */
+            font-weight: 700;
+            line-height: 0.8; /* Adjust vertical alignment */
+            position: relative;
+            display: inline-block;
+            text-align: center;
+            width: 1em; /* Make width equal to height to contain 'X' */
+            height: 1em;
+            overflow: hidden; /* Crucial for clipping the inner color effect */
+            animation: xFightBack 6s infinite ease-in-out; /* The core X animation */
+        }
+
+        .x-logo::before {
+            content: 'x';
+            color: var(--x-inner-color);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2; /* Ensures 'x' is on top */
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5); /* Subtle glow for the 'x' */
+        }
+
+        .x-logo::after {
+            content: ''; /* This creates the colored background layer */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, #FF00FF, #00FFFF, #FFFF00); /* Vibrant gradient */
+            opacity: 0; /* Starts invisible */
+            z-index: 1; /* Behind the 'x' text */
+            transition: opacity 0.5s ease-out; /* Smooth transition for color flash */
+        }
+
+        /* Animation for X: fights to become colorful, then snaps back */
+        @keyframes xFightBack {
+            0%, 100% { opacity: 1; filter: grayscale(0); } /* Fully black and white */
+            20% { opacity: 1; filter: grayscale(1); } /* Ensure grayscaled start */
+            25% { opacity: 0.5; filter: grayscale(0); } /* Brief color "flash" */
+            30% { opacity: 1; filter: grayscale(1); } /* Snaps back to B&W */
+            70% { opacity: 1; filter: grayscale(1); } /* Stays B&W for a while */
+            75% { opacity: 0.5; filter: grayscale(0); } /* Another brief color "flash" */
+            80% { opacity: 1; filter: grayscale(1); } /* Snaps back to B&W */
+        }
+
+        /* --- Dance Subtitle Styling --- */
+        .subtitle {
+            font-family: 'IBM Plex Mono', monospace; /* Keep 'dance' with terminal font */
+            font-size: 1.5em;
+            margin-top: -30px; /* Pull it up closer to 'x' */
+            letter-spacing: 0.1em;
+            color: var(--text-color);
+            white-space: nowrap; /* Prevent line breaks for animation */
+        }
+
+        .subtitle span {
+            opacity: 0; /* Start invisible */
+            animation: revealLetter 0.5s forwards; /* Animation for each letter */
+            animation-timing-function: ease-out;
+        }
+        /* Delay each letter's animation */
+        .subtitle span:nth-child(1) { animation-delay: 0.5s; }
+        .subtitle span:nth-child(2) { animation-delay: 0.6s; }
+        .subtitle span:nth-child(3) { animation-delay: 0.7s; }
+        .subtitle span:nth-child(4) { animation-delay: 0.8s; }
+        .subtitle span:nth-child(5) { animation-delay: 0.9s; }
+
+        @keyframes revealLetter {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Terminal Content Area Styling --- */
+        .terminal-output {
+            background-color: var(--bg-color); /* Matches body background for seamless look */
+            border: 1px solid var(--terminal-border);
+            padding: 25px; /* Original padding */
+            margin-top: 50px;
+            min-height: 150px; /* Original min-height */
+            text-align: left;
+            font-size: 0.9em;
+            line-height: 1.6;
+            box-shadow: 0 0 15px rgba(0, 255, 102, 0.1), inset 0 0 15px rgba(0, 255, 102, 0.1); /* Subtle internal glow */
+            overflow: hidden; /* For typing effect */
+            white-space: pre-wrap; /* Preserve formatting and wrap text */
+            position: relative;
+            width: calc(100% - 50px); /* Adjust for original padding */
+        }
+
+        /* Blinking cursor effect */
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 1.1em; /* Adjust to match line-height */
+            background-color: var(--text-color);
+            vertical-align: text-bottom;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            from, to { background-color: transparent; }
+            50% { background-color: var(--text-color); }
+        }
+
+        /* Blinking cursor for the prompt line specifically */
+        .prompt .cursor {
+            background-color: var(--terminal-glow);
+            box-shadow: 0 0 5px var(--terminal-glow);
+        }
+
+        /* --- DANCITIES & Dropdown Styling --- */
+        .dancities-line {
+            display: flex;
+            align-items: center;
+            margin-top: 0; /* Make it the very first line of content */
+        }
+
+        .dancities-line code { /* Apply terminal code style to the whole line */
+            display: flex; /* Make it flex to align text and dropdown */
+            align-items: center;
+            opacity: 0; /* Hidden by default, revealed by JS */
+            padding-right: 1ch; /* Space for cursor */
+        }
+
+        .dancities-text {
+            color: var(--terminal-glow); /* Highlight DANCITIES text */
+            letter-spacing: 0.1em;
+            font-size: 1.1em;
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+
+        .dancities-text span {
+            opacity: 0;
+            animation: revealLetter 0.1s forwards; /* Faster reveal for DANCITIES */
+            animation-timing-function: step-end; /* Snappy reveal */
+        }
+        /* Delay each letter */
+        .dancities-text span:nth-child(1) { animation-delay: 0.0s; }
+        .dancities-text span:nth-child(2) { animation-delay: 0.1s; }
+        .dancities-text span:nth-child(3) { animation-delay: 0.2s; }
+        .dancities-text span:nth-child(4) { animation-delay: 0.3s; }
+        .dancities-text span:nth-child(5) { animation-delay: 0.4s; }
+        .dancities-text span:nth-child(6) { animation-delay: 0.5s; }
+        .dancities-text span:nth-child(7) { animation-delay: 0.6s; }
+        .dancities-text span:nth-child(8) { animation-delay: 0.7s; }
+        .dancities-text span:nth-child(9) { animation-delay: 0.8s; }
+
+
+        .dancities-dropdown {
+            background-color: var(--bg-color);
+            border: 1px solid var(--terminal-glow);
+            color: var(--terminal-glow);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1em;
+            padding: 5px 10px;
+            appearance: none; /* Remove default dropdown arrow */
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            cursor: pointer;
+            outline: none;
+            box-shadow: 0 0 5px rgba(0, 255, 102, 0.3);
+            transition: all 0.3s ease-in-out;
+            opacity: 0; /* Hidden by default, revealed by JS */
+            transform: translateY(-10px); /* Starts slightly above */
+            pointer-events: none; /* Not clickable until visible */
+            position: relative;
+            z-index: 10;
+        }
+
+        .dancities-dropdown option {
+            background-color: var(--bg-color);
+            color: var(--terminal-glow);
+            padding: 5px;
+        }
+
+        .dancities-dropdown:hover,
+        .dancities-dropdown:focus {
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.6);
+        }
+
+        /* --- Footer Styling --- */
+        .footer {
+            margin-top: 40px;
+            font-size: 0.7em;
+            color: rgba(240, 240, 240, 0.5);
+            letter-spacing: 0.05em;
+            opacity: 0;
+            animation: fadeIn 1s forwards;
+            animation-delay: 4.5s; /* Appears after subtitle and DANCITIES */
+        }
+
+        .footer span {
+            color: var(--terminal-glow); /* Highlight tech words */
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .x-logo {
+                font-size: 7em;
+            }
+            .subtitle {
+                font-size: 1.2em;
+                margin-top: -20px;
+            }
+            .terminal-output {
+                font-size: 0.8em;
+                padding: 15px;
+                /* min-height remains 150px as per instruction */
+            }
+            .dancities-text {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="x-logo"></div>
+        <div class="subtitle" id="subtitle-animation">
+            <span>D</span><span>A</span><span>N</span><span>C</span><span>E</span>
+        </div>
+
+        <div class="terminal-output" id="terminal-output">
+            <code class="dancities-line" id="dancities-prompt-line">
+                > Enter <span class="dancities-text" id="dancities-text-animated">
+                    <span>D</span><span>A</span><span>N</span><span>C</span><span>I</span><span>T</span><span>I</span><span>E</span><span>S</span>
+                </span>
+                <select class="dancities-dropdown" id="dancities-dropdown">
+                    <option value="">-- select a dancity --</option>
+                    <option value="amsterdam">Amsterdam</option>
+                    <option value="barcelona">Barcelona</option>
+                    <option value="berlin">Berlin</option>
+                    <option value="london">London</option>
+                    <option value="los-angeles">Los Angeles</option>
+                    <option value="madrid">Madrid</option>
+                    <option value="melbourne">Melbourne</option>
+                    <option value="mexico-city">Mexico City</option>
+                    <option value="montreal">Montreal</option>
+                    <option value="new-york">New York</option>
+                    <option value="paris">Paris</option>
+                    <option value="rome">Rome</option>
+                    <option value="sao-paulo">São Paulo</option>
+                    <option value="sydney">Sydney</option>
+                    <option value="tokyo">Tokyo</option>
+                    <option value="toronto">Toronto</option>
+                    <option value="vancouver">Vancouver</option>
+                </select>
+                <span class="cursor prompt" id="dancity-cursor"></span>
+            </code>
+        </div>
+        <div class="footer">
+            [x.dance] - built on <span>radical</span> simplicity & <span>distributed</span> passion.
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dancitiesTextAnimated = document.getElementById('dancities-text-animated');
+            const dancitiesDropdown = document.getElementById('dancities-dropdown');
+            const dancityCursor = document.getElementById('dancity-cursor');
+            const dancitiesPromptLine = document.getElementById('dancities-prompt-line');
+            const footer = document.querySelector('.footer');
+
+            const DANCITIES_LOOP_INTERVAL = 8000; // Total duration of one DANCITIES reveal + dropdown display + reset
+            const DANCITIES_TEXT_REVEAL_DELAY_PER_CHAR = 100; // From CSS
+            const DROPDOWN_APPEAR_DELAY = 200; // Delay after DANCITIES typed
+            const DROPDOWN_DISPLAY_DURATION = 5000; // How long dropdown stays visible
+
+            // Initial hide for JS-controlled elements (footer will fade in separately)
+            dancitiesPromptLine.style.opacity = '0';
+            dancitiesDropdown.style.opacity = '0';
+            dancitiesDropdown.style.pointerEvents = 'none';
+            dancityCursor.style.opacity = '0'; // Hide cursor initially
+
+            let loopTimeout;
+
+            function startDancitiesLoop() {
+                clearTimeout(loopTimeout); // Clear any existing loop
+
+                // Reset state
+                dancitiesTextAnimated.style.opacity = '0';
+                const spans = dancitiesTextAnimated.querySelectorAll('span');
+                spans.forEach(span => {
+                    span.style.opacity = '0';
+                    span.style.animation = 'none'; // Reset animation
+                });
+
+                dancitiesDropdown.style.opacity = '0';
+                dancitiesDropdown.style.transform = 'translateY(-10px)';
+                dancitiesDropdown.style.pointerEvents = 'none';
+                dancitiesDropdown.value = ''; // Reset selection
+                dancityCursor.style.opacity = '1'; // Show cursor
+
+                // Step 1: Make the DANCITIES prompt line visible
+                dancitiesPromptLine.style.opacity = '1';
+
+                // Step 2: Reveal 'DANCITIES' letters
+                setTimeout(() => {
+                    dancitiesTextAnimated.style.opacity = '1';
+                    spans.forEach((span, index) => {
+                        span.style.animation = `revealLetter 0.1s forwards ${index * DANCITIES_TEXT_REVEAL_DELAY_PER_CHAR / 1000}s step-end`;
+                    });
+
+                    // Step 3: Show dropdown after DANCITIES animation finishes
+                    const totalDancitiesTextRevealTime = spans.length * DANCITIES_TEXT_REVEAL_DELAY_PER_CHAR;
+                    setTimeout(() => {
+                        dancitiesDropdown.style.opacity = '1';
+                        dancitiesDropdown.style.transform = 'translateY(0)';
+                        dancitiesDropdown.style.pointerEvents = 'auto'; // Make clickable
+                        dancityCursor.style.opacity = '0'; // Hide cursor when dropdown is active
+                    }, totalDancitiesTextRevealTime + DROPDOWN_APPEAR_DELAY);
+
+                    // Step 4: Hide dropdown and restart loop after a duration
+                    setTimeout(() => {
+                        dancitiesDropdown.style.opacity = '0';
+                        dancitiesDropdown.style.transform = 'translateY(-10px)';
+                        dancitiesDropdown.style.pointerEvents = 'none';
+                        dancitiesTextAnimated.style.opacity = '0'; // Hide the text too
+                        spans.forEach(span => span.style.animation = 'none'); // Ensure text stays hidden
+                        dancityCursor.style.opacity = '1'; // Show cursor again
+                        loopTimeout = setTimeout(startDancitiesLoop, DANCITIES_LOOP_INTERVAL - totalDancitiesTextRevealTime - DROPDOWN_APPEAR_DELAY - DROPDOWN_DISPLAY_DURATION);
+                    }, totalDancitiesTextRevealTime + DROPDOWN_APPEAR_DELAY + DROPDOWN_DISPLAY_DURATION);
+
+                }, 500); // Small initial delay before the DANCITIES prompt starts its cycle
+            }
+
+            // Start the DANCITIES loop after subtitle animation
+            const subtitleElements = document.querySelectorAll('.subtitle span');
+            const lastSubtitleDelay = parseFloat(subtitleElements[subtitleElements.length - 1].style.animationDelay);
+            const subtitleAnimationDuration = parseFloat(getComputedStyle(subtitleElements[0]).animationDuration);
+            const totalSubtitleRevealTime = (lastSubtitleDelay + subtitleAnimationDuration) * 1000;
+
+            setTimeout(startDancitiesLoop, totalSubtitleRevealTime + 500); // Start DANCITIES after subtitle is fully revealed
+
+            // Handle dropdown change
+            dancitiesDropdown.addEventListener('change', function() {
+                const selectedDancity = this.value;
+                if (selectedDancity) {
+                    console.log(`Navigating to Dancity: ${selectedDancity}`);
+                    alert(`Redirecting to ${selectedDancity.toUpperCase().replace('-', ' ')} dancity page! (Not implemented yet)`);
+                    // --- Next step: Redirect to a new page ---
+                    // window.location.href = `/${selectedDancity}.html`;
+                    startDancitiesLoop(); // Restart loop after selection, or navigate away
+                }
+            });
+        });
+    </script>
+</body>
+</html>

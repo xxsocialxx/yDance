@@ -20,3 +20,12 @@ supabase db push
 - UI should read only from `normalized_events_latest` (anon key).
 - Writes go to `raw_events` via server/edge jobs using the service role.
 - Policies are deny-all by default on tables; the view is granted select to `anon`.
+
+
+
+
+
+
+
+
+
