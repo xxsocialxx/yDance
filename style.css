@@ -1200,3 +1200,88 @@ body * {
 #dj-events-content {
     margin-top: 20px;
 }
+
+/* ========================================
+   OPERATORS - Flat List Style
+   ======================================== */
+.operator-listing {
+    margin-bottom: 0;
+    padding: 12px 0;
+    border-bottom: 1px dotted var(--border-primary);
+    font-size: 0.9rem;
+    line-height: 1.8;
+    color: var(--text-primary);
+}
+
+.operator-listing:hover {
+    background: var(--bg-secondary);
+}
+
+.operator-listing:last-child {
+    border-bottom: none;
+}
+
+.operator-name {
+    color: var(--accent);
+    font-weight: 700;
+    margin-right: 15px;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.operator-specialty {
+    color: var(--text-secondary);
+    margin-right: 15px;
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+.operator-event-count {
+    color: var(--accent);
+    font-weight: 700;
+    margin-left: 15px;
+}
+
+.operator-venues {
+    color: var(--text-secondary);
+    margin-left: 15px;
+    font-size: 0.9rem;
+}
+
+/* ========================================
+   OPERATOR PROFILE - Terminal Style
+   ======================================== */
+.operator-profile-terminal {
+    padding: 20px 0;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.operator-profile-header {
+    border-bottom: 1px solid var(--border-primary);
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+}
+
+.operator-name-large {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 0 0 10px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.operator-specialty-display {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+.operator-profile-info {
+    margin-top: 20px;
+}
+
+.operator-profile-actions {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-primary);
+}
