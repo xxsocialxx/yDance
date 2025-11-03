@@ -11,7 +11,7 @@
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = 'https://rymcfymmigomaytblqml.supabase.co';
-const SUPABASE_SERVICE_KEY = 'sbp_c43ecd84d59c3207d71e4c2eae601bded7e30331';
+const SUPABASE_SERVICE_KEY = 'sb_publishable_sk0GTezrQ8me8sPRLsWo4g_8UEQgztQ';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
