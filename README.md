@@ -5,6 +5,23 @@ Electronic music event discovery platform with equal-value tabs for Events, DJs,
 ## 📚 Documentation
 
 - **[Supabase Operations Guide](docs/SUPABASE_OPERATIONS.md)** - Complete guide for database schema updates, data population, and troubleshooting
+- **[Nostr Isolation Plan](docs/NOSTR_ISOLATION_PLAN.md)** - Complete Nostr isolation implementation plan
+- **[Nostr Module API](docs/NOSTR_MODULE_API.md)** - API reference for isolated Nostr module
+- **[Validation Guide](docs/PHASE5_VALIDATION.md)** - Phase 5 validation and cleanup checklist
+
+## Nostr Isolation
+
+The application includes an isolated Nostr module for independent development and testing. This enables:
+- Independent Nostr testing without affecting main app
+- Easy transition to private Nostr relay in the future
+- Complete separation of Nostr auth from main app auth
+
+**Feature Flags:**
+- `nostrIsolated: false` - Use legacy Nostr integration (default, backward compatible)
+- `nostrIsolated: true` - Use isolated Nostr module
+- `nostrDevTab: true` - Show NOSTR dev tab for testing
+
+**Status:** Implementation complete. Currently in validation period (2-4 weeks recommended before cleanup).
 
 ## 🚨 For AI Agents
 
