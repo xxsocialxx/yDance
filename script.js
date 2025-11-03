@@ -5823,6 +5823,176 @@ function initLocationSelection() {
 }
 
 // ============================================================================
+// NOSTR DEV TAB EVENT HANDLERS
+// ============================================================================
+function initNostrDevTab() {
+    if (!CONFIG.flags.nostrDevTab) {
+        // Hide tab if flag disabled
+        const tabButton = document.getElementById('tab-nostr');
+        if (tabButton) tabButton.style.display = 'none';
+        return;
+    }
+    
+    // Show tab if flag enabled
+    const tabButton = document.getElementById('tab-nostr');
+    if (tabButton) tabButton.style.display = 'inline-block';
+    
+    // Only set up handlers if nostrIsolated flag is enabled
+    if (!CONFIG.flags.nostrIsolated) {
+        return; // Will work but may have limited functionality
+    }
+    
+    // Status refresh
+    const refreshStatusBtn = document.getElementById('nostr-refresh-status');
+    if (refreshStatusBtn) {
+        refreshStatusBtn.addEventListener('click', () => views.updateNostrStatus());
+    }
+    
+    // Key Management
+    const generateKeysBtn = document.getElementById('nostr-generate-keys');
+    if (generateKeysBtn) {
+        generateKeysBtn.addEventListener('click', async () => {
+            try {
+                const keys = await nostr.generateKeys();
+                setNostrKeys(keys);
+                views.displayNostrKeys(keys);
+                views.displayNostrResult('nostr-keys-display', keys, 'Generated Keys');
+                views.updateNostrStatus();
+            } catch (error) {
+                views.displayNostrResult('nostr-keys-display', { error: error.message }, 'Error');
+            }
+        });
+    }
+    
+    const testKeygenBtn = document.getElementById('nostr-test-keygen');
+    if (testKeygenBtn) {
+        testKeygenBtn.addEventListener('click', async () => {
+            try {
+                const result = await nostr.testKeyGeneration();
+                views.displayNostrResult('nostr-dev-results', result, 'Key Generation Test');
+            } catch (error) {
+                views.displayNostrResult('nostr-dev-results', { error: error.message }, 'Error');
+            }
+        });
+    }
+    
+    const testEncryptionBtn = document.getElementById('nostr-test-encryption');
+    if (testEncryptionBtn) {
+        testEncryptionBtn.addEventListener('click', async () => {
+            try {
+                const result = await nostr.testEncryption();
+                views.displayNostrResult('nostr-dev-results', result, 'Encryption Test');
+            } catch (error) {
+                views.displayNostrResult('nostr-dev-results', { error: error.message }, 'Error');
+            }
+        });
+    }
+    
+    // Connection Management
+    const connectBtn = document.getElementById('nostr-connect');
+    if (connectBtn) {
+        connectBtn.addEventListener('click', async () => {
+            const input = document.getElementById('nostr-relay-input');
+            const relayUrl = input?.value || CONFIG.nostrRelayUrl;
+            try {
+                const result = await nostr.connect(relayUrl);
+                views.displayNostrResult('nostr-connection-result', { success: true, relay: relayUrl }, 'Connection');
+                views.updateNostrStatus();
+            } catch (error) {
+                views.displayNostrResult('nostr-connection-result', { error: error.message }, 'Connection Error');
+            }
+        });
+    }
+    
+    const disconnectBtn = document.getElementById('nostr-disconnect');
+    if (disconnectBtn) {
+        disconnectBtn.addEventListener('click', async () => {
+            try {
+                await nostr.disconnect();
+                views.displayNostrResult('nostr-connection-result', { success: true, message: 'Disconnected' }, 'Disconnection');
+                views.updateNostrStatus();
+            } catch (error) {
+                views.displayNostrResult('nostr-connection-result', { error: error.message }, 'Error');
+            }
+        });
+    }
+    
+    const healthCheckBtn = document.getElementById('nostr-health-check');
+    if (healthCheckBtn) {
+        healthCheckBtn.addEventListener('click', async () => {
+            const input = document.getElementById('nostr-relay-input');
+            const relayUrl = input?.value || CONFIG.nostrRelayUrl;
+            try {
+                const result = await nostr.healthCheck(relayUrl);
+                views.displayNostrResult('nostr-connection-result', result, 'Health Check');
+            } catch (error) {
+                views.displayNostrResult('nostr-connection-result', { error: error.message }, 'Error');
+            }
+        });
+    }
+    
+    // Query Tools
+    const queryEventsBtn = document.getElementById('nostr-query-events');
+    if (queryEventsBtn) {
+        queryEventsBtn.addEventListener('click', async () => {
+            try {
+                const filter = { kinds: [1], limit: 10 };
+                const result = await nostr.queryEvents(filter);
+                views.displayNostrResult('nostr-query-results', result, 'Query Events');
+            } catch (error) {
+                views.displayNostrResult('nostr-query-results', { error: error.message }, 'Error');
+            }
+        });
+    }
+    
+    const queryProfilesBtn = document.getElementById('nostr-query-profiles');
+    if (queryProfilesBtn) {
+        queryProfilesBtn.addEventListener('click', async () => {
+            try {
+                const result = await nostr.queryProfiles();
+                views.displayNostrResult('nostr-query-results', result, 'Query Profiles');
+            } catch (error) {
+                views.displayNostrResult('nostr-query-results', { error: error.message }, 'Error');
+            }
+        });
+    }
+    
+    const fetchFeedBtn = document.getElementById('nostr-fetch-feed');
+    if (fetchFeedBtn) {
+        fetchFeedBtn.addEventListener('click', async () => {
+            try {
+                const result = await nostr.fetchFeed();
+                views.displayNostrResult('nostr-query-results', result, 'Fetch Feed');
+                views.updateNostrStatus();
+            } catch (error) {
+                views.displayNostrResult('nostr-query-results', { error: error.message }, 'Error');
+            }
+        });
+    }
+    
+    // Dev Tools
+    const testConnectionBtn = document.getElementById('nostr-test-connection');
+    if (testConnectionBtn) {
+        testConnectionBtn.addEventListener('click', async () => {
+            try {
+                const result = await nostr.testConnection();
+                views.displayNostrResult('nostr-dev-results', result, 'Connection Test');
+            } catch (error) {
+                views.displayNostrResult('nostr-dev-results', { error: error.message }, 'Error');
+            }
+        });
+    }
+    
+    const getStatusBtn = document.getElementById('nostr-get-status');
+    if (getStatusBtn) {
+        getStatusBtn.addEventListener('click', () => {
+            const status = nostr.getStatus();
+            views.displayNostrResult('nostr-dev-results', status, 'Status');
+        });
+    }
+}
+
+// ============================================================================
 // DJ STATS CALCULATION HELPERS
 // ============================================================================
 
