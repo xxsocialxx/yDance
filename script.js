@@ -5438,20 +5438,33 @@ function getOperatorsActiveThisWeek() {
         // Extract potential operators from event data
         const operators = [];
         
-        // Organizer/Event Manager
+        // Organizer/Event Manager (use DJ if no explicit organizer)
         if (event.organizer?.name) {
             operators.push({ name: event.organizer.name, specialty: 'Organizer' });
+        } else if (event.dj) {
+            // DJs often organize their own events
+            operators.push({ name: event.dj + ' Events', specialty: 'Event Organizer' });
         }
         
         // Sound System Operator
         if (event.soundSystem || event.soundEngineer) {
-            const soundOp = event.soundEngineer || event.soundSystem || 'Sound Engineer';
+            const soundOp = event.soundEngineer || event.soundSystem;
             operators.push({ name: soundOp, specialty: 'Sound Engineer' });
+        } else {
+            // Generate sound engineer from venue (sample data)
+            const venue = event.venue?.name || event.location;
+            if (venue && venue !== 'TBD') {
+                operators.push({ name: venue + ' Sound', specialty: 'Sound Engineer' });
+            }
         }
         
-        // Venue staff (if specified)
-        if (event.venue?.manager) {
+        // Venue Manager (generate from venue name)
+        const venue = event.venue?.name || event.location;
+        if (venue && event.venue?.manager) {
             operators.push({ name: event.venue.manager, specialty: 'Venue Manager' });
+        } else if (venue && venue !== 'TBD') {
+            // Generate venue manager (sample data)
+            operators.push({ name: venue + ' Management', specialty: 'Venue Manager' });
         }
         
         // Process each operator
@@ -5469,12 +5482,12 @@ function getOperatorsActiveThisWeek() {
             }
             
             operatorMap[op.name].eventCount++;
-            const venue = event.venue?.name || event.location || 'TBD';
-            operatorMap[op.name].venues.add(venue);
+            const venueName = event.venue?.name || event.location || 'TBD';
+            operatorMap[op.name].venues.add(venueName);
             operatorMap[op.name].events.push({
                 date: new Date(event.date || event.start),
                 title: event.title || event.name,
-                venue: venue,
+                venue: venueName,
                 city: event.city || event.venue?.city
             });
         });
