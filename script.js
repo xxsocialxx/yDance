@@ -386,6 +386,27 @@ const social = {
     async init() {
         if (CONFIG.flags.debug) console.log('Initializing Social layer...');
         try {
+            // NEW: Use isolated nostr module if flag is enabled
+            if (CONFIG.flags.nostrIsolated) {
+                // Initialize isolated nostr module
+                const nostrInitialized = await nostr.init();
+                if (nostrInitialized) {
+                    // Sync feed from nostr to socialFeed
+                    if (state.nostr && state.nostr.feed) {
+                        state.socialFeed = [...state.nostr.feed];
+                    }
+                    if (CONFIG.flags.debug) console.log('Social layer initialized with isolated Nostr module');
+                } else {
+                    if (CONFIG.flags.debug) console.log('Social layer initialized (nostr module initialization failed)');
+                }
+                // Expose dev hook
+                if (typeof window !== 'undefined') {
+                    window.social = this;
+                }
+                return true;
+            }
+            
+            // LEGACY: Direct nostr integration (backward compatible)
             if (CONFIG.flags.nostrRealClient) {
                 // Initialize nostr client using nostrClient module
                 const urlParams = new URLSearchParams(window.location.search);
@@ -556,6 +577,12 @@ const social = {
         if (CONFIG.flags.debug) console.log('Sending nostr message...');
         
         try {
+            // NEW: Use isolated nostr module if flag is enabled
+            if (CONFIG.flags.nostrIsolated) {
+                return await nostr.sendMessage(content);
+            }
+            
+            // LEGACY: Direct nostr message sending (backward compatible)
             if (!CONFIG.flags.nostrRealClient) {
                 if (CONFIG.flags.debug) console.log('Nostr real client disabled by feature flag. Skip publish.');
                 return { success: false, disabled: true };
@@ -579,6 +606,23 @@ const social = {
         if (CONFIG.flags.debug) console.log('Fetching yDance events from Nostr...');
         
         try {
+            // NEW: Use isolated nostr module if flag is enabled
+            if (CONFIG.flags.nostrIsolated) {
+                const feed = await nostr.fetchFeed({
+                    kinds: [1],
+                    '#t': ['ydance', 'event'],
+                    limit: 100
+                });
+                // Update social feed
+                state.socialFeed = [...feed];
+                // Sync to nostr namespace
+                if (state.nostr) {
+                    state.nostr.feed = [...feed];
+                }
+                return feed;
+            }
+            
+            // LEGACY: Direct nostr query (backward compatible)
             // Query for Kind 1 events with yDance tags
             const events = await this.queryNostrEvents({
                 kinds: [1], // Text notes
@@ -602,9 +646,15 @@ const social = {
     },
 
     async queryNostrEvents(filter) {
-        if (CONFIG.flags.debug) console.log('SOCIAL: Delegating event query to nostrClient module');
+        if (CONFIG.flags.debug) console.log('SOCIAL: Delegating event query');
         
         try {
+            // NEW: Use isolated nostr module if flag is enabled
+            if (CONFIG.flags.nostrIsolated) {
+                return await nostr.queryEvents(filter);
+            }
+            
+            // LEGACY: Direct nostrClient query (backward compatible)
             if (!state.nostrClient || !state.nostrClient.connected) {
                 if (CONFIG.flags.debug) console.log('Nostr client not connected, returning placeholder data');
                 return this.getPlaceholderNostrEvents();
@@ -1335,6 +1385,12 @@ const social = {
     },
 
     async generateNostrKeys() {
+        // NEW: Use isolated nostr module if flag is enabled
+        if (CONFIG.flags.nostrIsolated) {
+            return await nostr.generateKeys();
+        }
+        
+        // LEGACY: Direct key generation (backward compatible)
         console.log('SOCIAL: Delegating key generation to nostrKeys module');
         const keys = await nostrKeys.generateKeyPair();
         
@@ -1348,6 +1404,12 @@ const social = {
     },
 
     encryptKeys(keys, password) {
+        // NEW: Use isolated nostr module if flag is enabled
+        if (CONFIG.flags.nostrIsolated) {
+            return nostr.encryptKeys(keys, password);
+        }
+        
+        // LEGACY: Direct encryption (backward compatible)
         if (CONFIG.flags.debug) console.log('SOCIAL: Delegating encryption to keyEncryption module');
         return keyEncryption.encryptData(keys.privateKey, password);
     },
