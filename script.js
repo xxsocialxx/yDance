@@ -3929,86 +3929,6 @@ const views = {
         if (CONFIG.flags.debug) console.log('Sound system details rendered');
     },
 
-    createFriendCard(friend) {
-        return `
-            <div class="friend-card" onclick="router.showFriendProfile('${friend.name}')" style="cursor: pointer;">
-                <div class="friend-avatar">${friend.avatar}</div>
-                <h3 class="friend-name">${friend.name}</h3>
-                <p class="friend-username">${friend.username}</p>
-                <p class="friend-events">🎵 ${friend.eventsAttending} events attending</p>
-                <p class="friend-genres">🎧 ${friend.favoriteGenres.join(', ')}</p>
-                <p class="friend-mutual">👥 ${friend.mutualFriends} mutual friends</p>
-                <p class="friend-active">🟢 ${friend.lastActive}</p>
-                <p class="click-hint">Click to view friend profile</p>
-            </div>
-        `;
-    },
-
-    renderFriends(friends) {
-        const container = document.getElementById('friends-container');
-        if (!container) {
-            console.error('Friends container not found!');
-            return;
-        }
-
-        if (!friends || friends.length === 0) {
-            container.innerHTML = '<p>No friends found.</p>';
-            return;
-        }
-
-        // Create friend cards
-        const cardsHTML = friends.map(this.createFriendCard).join('');
-        container.innerHTML = cardsHTML;
-        
-        if (CONFIG.flags.debug) console.log('Friends rendered');
-    },
-
-    renderFriendProfile(friend) {
-        const container = document.getElementById('friend-profile-container');
-        if (!container) {
-            console.error('Friend profile container not found!');
-            return;
-        }
-
-        if (!friend) {
-            container.innerHTML = '<p>Friend profile not found.</p>';
-            return;
-        }
-
-        // Create detailed friend HTML
-        container.innerHTML = `
-            <div class="friend-profile-card">
-                <div class="friend-profile-header">
-                    <div class="friend-profile-avatar">${friend.avatar}</div>
-                    <h1 class="friend-profile-name">${friend.name}</h1>
-                    <p class="friend-profile-username">${friend.username}</p>
-                </div>
-                
-                <div class="friend-profile-content">
-                    <div class="friend-profile-about">
-                        <h3>About</h3>
-                        <p>${friend.about}</p>
-                    </div>
-                    
-                    <div class="friend-profile-stats">
-                        <h3>Activity</h3>
-                        <p><strong>Events Attending:</strong> ${friend.eventsAttending}</p>
-                        <p><strong>Mutual Friends:</strong> ${friend.mutualFriends}</p>
-                        <p><strong>Last Active:</strong> ${friend.lastActive}</p>
-                    </div>
-                    
-                    <div class="friend-profile-genres">
-                        <h3>Favorite Genres</h3>
-                        <div class="genres-list">
-                            ${friend.favoriteGenres.map(genre => `<span class="genre-tag">${genre}</span>`).join('')}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        if (CONFIG.flags.debug) console.log('Friend profile rendered');
-    },
 
     createSocialMessageCard(message) {
         return `
@@ -4308,9 +4228,7 @@ const router = {
         document.getElementById('venues-view').style.display = 'none';
         document.getElementById('operator-profile-view').style.display = 'none';
         document.getElementById('operators-view').style.display = 'none';
-        document.getElementById('friend-profile-view').style.display = 'none';
-        document.getElementById('friends-view').style.display = 'none';
-        document.getElementById('social-view').style.display = 'none';
+        document.getElementById('users-view').style.display = 'none';
         const djUpcomingView = document.getElementById('dj-upcoming-view');
         if (djUpcomingView) djUpcomingView.style.display = 'none';
         
@@ -4365,25 +4283,10 @@ const router = {
                     views.renderOperators(activeOperators);
                 }
                 break;
-            case 'friends':
-                document.getElementById('friends-view').style.display = 'block';
-                state.currentView = 'friends';
-                // Load friends if not already loaded
-                if (state.friendsData.length === 0) {
-                    views.showLoading('friends-container');
-                    api.fetchFriends().then(friends => {
-                        views.renderFriends(friends);
-                    }).catch(error => {
-                        views.showError('friends-container', error.message);
-                    });
-                } else {
-                    views.renderFriends(state.friendsData);
-                }
-                break;
-            case 'social':
-                document.getElementById('social-view').style.display = 'block';
-                state.currentView = 'social';
-                // Load social feed if not already loaded
+            case 'users':
+                document.getElementById('users-view').style.display = 'block';
+                state.currentView = 'users';
+                // Load social feed if not already loaded (internal: still uses social layer)
                 if (state.socialFeed.length === 0) {
                     views.showLoading('social-feed-container');
                     social.fetchSocialFeed().then(messages => {
@@ -4409,7 +4312,7 @@ const router = {
         document.getElementById('venue-details-view').style.display = 'block';
         document.getElementById('venues-view').style.display = 'none';
         document.getElementById('sound-systems-view').style.display = 'none';
-        document.getElementById('friends-view').style.display = 'none';
+        document.getElementById('users-view').style.display = 'none';
         
         // Update the title
         const titleElement = document.getElementById('venue-details-title');
@@ -4439,7 +4342,7 @@ const router = {
         document.getElementById('venues-view').style.display = 'none';
         document.getElementById('operator-profile-view').style.display = 'block';
         document.getElementById('operators-view').style.display = 'none';
-        document.getElementById('friends-view').style.display = 'none';
+        document.getElementById('users-view').style.display = 'none';
         const djUpcomingView = document.getElementById('dj-upcoming-view');
         if (djUpcomingView) djUpcomingView.style.display = 'none';
         
@@ -4466,35 +4369,6 @@ const router = {
         views.renderOperatorProfile(operator);
     },
 
-    async showFriendProfile(friendName) {
-        console.log('Switching to friend profile view for:', friendName);
-        state.currentView = 'friend-profile';
-        
-        // Hide all other views
-        document.getElementById('events-view').style.display = 'none';
-        document.getElementById('dj-view').style.display = 'none';
-        document.getElementById('dj-profile-view').style.display = 'none';
-        document.getElementById('venue-details-view').style.display = 'none';
-        document.getElementById('venues-view').style.display = 'none';
-        document.getElementById('operator-profile-view').style.display = 'none';
-        document.getElementById('operators-view').style.display = 'none';
-        document.getElementById('friend-profile-view').style.display = 'block';
-        document.getElementById('friends-view').style.display = 'none';
-        
-        // Update the title
-        const titleElement = document.getElementById('friend-profile-title');
-        if (titleElement) {
-            titleElement.textContent = `${friendName} - Profile`;
-        }
-        
-        // Find and render the friend profile
-        const friend = state.friendsData.find(f => f.name === friendName);
-        if (friend) {
-            views.renderFriendProfile(friend);
-        } else {
-            views.showError('friend-profile-container', 'Friend not found');
-        }
-    },
 
     async handleSendMessage(messageText) {
         console.log('Handling send message:', messageText);
@@ -4601,10 +4475,6 @@ const router = {
         }
         
         // Back to friends button
-        const backToFriendsButton = document.getElementById('back-to-friends');
-        if (backToFriendsButton) {
-            backToFriendsButton.addEventListener('click', () => this.switchTab('friends'));
-        }
         
         // Tab button event listeners
         document.querySelectorAll('.tab-button').forEach(button => {
