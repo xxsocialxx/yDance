@@ -169,8 +169,15 @@ const api = {
             if (!viewResult.error && Array.isArray(viewResult.data) && viewResult.data.length > 0) {
                 const events = viewResult.data.map(row => row.normalized_json).filter(Boolean);
                 state.eventsData = events;
-                if (CONFIG.flags.debug) console.log('Loaded events from normalized view:', state.eventsData.length);
+                console.log('✅ Loaded events from normalized view:', state.eventsData.length);
+                if (CONFIG.flags.debug) {
+                    console.log('Sample event:', state.eventsData[0]);
+                    console.log('Event dates:', state.eventsData.slice(0, 5).map(e => e.date || e.start));
+                }
                 return state.eventsData;
+            } else {
+                console.warn('⚠️  No events found in normalized_events_latest view');
+                if (viewResult.error) console.error('Error:', viewResult.error);
             }
 
             // Fallback: legacy tables
@@ -3130,9 +3137,23 @@ const views = {
             return;
         }
 
-        // Clear container and add events as flat list
-        container.innerHTML = events.map(this.createEventCard).join('');
+        // Sort events by date (upcoming first, then past)
+        const now = new Date();
+        const sortedEvents = [...events].sort((a, b) => {
+            const dateA = a.date || a.start;
+            const dateB = b.date || b.start;
+            if (!dateA && !dateB) return 0;
+            if (!dateA) return 1;
+            if (!dateB) return -1;
+            const timeA = new Date(dateA);
+            const timeB = new Date(dateB);
+            return timeA - timeB;
+        });
         
+        // Clear container and add events as flat list
+        container.innerHTML = sortedEvents.map(this.createEventCard).join('');
+        
+        console.log(`✅ Rendered ${sortedEvents.length} events`);
         if (CONFIG.flags.debug) console.log('Events rendered');
     },
 
