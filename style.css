@@ -1163,3 +1163,40 @@ body * {
     margin-left: 15px;
     font-size: 0.9rem;
 }
+
+/* Event tabs in DJ upcoming view */
+.event-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.event-tab {
+    background: none;
+    border: 1px solid var(--border-primary);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.event-tab:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+
+.event-tab.active {
+    background: var(--bg-tertiary);
+    color: var(--accent);
+    border-color: var(--accent);
+    font-weight: 700;
+}
+
+#dj-events-content {
+    margin-top: 20px;
+}

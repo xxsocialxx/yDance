@@ -3456,23 +3456,35 @@ const views = {
             return;
         }
 
-        // Get all upcoming events for this DJ
+        // Get all events for this DJ (upcoming and past)
         const stats = aggregateDJStats(djName);
-        if (!stats || !stats.upcomingEvents || stats.upcomingEvents.length === 0) {
-            container.innerHTML = '<div class="empty-state">> No upcoming events found.</div>';
+        if (!stats) {
+            container.innerHTML = '<div class="empty-state">> No events found.</div>';
             return;
         }
+
+        const now = new Date();
+        const upcomingEvents = (stats.upcomingEvents || []).filter(e => e.date && new Date(e.date) > now);
+        const pastEvents = stats.allEvents ? stats.allEvents.filter(e => {
+            const eventDate = e.dateObj || (e.date ? new Date(e.date) : null);
+            return eventDate && eventDate < now;
+        }).sort((a, b) => {
+            const dateA = a.dateObj || (a.date ? new Date(a.date) : null);
+            const dateB = b.dateObj || (b.date ? new Date(b.date) : null);
+            return (dateB || 0) - (dateA || 0); // Most recent first
+        }) : [];
 
         // Update title
         const titleElement = document.getElementById('dj-upcoming-title');
         if (titleElement) {
-            titleElement.textContent = `${djName} - Upcoming Events (${stats.upcomingEvents.length})`;
+            titleElement.textContent = `${djName} - Events (${upcomingEvents.length} upcoming, ${pastEvents.length} past)`;
         }
 
         // Format date helper
         const formatDate = (date) => {
             if (!date) return null;
-            return date.toLocaleDateString('en-US', { 
+            const dateObj = date instanceof Date ? date : new Date(date);
+            return dateObj.toLocaleDateString('en-US', { 
                 month: 'short', 
                 day: 'numeric', 
                 year: 'numeric',
@@ -3481,19 +3493,32 @@ const views = {
             });
         };
 
-        // Sort by date
-        const sortedEvents = [...stats.upcomingEvents].sort((a, b) => a.date - b.date);
+        // Sort upcoming by date (ascending), past by date (descending - most recent first)
+        const sortedUpcoming = [...upcomingEvents].sort((a, b) => {
+            const dateA = a.date instanceof Date ? a.date : new Date(a.date);
+            const dateB = b.date instanceof Date ? b.date : new Date(b.date);
+            return dateA - dateB;
+        });
 
+        // Build tabs for upcoming/past
         let html = `
             <div class="dj-upcoming-terminal">
                 <div class="dj-upcoming-header">
-                    <div class="upcoming-summary">
-                        <span class="summary-label">TOTAL UPCOMING:</span> ${sortedEvents.length} events
+                    <div class="event-tabs">
+                        <button class="event-tab active" onclick="views.switchEventTab('upcoming', '${djName}')">
+                            UPCOMING (${upcomingEvents.length})
+                        </button>
+                        <button class="event-tab" onclick="views.switchEventTab('past', '${djName}')">
+                            PAST (${pastEvents.length})
+                        </button>
                     </div>
                 </div>
+                <div id="dj-events-content">
         `;
 
-        sortedEvents.forEach((event, index) => {
+        // Render upcoming events
+        if (sortedUpcoming.length > 0) {
+            sortedUpcoming.forEach((event, index) => {
             html += `
                 <div class="upcoming-event-detail">
                     <div class="event-detail-header">
@@ -3518,15 +3543,127 @@ const views = {
                     </div>
                 </div>
             `;
-        });
+            });
+        } else {
+            html += `<div class="empty-state">> No upcoming events.</div>`;
+        }
 
         html += `
+                </div>
             </div>
         `;
 
         container.innerHTML = html;
         
-        if (CONFIG.flags.debug) console.log('DJ upcoming events rendered:', sortedEvents.length);
+        // Store events for tab switching
+        container.dataset.djName = djName;
+        container.dataset.upcomingEvents = JSON.stringify(sortedUpcoming);
+        container.dataset.pastEvents = JSON.stringify(pastEvents);
+        
+        if (CONFIG.flags.debug) console.log('DJ events rendered:', sortedUpcoming.length, 'upcoming,', pastEvents.length, 'past');
+    },
+
+    switchEventTab(tab, djName) {
+        const container = document.getElementById('dj-upcoming-container');
+        if (!container) return;
+
+        const upcomingEvents = JSON.parse(container.dataset.upcomingEvents || '[]');
+        const pastEvents = JSON.parse(container.dataset.pastEvents || '[]');
+        const contentDiv = document.getElementById('dj-events-content');
+        
+        if (!contentDiv) return;
+
+        // Update tab buttons
+        const tabs = container.querySelectorAll('.event-tab');
+        tabs.forEach(t => t.classList.remove('active'));
+        const activeTab = Array.from(tabs).find(t => t.textContent.includes(tab.toUpperCase()));
+        if (activeTab) activeTab.classList.add('active');
+
+        // Format date helper
+        const formatDate = (date) => {
+            if (!date) return null;
+            const dateObj = date instanceof Date ? date : new Date(date);
+            return dateObj.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        };
+
+        let html = '';
+
+        if (tab === 'upcoming') {
+            if (upcomingEvents.length > 0) {
+                upcomingEvents.forEach((event, index) => {
+                    html += `
+                <div class="upcoming-event-detail">
+                    <div class="event-detail-header">
+                        <span class="event-number">${index + 1}.</span>
+                        <span class="event-title">${event.title}</span>
+                    </div>
+                    <div class="event-detail-info">
+                        <div class="event-detail-line">
+                            <span class="detail-label">DATE:</span> ${formatDate(event.date)}
+                        </div>
+                        <div class="event-detail-line">
+                            <span class="detail-label">VENUE:</span> ${event.venue}
+                        </div>
+                        ${event.city ? `
+                        <div class="event-detail-line">
+                            <span class="detail-label">CITY:</span> ${event.city}
+                        </div>
+                        ` : ''}
+                        <div class="event-detail-actions">
+                            <a href="#" class="details-link" onclick="router.showEventDetailsView('${event.title}'); return false;">[DETAILS]</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+                });
+            } else {
+                html = `<div class="empty-state">> No upcoming events.</div>`;
+            }
+        } else {
+            // Past events
+            if (pastEvents.length > 0) {
+                pastEvents.forEach((event, index) => {
+                    const eventDate = event.dateObj || (event.date ? new Date(event.date) : null);
+                    const venue = event.venue?.name || event.venue || event.location || 'TBD';
+                    const city = event.city || event.venue?.city || '';
+                    
+                    html += `
+                <div class="upcoming-event-detail">
+                    <div class="event-detail-header">
+                        <span class="event-number">${index + 1}.</span>
+                        <span class="event-title">${event.title || event.name || 'Event'}</span>
+                    </div>
+                    <div class="event-detail-info">
+                        <div class="event-detail-line">
+                            <span class="detail-label">DATE:</span> ${formatDate(eventDate)}
+                        </div>
+                        <div class="event-detail-line">
+                            <span class="detail-label">VENUE:</span> ${venue}
+                        </div>
+                        ${city ? `
+                        <div class="event-detail-line">
+                            <span class="detail-label">CITY:</span> ${city}
+                        </div>
+                        ` : ''}
+                        <div class="event-detail-actions">
+                            <a href="#" class="details-link" onclick="router.showEventDetailsView('${event.title || event.name}'); return false;">[DETAILS]</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+                });
+            } else {
+                html = `<div class="empty-state">> No past events.</div>`;
+            }
+        }
+
+        contentDiv.innerHTML = html;
     },
 
     renderSocialMentions(djName) {
