@@ -5016,11 +5016,6 @@ const router = {
                 state.currentView = 'nostr';
                 views.renderNostrDevTools();
                 break;
-                        views.renderSocialFeed(messages);
-                    }).catch(error => {
-                        views.showError('social-feed-container', error.message);
-                    });
-                } else {
                     views.renderSocialFeed(state.socialFeed);
                 }
                 break;
