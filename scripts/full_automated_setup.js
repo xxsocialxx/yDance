@@ -76,24 +76,11 @@ async function main() {
     
     console.log('✅ Function exists!\n\n');
     
-    // Create tables
-    console.log('📝 Step 1: Creating tables...');
-    const sqlPath = path.join(__dirname, '..', 'supabase/migrations/create_dj_editorial_tables.sql');
-    const sql = fs.readFileSync(sqlPath, 'utf8');
-    const cleanSQL = sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
-    
-    const result = await executeSQL(cleanSQL);
-    
-    if (result.status !== 200 && result.status !== 201 && result.status !== 204) {
-        console.log(`❌ Failed: ${result.status}`);
-        if (result.json) console.log(JSON.stringify(result.json, null, 2));
-        process.exit(1);
-    }
-    
-    console.log('✅ Tables created!\n');
+    // Tables should already be created via migration
+    console.log('📝 Step 1: Verifying tables (already created via migration)...\n');
     
     // Verify
-    console.log('🔍 Step 2: Verifying tables...');
+    console.log('🔍 Verifying tables...');
     const { error: e1 } = await supabase.from('dj_editorial_attributes').select('id').limit(1);
     const { error: e2 } = await supabase.from('dj_reviews_aggregate').select('id').limit(1);
     
@@ -108,7 +95,7 @@ async function main() {
     console.log('✅ Tables verified!\n');
     
     // Populate
-    console.log('📝 Step 3: Populating sample data...\n');
+    console.log('📝 Step 2: Populating sample data...\n');
     const populateScript = require('./populate_dj_editorial.js');
     await populateScript.main();
     

@@ -47,12 +47,24 @@ CREATE INDEX IF NOT EXISTS idx_dj_reviews_dj_name ON dj_reviews_aggregate(dj_nam
 ALTER TABLE dj_editorial_attributes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dj_reviews_aggregate ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies: Allow public read, restrict writes (will add admin policies later)
+-- RLS Policies: Allow public read, allow service role writes
 CREATE POLICY "dj_editorial_attributes_select" ON dj_editorial_attributes
     FOR SELECT USING (true);
 
+CREATE POLICY "dj_editorial_attributes_insert" ON dj_editorial_attributes
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "dj_editorial_attributes_update" ON dj_editorial_attributes
+    FOR UPDATE USING (true) WITH CHECK (true);
+
 CREATE POLICY "dj_reviews_aggregate_select" ON dj_reviews_aggregate
     FOR SELECT USING (true);
+
+CREATE POLICY "dj_reviews_aggregate_insert" ON dj_reviews_aggregate
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "dj_reviews_aggregate_update" ON dj_reviews_aggregate
+    FOR UPDATE USING (true) WITH CHECK (true);
 
 -- Grant permissions
 GRANT SELECT ON dj_editorial_attributes TO anon, authenticated;

@@ -9,12 +9,20 @@
     "serve": "python3 -m http.server 8000"
   },
   "dependencies": {
-    "nostr-tools": "^2.0.0"
+    "@supabase/supabase-js": "^2.78.0",
+    "nostr-tools": "^2.0.0",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "eslint": "^8.0.0"
   },
-  "keywords": ["music", "events", "dj", "pwa", "nostr"],
+  "keywords": [
+    "music",
+    "events",
+    "dj",
+    "pwa",
+    "nostr"
+  ],
   "author": "",
   "license": "MIT"
 }
