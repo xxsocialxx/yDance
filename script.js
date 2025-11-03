@@ -3144,11 +3144,11 @@ const views = {
         }
 
         if (!profiles || profiles.length === 0) {
-            container.innerHTML = '<p>No DJ profiles found.</p>';
+            container.innerHTML = '<div class="empty-state">> No DJ profiles found.</div>';
             return;
         }
 
-        // Create DJ cards
+        // Create DJ cards - profiles is now array of week activity objects
         const cardsHTML = profiles.map(this.createDJCard).join('');
         container.innerHTML = cardsHTML;
         
@@ -3441,6 +3441,92 @@ const views = {
         container.innerHTML = html;
         
         if (CONFIG.flags.debug) console.log('DJ profile rendered with all attributes');
+    },
+
+    showEmpty(containerId, message) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.innerHTML = `<div class="empty-state">${message}</div>`;
+    },
+
+    renderDJUpcomingEvents(djName) {
+        const container = document.getElementById('dj-upcoming-container');
+        if (!container) {
+            console.error('DJ upcoming container not found!');
+            return;
+        }
+
+        // Get all upcoming events for this DJ
+        const stats = aggregateDJStats(djName);
+        if (!stats || !stats.upcomingEvents || stats.upcomingEvents.length === 0) {
+            container.innerHTML = '<div class="empty-state">> No upcoming events found.</div>';
+            return;
+        }
+
+        // Update title
+        const titleElement = document.getElementById('dj-upcoming-title');
+        if (titleElement) {
+            titleElement.textContent = `${djName} - Upcoming Events (${stats.upcomingEvents.length})`;
+        }
+
+        // Format date helper
+        const formatDate = (date) => {
+            if (!date) return null;
+            return date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        };
+
+        // Sort by date
+        const sortedEvents = [...stats.upcomingEvents].sort((a, b) => a.date - b.date);
+
+        let html = `
+            <div class="dj-upcoming-terminal">
+                <div class="dj-upcoming-header">
+                    <div class="upcoming-summary">
+                        <span class="summary-label">TOTAL UPCOMING:</span> ${sortedEvents.length} events
+                    </div>
+                </div>
+        `;
+
+        sortedEvents.forEach((event, index) => {
+            html += `
+                <div class="upcoming-event-detail">
+                    <div class="event-detail-header">
+                        <span class="event-number">${index + 1}.</span>
+                        <span class="event-title">${event.title}</span>
+                    </div>
+                    <div class="event-detail-info">
+                        <div class="event-detail-line">
+                            <span class="detail-label">DATE:</span> ${formatDate(event.date)}
+                        </div>
+                        <div class="event-detail-line">
+                            <span class="detail-label">VENUE:</span> ${event.venue}
+                        </div>
+                        ${event.city ? `
+                        <div class="event-detail-line">
+                            <span class="detail-label">CITY:</span> ${event.city}
+                        </div>
+                        ` : ''}
+                        <div class="event-detail-actions">
+                            <a href="#" class="details-link" onclick="router.showEventDetailsView('${event.title}'); return false;">[DETAILS]</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+            </div>
+        `;
+
+        container.innerHTML = html;
+        
+        if (CONFIG.flags.debug) console.log('DJ upcoming events rendered:', sortedEvents.length);
     },
 
     renderSocialMentions(djName) {
@@ -3923,6 +4009,8 @@ const router = {
         document.getElementById('dj-view').style.display = 'none';
         document.getElementById('dj-profile-view').style.display = 'block';
         document.getElementById('event-details-view').style.display = 'none';
+        const djUpcomingView = document.getElementById('dj-upcoming-view');
+        if (djUpcomingView) djUpcomingView.style.display = 'none';
         
         // Update the title
         const titleElement = document.getElementById('dj-profile-title');
@@ -4008,6 +4096,8 @@ const router = {
         document.getElementById('friend-profile-view').style.display = 'none';
         document.getElementById('friends-view').style.display = 'none';
         document.getElementById('social-view').style.display = 'none';
+        const djUpcomingView = document.getElementById('dj-upcoming-view');
+        if (djUpcomingView) djUpcomingView.style.display = 'none';
         
         // Show the selected tab's view
         switch(tabName) {
@@ -4018,16 +4108,14 @@ const router = {
             case 'djs':
                 document.getElementById('dj-view').style.display = 'block';
                 state.currentView = 'dj';
-                // Load DJ profiles if not already loaded
-                if (state.djProfilesData.length === 0) {
-                    views.showLoading('dj-profiles-container');
-                    api.fetchDJProfiles().then(profiles => {
-                        views.renderDJProfiles(profiles);
-                    }).catch(error => {
-                        views.showError('dj-profiles-container', error.message);
-                    });
+                // Show only DJs active in next 7 days
+                views.showLoading('dj-profiles-container');
+                const activeDJs = getDJsActiveThisWeek();
+                if (activeDJs.length === 0) {
+                    const cityContext = state.userCity ? ` in ${state.userCity}` : '';
+                    views.showEmpty('dj-profiles-container', `> No DJs active in the next 7 days${cityContext}.`);
                 } else {
-                    views.renderDJProfiles(state.djProfilesData);
+                    views.renderDJProfiles(activeDJs);
                 }
                 break;
             case 'venues':
