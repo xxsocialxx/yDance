@@ -4936,6 +4936,8 @@ const router = {
         document.getElementById('operator-profile-view').style.display = 'none';
         document.getElementById('operators-view').style.display = 'none';
         document.getElementById('users-view').style.display = 'none';
+        const nostrView = document.getElementById('nostr-view');
+        if (nostrView) nostrView.style.display = 'none';
         const djUpcomingView = document.getElementById('dj-upcoming-view');
         if (djUpcomingView) djUpcomingView.style.display = 'none';
         
@@ -5015,9 +5017,6 @@ const router = {
                 document.getElementById('nostr-view').style.display = 'block';
                 state.currentView = 'nostr';
                 views.renderNostrDevTools();
-                break;
-                    views.renderSocialFeed(state.socialFeed);
-                }
                 break;
         }
     },
