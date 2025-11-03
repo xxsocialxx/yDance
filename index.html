@@ -39,6 +39,10 @@
                 <button class="tab-button" data-tab="users" id="tab-users">
                     <span class="tab-label">USERS</span>
                 </button>
+                <!-- NOSTR Dev Tab (only shown if nostrDevTab flag enabled) -->
+                <button class="tab-button nostr-dev-tab" data-tab="nostr" id="tab-nostr" style="display: none;">
+                    <span class="tab-label">NOSTR</span>
+                </button>
                 <button class="nostr-refresh-button" id="nostr-refresh-btn" title="Refresh Nostr Data">
                     <span class="refresh-icon">↻</span>
                 </button>
@@ -172,6 +176,97 @@
             <!-- Social Feed -->
             <div class="social-feed-container" id="social-feed-container">
                 <!-- Social messages will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- NOSTR Development Tools View -->
+        <div class="nostr-view" id="nostr-view" style="display: none;">
+            <div class="view-header">
+                <h2>NOSTR Development Tools</h2>
+            </div>
+            
+            <!-- Connection Status -->
+            <div class="nostr-status-section">
+                <h3>Connection Status</h3>
+                <div class="nostr-status-grid">
+                    <div class="nostr-status-item">
+                        <span class="nostr-status-label">Status:</span>
+                        <span class="nostr-status-value" id="nostr-connection-status">Disconnected</span>
+                    </div>
+                    <div class="nostr-status-item">
+                        <span class="nostr-status-label">Relay:</span>
+                        <span class="nostr-status-value" id="nostr-relay-url">-</span>
+                    </div>
+                    <div class="nostr-status-item">
+                        <span class="nostr-status-label">Has Keys:</span>
+                        <span class="nostr-status-value" id="nostr-has-keys">No</span>
+                    </div>
+                    <div class="nostr-status-item">
+                        <span class="nostr-status-label">Feed Count:</span>
+                        <span class="nostr-status-value" id="nostr-feed-count">0</span>
+                    </div>
+                    <div class="nostr-status-item">
+                        <span class="nostr-status-label">Last Sync:</span>
+                        <span class="nostr-status-value" id="nostr-last-sync">Never</span>
+                    </div>
+                </div>
+                <button id="nostr-refresh-status" class="nostr-button secondary">Refresh Status</button>
+            </div>
+            
+            <!-- Key Management -->
+            <div class="nostr-section">
+                <h3>Key Management</h3>
+                <div class="nostr-button-group">
+                    <button id="nostr-generate-keys" class="nostr-button">Generate New Keys</button>
+                    <button id="nostr-test-keygen" class="nostr-button secondary">Test Key Generation</button>
+                    <button id="nostr-test-encryption" class="nostr-button secondary">Test Encryption</button>
+                </div>
+                <div class="nostr-keys-display" id="nostr-keys-display">
+                    <p class="nostr-placeholder">No keys generated yet</p>
+                </div>
+            </div>
+            
+            <!-- Connection Tools -->
+            <div class="nostr-section">
+                <h3>Connection Management</h3>
+                <div class="nostr-input-group">
+                    <input type="text" id="nostr-relay-input" class="nostr-input" placeholder="wss://relay.beginnersurfer.com" value="wss://relay.beginnersurfer.com">
+                    <button id="nostr-connect" class="nostr-button">Connect</button>
+                    <button id="nostr-disconnect" class="nostr-button secondary">Disconnect</button>
+                    <button id="nostr-health-check" class="nostr-button secondary">Health Check</button>
+                </div>
+                <div class="nostr-result" id="nostr-connection-result"></div>
+            </div>
+            
+            <!-- Query Tools -->
+            <div class="nostr-section">
+                <h3>Query Tools</h3>
+                <div class="nostr-button-group">
+                    <button id="nostr-query-events" class="nostr-button">Query Events</button>
+                    <button id="nostr-query-profiles" class="nostr-button secondary">Query Profiles</button>
+                    <button id="nostr-fetch-feed" class="nostr-button secondary">Fetch Feed</button>
+                </div>
+                <div class="nostr-result" id="nostr-query-results">
+                    <p class="nostr-placeholder">No queries run yet</p>
+                </div>
+            </div>
+            
+            <!-- Dev Tools -->
+            <div class="nostr-section">
+                <h3>Dev Tools</h3>
+                <div class="nostr-button-group">
+                    <button id="nostr-test-connection" class="nostr-button">Test Connection</button>
+                    <button id="nostr-get-status" class="nostr-button secondary">Get Status</button>
+                </div>
+                <div class="nostr-result" id="nostr-dev-results">
+                    <p class="nostr-placeholder">No tests run yet</p>
+                </div>
+            </div>
+            
+            <!-- Admin Features (Future) -->
+            <div class="nostr-section">
+                <h3>Admin Tools</h3>
+                <p class="nostr-placeholder">Future: Event moderation, user management, etc.</p>
             </div>
         </div>
         

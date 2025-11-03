@@ -4498,6 +4498,95 @@ const views = {
         
         if (CONFIG.flags.debug) console.log('Operator profile rendered');
     },
+    
+    renderNostrDevTools() {
+        const view = document.getElementById('nostr-view');
+        if (!view) return;
+        
+        // Refresh status display
+        this.updateNostrStatus();
+    },
+    
+    async updateNostrStatus() {
+        // Only update if nostrIsolated flag is enabled
+        if (!CONFIG.flags.nostrIsolated) {
+            document.getElementById('nostr-connection-status').textContent = 'Not Isolated';
+            document.getElementById('nostr-relay-url').textContent = 'N/A (legacy mode)';
+            return;
+        }
+        
+        if (!window.nostr) {
+            document.getElementById('nostr-connection-status').textContent = 'Module Not Available';
+            return;
+        }
+        
+        try {
+            const status = nostr.getStatus();
+            document.getElementById('nostr-connection-status').textContent = 
+                status.connected ? 'Connected' : 'Disconnected';
+            document.getElementById('nostr-relay-url').textContent = 
+                status.relay || '-';
+            document.getElementById('nostr-has-keys').textContent = 
+                status.hasKeys ? 'Yes' : 'No';
+            document.getElementById('nostr-feed-count').textContent = 
+                status.feedCount || 0;
+            document.getElementById('nostr-last-sync').textContent = 
+                status.lastSync ? new Date(status.lastSync).toLocaleString() : 'Never';
+        } catch (error) {
+            console.error('Error updating nostr status:', error);
+            document.getElementById('nostr-connection-status').textContent = 'Error';
+        }
+    },
+    
+    displayNostrResult(containerId, data, title = null) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        let html = '';
+        if (title) {
+            html += `<strong>${title}:</strong>\n\n`;
+        }
+        
+        if (typeof data === 'object') {
+            html += JSON.stringify(data, null, 2);
+        } else {
+            html += String(data);
+        }
+        
+        container.innerHTML = `<pre>${html}</pre>`;
+        container.scrollTop = 0;
+    },
+    
+    displayNostrKeys(keys) {
+        const container = document.getElementById('nostr-keys-display');
+        if (!container) return;
+        
+        if (!keys) {
+            container.innerHTML = '<p class="nostr-placeholder">No keys available</p>';
+            return;
+        }
+        
+        const html = `
+            <div class="key-item">
+                <span class="key-label">Public Key:</span>
+                <span class="key-value">${keys.publicKey || 'N/A'}</span>
+            </div>
+            <div class="key-item">
+                <span class="key-label">Private Key:</span>
+                <span class="key-value">${keys.privateKey ? keys.privateKey.substring(0, 20) + '...' : 'N/A'}</span>
+            </div>
+            <div class="key-item">
+                <span class="key-label">NPUB:</span>
+                <span class="key-value">${keys.npub || 'N/A'}</span>
+            </div>
+            <div class="key-item">
+                <span class="key-label">NSEC:</span>
+                <span class="key-value">${keys.nsec ? keys.nsec.substring(0, 20) + '...' : 'N/A'}</span>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+    },
 
     renderSoundSystemDetails(soundSystem) {
         const container = document.getElementById('sound-system-details-container');
@@ -4908,6 +4997,25 @@ const router = {
                 if (state.socialFeed.length === 0) {
                     views.showLoading('social-feed-container');
                     social.fetchSocialFeed().then(messages => {
+                        views.renderSocialFeed(messages);
+                    }).catch(error => {
+                        console.error('Error fetching social feed:', error);
+                        views.showError('social-feed-container', 'Failed to load social feed');
+                    });
+                } else {
+                    views.renderSocialFeed(state.socialFeed);
+                }
+                break;
+                
+            case 'nostr':
+                if (!CONFIG.flags.nostrDevTab) {
+                    console.warn('NOSTR tab disabled by flag');
+                    return;
+                }
+                document.getElementById('nostr-view').style.display = 'block';
+                state.currentView = 'nostr';
+                views.renderNostrDevTools();
+                break;
                         views.renderSocialFeed(messages);
                     }).catch(error => {
                         views.showError('social-feed-container', error.message);
@@ -6104,6 +6212,9 @@ async function init() {
     
     // Initialize Social layer
     const socialInitialized = await social.init();
+    
+    // Initialize NOSTR dev tab (if flag enabled)
+    initNostrDevTab();
     if (!socialInitialized) {
         console.warn('Social layer initialization failed, continuing without social features');
     }
@@ -6141,4 +6252,5 @@ document.addEventListener('DOMContentLoaded', init);
 // 6. Add navigation logic to router object
 // 
 // NEVER add functions outside these modules!
+// ============================================================================
 // ============================================================================

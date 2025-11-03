@@ -1274,3 +1274,211 @@ body * {
     padding-top: 20px;
     border-top: 1px solid var(--border-primary);
 }
+
+/* ========================================
+   NOSTR DEV TAB - Terminal Style
+   ======================================== */
+.nostr-dev-tab {
+    /* Only show if flag enabled - controlled by JavaScript */
+}
+
+.nostr-view {
+    padding: 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text-primary);
+}
+
+.nostr-view h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 30px 0 15px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.nostr-view h3:first-child {
+    margin-top: 0;
+}
+
+.nostr-section {
+    margin-bottom: 40px;
+}
+
+/* Status Section */
+.nostr-status-section {
+    margin-bottom: 40px;
+}
+
+.nostr-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.nostr-status-item {
+    padding: 10px;
+    border: 1px solid var(--border-primary);
+    background: var(--bg-secondary);
+}
+
+.nostr-status-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.nostr-status-value {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    font-weight: 700;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+/* Buttons */
+.nostr-button-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.nostr-button {
+    padding: 10px 20px;
+    border: 1px solid var(--accent);
+    background: var(--bg-primary);
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.nostr-button:hover {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.nostr-button.secondary {
+    border-color: var(--border-primary);
+    color: var(--text-primary);
+}
+
+.nostr-button.secondary:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.nostr-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.nostr-button:disabled:hover {
+    background: var(--bg-primary);
+    color: var(--accent);
+}
+
+/* Input */
+.nostr-input-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.nostr-input {
+    flex: 1;
+    min-width: 250px;
+    padding: 10px;
+    border: 1px solid var(--border-primary);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+}
+
+.nostr-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Results Display */
+.nostr-result {
+    padding: 15px;
+    border: 1px solid var(--border-primary);
+    background: var(--bg-secondary);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.nostr-keys-display {
+    padding: 15px;
+    border: 1px solid var(--border-primary);
+    background: var(--bg-secondary);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.8;
+    color: var(--text-primary);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.nostr-keys-display .key-item {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dotted var(--border-primary);
+}
+
+.nostr-keys-display .key-label {
+    color: var(--accent);
+    font-weight: 700;
+    margin-right: 10px;
+    display: inline-block;
+    min-width: 80px;
+}
+
+.nostr-keys-display .key-value {
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.nostr-placeholder {
+    color: var(--text-secondary);
+    font-style: italic;
+    margin: 0;
+}
+
+/* Light Mode Adjustments */
+body.light-mode .nostr-button {
+    border-color: var(--accent);
+    background: var(--bg-primary);
+}
+
+body.light-mode .nostr-button:hover {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+body.light-mode .nostr-status-item,
+body.light-mode .nostr-result,
+body.light-mode .nostr-keys-display {
+    background: var(--bg-secondary);
+    border-color: var(--border-primary);
+}
