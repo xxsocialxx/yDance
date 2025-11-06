@@ -49,6 +49,11 @@ const CONFIG = {
     supabaseUrl: 'https://rymcfymmigomaytblqml.supabase.co',
     // Supabase anon publishable key (safe for frontend per Supabase docs)
     supabaseKey: 'sb_publishable_sk0GTezrQ8me8sPRLsWo4g_8UEQgztQ',
+    // App URL for email redirects (configure in Supabase dashboard > Authentication > URL Configuration)
+    // For local dev: use localhost or ngrok tunnel URL
+    // For production: use your deployment URL
+    // Default: use current origin (falls back to window.location.origin)
+    appUrl: null, // Set to null to auto-detect, or set explicit URL like 'https://your-app.supabase.app'
     nostrRelayUrl: 'wss://relay.beginnersurfer.com',
     flags: {
         nostrRealClient: false,
@@ -63,6 +68,15 @@ const CONFIG = {
         // Verbose console logging during development
         debug: false,
         allowClientSensitiveWrites: false
+    },
+    // Rave Operators configuration
+    operatorTypes: {
+        sound: { label: 'SOUND', roles: ['Sound Engineer', 'Sound Operator', 'Sound System'], hasGear: true },
+        lighting: { label: 'LIGHTING', roles: ['Lighting Designer', 'Lighting Operator'], hasEquipment: true },
+        leads: { label: 'LEADS', roles: ['Event Curator', 'Bar Lead', 'Safety Lead', 'Operations Lead', 'Medical Lead'] },
+        hospitality: { label: 'HOSPITALITY', roles: ['Security', 'Bartender', 'Cashier', 'Vibe Liaison', 'Medical'] },
+        equipment: { label: 'EQUIPMENT', roles: ['Equipment Rental', 'Sound Equipment Provider', 'Gear Rental'] },
+        curators: { label: 'CURATORS', roles: ['Event Curator'] } // Kept for backward compatibility with existing data
     }
 };
 
@@ -82,10 +96,14 @@ const state = {
     selectedDJ: null,
     selectedOperator: null,
     selectedEvent: null,
+    dateSortOrder: 'asc', // 'asc' = upcoming first, 'desc' = latest first
+    timeSortOrder: { start: 'asc', end: 'asc' }, // Sort order for START and END columns
+    activeSort: 'date', // 'date', 'start', or 'end' - tracks which column is currently sorting
     
     // Account Mode Management
-    selectedAccountMode: null, // 'light' or 'bold' (for signup)
-    userAccountMode: null, // 'light' or 'bold' (for current user)
+    // Deprecated - kept for potential future Nostr integration (see docs/NOSTR_AUTH_REMOVED.md)
+    selectedAccountMode: null, // 'light' or 'bold' (not currently used)
+    userAccountMode: null, // 'light' or 'bold' (not currently used)
     currentDJProfile: null,
     venuesData: [],
     operatorsData: [],
@@ -98,15 +116,43 @@ const state = {
     currentUser: null,
     isAuthenticated: false,
     authSession: null,
-    authModalMode: 'login',
+    authModalMode: 'login', // 'login' or 'signup'
+    authLoginMethod: 'password', // 'password' or 'email-link' (for login only)
     // Location state
     userCity: null,
+    // DJ view mode
+    djViewMode: 'list', // 'list' or 'cards' (expanded card view)
+    // Event view mode
+    eventViewMode: 'list', // 'list' or 'cards' (expanded card view)
+    // Venue view mode
+    venueViewMode: 'list', // 'list' or 'cards' (expanded card view)
+    // Time range filter
+    timeRange: 'weekend', // 'weekend', 'week', 'custom', 'next-weekend'
+    customDate: null, // Date object for custom date selection
+    // Navigation tracking - where did we come from?
+    djNavigationSource: null, // 'modal', 'profile', or null (default to DJ list)
+    // User event lists (saved, maybe, going)
+    userEventLists: {
+        saved: [], // Array of event_uid strings
+        maybe: [], // Array of event_uid strings
+        going: []  // Array of event_uid strings
+    },
+    // Emulated user for reviews (before real auth)
+    emulatedUser: null, // { id, username, display_name } - matches real user structure
+    // Current review context
+    currentReviewDJ: null, // DJ name for current review being submitted
     // Nostr state (DEPRECATED - use state.nostr when nostrIsolated = true)
     nostrClient: null, // Migrated to state.nostr.client
     userAuth: null, // Migrated to state.nostr.auth
     userKeys: null, // Migrated to state.nostr.keys
     // Nostr isolated namespace (when CONFIG.flags.nostrIsolated = true)
-    nostr: null // Initialized by migration function
+    nostr: null, // Initialized by migration function
+    // Rave Operators state
+    raveOperatorsView: 'matrix', // 'matrix', 'list', 'detail'
+    selectedOperatorType: null, // 'curators', 'sound', 'lighting', 'hospitality', 'coordination'
+    selectedProvider: null, // Selected provider for detail view
+    eventOperatorsData: [], // Operator-event relationships
+    providersData: {} // Providers by type
 };
 
 // ============================================================================
@@ -138,6 +184,81 @@ const api = {
         try {
             state.supabaseClient = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
             if (CONFIG.flags.debug) console.log('Supabase client created successfully');
+            
+            // Set up auth state change listener to restore sessions
+            state.supabaseClient.auth.onAuthStateChange((event, session) => {
+                if (CONFIG.flags.debug) console.log('Auth state changed:', event, session?.user?.email);
+                
+                if (session?.user) {
+                    // User is authenticated
+                    state.currentUser = session.user;
+                    state.isAuthenticated = true;
+                    state.authSession = session;
+                    
+                    // Update UI if router is initialized
+                    if (typeof router !== 'undefined' && router.updateAuthStatus) {
+                        router.updateAuthStatus();
+                    }
+                } else {
+                    // User is not authenticated
+                    state.currentUser = null;
+                    state.isAuthenticated = false;
+                    state.authSession = null;
+                    state.emulatedUser = null;
+                    
+                    // Update UI if router is initialized
+                    if (typeof router !== 'undefined' && router.updateAuthStatus) {
+                        router.updateAuthStatus();
+                    }
+                }
+            });
+            
+            // Handle email link callback (magic link / OTP)
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            const accessToken = hashParams.get('access_token');
+            const refreshToken = hashParams.get('refresh_token');
+            
+            if (accessToken && refreshToken) {
+                console.log('Email link callback detected, setting session...');
+                
+                // Set the session from the callback tokens
+                const { data: { session }, error: sessionError } = await state.supabaseClient.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken
+                });
+                
+                if (sessionError) {
+                    console.error('Error setting session from callback:', sessionError);
+                } else if (session) {
+                    console.log('✅ Session created from email link for:', session.user.email);
+                    state.currentUser = session.user;
+                    state.isAuthenticated = true;
+                    state.authSession = session;
+                    
+                    // Clean up URL hash to remove tokens
+                    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                    
+                    // Show success message
+                    if (typeof router !== 'undefined' && router.updateAuthStatus) {
+                        router.updateAuthStatus();
+                    }
+                    alert('Successfully logged in with email link!');
+                }
+            } else {
+                // Check for existing session on init (normal flow)
+                const { data: { session }, error } = await state.supabaseClient.auth.getSession();
+                if (error) {
+                    console.warn('Error checking session:', error);
+                } else if (session) {
+                    if (CONFIG.flags.debug) console.log('Restored session for:', session.user.email);
+                    state.currentUser = session.user;
+                    state.isAuthenticated = true;
+                    state.authSession = session;
+                } else {
+                    if (CONFIG.flags.debug) console.log('No existing session found');
+                }
+            }
+            
             return true;
         } catch (error) {
             console.error('Error creating Supabase client:', error);
@@ -171,11 +292,27 @@ const api = {
             if (CONFIG.flags.debug) console.log('Trying normalized_events_latest view...');
             const viewResult = await state.supabaseClient
                 .from('normalized_events_latest')
-                .select('normalized_json, created_at')
-                .order('created_at', { ascending: true });
+                .select('normalized_json, created_at');
+            
+            // Note: We'll sort by event date in JavaScript since normalized_json contains the date field
+            // This allows us to sort by the actual event date, not when it was added to the database
 
             if (!viewResult.error && Array.isArray(viewResult.data) && viewResult.data.length > 0) {
-                const events = viewResult.data.map(row => row.normalized_json).filter(Boolean);
+                let events = viewResult.data.map(row => row.normalized_json).filter(Boolean);
+                
+                // Sort by event date (upcoming first, then past)
+                // Extract date from normalized_json and sort accordingly
+                events.sort((a, b) => {
+                    const dateA = a.date || a.start || a.created_at;
+                    const dateB = b.date || b.start || b.created_at;
+                    if (!dateA && !dateB) return 0;
+                    if (!dateA) return 1;
+                    if (!dateB) return -1;
+                    const timeA = new Date(dateA).getTime();
+                    const timeB = new Date(dateB).getTime();
+                    return timeA - timeB;
+                });
+                
                 state.eventsData = events;
                 console.log('✅ Loaded events from normalized view:', state.eventsData.length);
                 if (CONFIG.flags.debug) {
@@ -316,19 +453,359 @@ const api = {
             return null;
         }
     },
+    
+    async fetchDJReviews(djName, limit = 50) {
+        if (CONFIG.flags.debug) console.log('Loading reviews for DJ:', djName);
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('reviews')
+                .select('*')
+                .eq('dj_name', djName)
+                .order('created_at', { ascending: false })
+                .limit(limit);
+            
+            if (error) {
+                console.error('Error loading reviews:', error);
+                return [];
+            }
+            
+            return data || [];
+        } catch (error) {
+            console.error('Error:', error);
+            return [];
+        }
+    },
+    
+    async submitReview(reviewData) {
+        // reviewData: { dj_name, rating, comment, event_title (optional) }
+        if (CONFIG.flags.debug) console.log('Submitting review:', reviewData);
+        
+        try {
+            // Get current user (real or emulated)
+            const currentUser = state.currentUser || state.emulatedUser;
+            
+            if (!currentUser) {
+                throw new Error('No user found. Please select an emulated user or sign in.');
+            }
+            
+            // Prepare review payload
+            const reviewPayload = {
+                dj_name: reviewData.dj_name,
+                rating: reviewData.rating,
+                comment: reviewData.comment || null,
+                event_title: reviewData.event_title || null,
+                user_id: currentUser.id,
+                user_name: currentUser.display_name || currentUser.username || currentUser.email || 'Anonymous'
+            };
+            
+            const { data, error } = await state.supabaseClient
+                .from('reviews')
+                .insert(reviewPayload)
+                .select()
+                .single();
+            
+            if (error) {
+                console.error('Error submitting review:', error);
+                throw error;
+            }
+            
+            // Refresh aggregate (or let trigger handle it)
+            if (CONFIG.flags.debug) console.log('Review submitted successfully:', data);
+            
+            return { success: true, review: data };
+        } catch (error) {
+            console.error('Error submitting review:', error);
+            throw error;
+        }
+    },
+    
+    async fetchEmulatedUsers() {
+        if (CONFIG.flags.debug) console.log('Loading emulated users...');
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('sample_users')
+                .select('*')
+                .order('username', { ascending: true })
+                .limit(100);
+            
+            if (error) {
+                console.error('Error loading emulated users:', error);
+                return [];
+            }
+            
+            return data || [];
+        } catch (error) {
+            console.error('Error:', error);
+            return [];
+        }
+    },
+    
+    async fetchUserReviews(userId) {
+        // Fetch all reviews submitted by a specific user
+        if (CONFIG.flags.debug) console.log('Loading reviews for user:', userId);
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('reviews')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(100);
+            
+            if (error) {
+                console.error('Error loading user reviews:', error);
+                return [];
+            }
+            
+            return data || [];
+        } catch (error) {
+            console.error('Error:', error);
+            return [];
+        }
+    },
+    
+    // ============================================================================
+    // USER EVENT LISTS API
+    // ============================================================================
+    
+    async fetchUserEventLists(userId) {
+        if (CONFIG.flags.debug) console.log('Loading user event lists for:', userId);
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('user_event_lists')
+                .select('event_uid, list_type')
+                .eq('user_id', userId);
+            
+            if (error) {
+                console.error('Error loading user event lists:', error);
+                return { saved: [], maybe: [], going: [] };
+            }
+            
+            // Group by list type
+            const lists = { saved: [], maybe: [], going: [] };
+            (data || []).forEach(item => {
+                if (lists[item.list_type]) {
+                    lists[item.list_type].push(item.event_uid);
+                }
+            });
+            
+            return lists;
+        } catch (error) {
+            console.error('Error:', error);
+            return { saved: [], maybe: [], going: [] };
+        }
+    },
+    
+    async addEventToList(userId, eventUid, listType) {
+        // listType: 'saved', 'maybe', or 'going'
+        if (CONFIG.flags.debug) console.log(`Adding event ${eventUid} to ${listType} list for user ${userId}`);
+        
+        try {
+            // First, remove from other lists (event can only be in one list at a time)
+            const { error: deleteError } = await state.supabaseClient
+                .from('user_event_lists')
+                .delete()
+                .eq('user_id', userId)
+                .eq('event_uid', eventUid);
+            
+            if (deleteError && deleteError.code !== 'PGRST116') {
+                console.warn('Error removing event from other lists:', deleteError);
+            }
+            
+            // Add to requested list
+            const { data, error } = await state.supabaseClient
+                .from('user_event_lists')
+                .insert({
+                    user_id: userId,
+                    event_uid: eventUid,
+                    list_type: listType
+                })
+                .select()
+                .single();
+            
+            if (error) {
+                console.error('Error adding event to list:', error);
+                throw error;
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Error:', error);
+            throw error;
+        }
+    },
+    
+    async removeEventFromList(userId, eventUid, listType) {
+        if (CONFIG.flags.debug) console.log(`Removing event ${eventUid} from ${listType} list for user ${userId}`);
+        
+        try {
+            const { error } = await state.supabaseClient
+                .from('user_event_lists')
+                .delete()
+                .eq('user_id', userId)
+                .eq('event_uid', eventUid)
+                .eq('list_type', listType);
+            
+            if (error) {
+                console.error('Error removing event from list:', error);
+                throw error;
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error:', error);
+            throw error;
+        }
+    },
+    
+    async getEventsByUids(eventUids) {
+        // Fetch full event data for given event_uid list
+        if (!eventUids || eventUids.length === 0) return [];
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('normalized_events_latest')
+                .select('normalized_json, event_uid')
+                .in('event_uid', eventUids);
+            
+            if (error) {
+                console.error('Error fetching events by UIDs:', error);
+                return [];
+            }
+            
+            // Map to include event_uid with normalized_json
+            return (data || []).map(row => ({
+                ...row.normalized_json,
+                event_uid: row.event_uid
+            }));
+        } catch (error) {
+            console.error('Error:', error);
+            return [];
+        }
+    },
+    
+    async selectEmulatedUser(userId) {
+        if (CONFIG.flags.debug) console.log('Selecting emulated user:', userId);
+        
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('sample_users')
+                .select('*')
+                .eq('id', userId)
+                .single();
+            
+            if (error) {
+                console.error('Error loading emulated user:', error);
+                return null;
+            }
+            
+            // Store as emulatedUser (matches real user structure)
+            state.emulatedUser = {
+                id: data.id,
+                username: data.username,
+                display_name: data.display_name || data.username,
+                created_at: data.created_at
+            };
+            
+            // Also store in currentUser if no real user (for compatibility)
+            if (!state.currentUser) {
+                state.currentUser = { ...state.emulatedUser };
+                state.isAuthenticated = true; // Mark as "authenticated" for review purposes
+            }
+            
+            if (CONFIG.flags.debug) console.log('Emulated user selected:', state.emulatedUser);
+            
+            return state.emulatedUser;
+        } catch (error) {
+            console.error('Error:', error);
+            return null;
+        }
+    },
 
     async fetchVenues() {
         if (CONFIG.flags.debug) console.log('Loading venues from database...');
         
         try {
-            // For now, return placeholder data until venues table is created
-            state.venuesData = api.placeholders?.venues || [];
+            // Ensure events are loaded first
+            if (!state.eventsData || state.eventsData.length === 0) {
+                await this.fetchEvents();
+            }
+            
+            // Extract venues from events data with proper stats
+            if (state.eventsData && state.eventsData.length > 0) {
+                const venueMap = new Map();
+                const now = new Date();
+                
+                state.eventsData.forEach(event => {
+                    const venueName = event.venue || event.location || event.venue?.name;
+                    if (venueName && venueName !== 'TBD') {
+                        if (!venueMap.has(venueName)) {
+                            venueMap.set(venueName, {
+                                name: venueName,
+                                eventCount: 0,
+                                pastEvents: 0,
+                                upcomingEvents: [],
+                                events: []
+                            });
+                        }
+                        const venue = venueMap.get(venueName);
+                        venue.eventCount++;
+                        venue.events.push(event);
+                        
+                        if (event.date) {
+                            const eventDate = new Date(event.date);
+                            if (eventDate >= now) {
+                                venue.upcomingEvents.push(event);
+                            } else {
+                                venue.pastEvents++;
+                            }
+                        }
+                    }
+                });
+                
+                // Convert to array and enrich with stats
+                const venues = Array.from(venueMap.values());
+                
+                // Enrich each venue with rating/reviews (if available from operators table)
+                for (const venue of venues) {
+                    try {
+                        // Check if venue exists in operators table (venues might be stored there)
+                        const { data: venueData } = await state.supabaseClient
+                            .from('operators')
+                            .select('rating, review_count')
+                            .eq('name', venue.name)
+                            .eq('type', 'venue')
+                            .single();
+                        
+                        if (venueData) {
+                            venue.rating = venueData.rating || 0;
+                            venue.reviewCount = venueData.review_count || 0;
+                        } else {
+                            venue.rating = 0;
+                            venue.reviewCount = 0;
+                        }
+                    } catch (e) {
+                        // Venue not in operators table, use defaults
+                        venue.rating = 0;
+                        venue.reviewCount = 0;
+                    }
+                }
+                
+                state.venuesData = venues;
+            } else {
+                state.venuesData = [];
+            }
+            
             if (CONFIG.flags.debug) console.log('Venues loaded successfully:', state.venuesData.length);
             return state.venuesData;
             
         } catch (error) {
-            console.error('Error:', error);
-            throw error;
+            console.error('Error loading venues:', error);
+            state.venuesData = [];
+            return [];
         }
     },
 
@@ -345,6 +822,238 @@ const api = {
             console.error('Error:', error);
             throw error;
         }
+    },
+
+    async fetchEventOperators(eventUids = null) {
+        if (CONFIG.flags.debug) console.log('Loading event operators...');
+        
+        try {
+            // Try to fetch from event_operators table if it exists
+            let query = state.supabaseClient
+                .from('event_operators')
+                .select('*');
+            
+            if (eventUids && eventUids.length > 0) {
+                query = query.in('event_uid', eventUids);
+            }
+            
+            const { data, error } = await query;
+            
+            if (error) {
+                // If table doesn't exist, extract from event data
+                if (CONFIG.flags.debug) console.log('event_operators table not found, extracting from event data');
+                return this.extractOperatorsFromEvents(eventUids);
+            }
+            
+            state.eventOperatorsData = data || [];
+            if (CONFIG.flags.debug) console.log('Event operators loaded:', state.eventOperatorsData.length);
+            return state.eventOperatorsData;
+            
+        } catch (error) {
+            console.error('Error loading event operators:', error);
+            // Fallback: extract from event data
+            return this.extractOperatorsFromEvents(eventUids);
+        }
+    },
+
+    extractOperatorsFromEvents(eventUids = null) {
+        // Extract operator data from normalized event JSON
+        const events = eventUids 
+            ? state.eventsData.filter(e => eventUids.includes(e.event_uid || e.title || e.name))
+            : state.eventsData;
+        
+        const operators = [];
+        const operatorTypes = Object.keys(CONFIG.operatorTypes);
+        
+        events.forEach(event => {
+            const eventUid = event.event_uid || event.title || event.name;
+            
+            operatorTypes.forEach(type => {
+                // Check for operator fields in event data
+                const typeConfig = CONFIG.operatorTypes[type];
+                let operatorValue = null;
+                
+                // Map various field names to operator types
+                if (type === 'curators' && event.promoter) {
+                    operatorValue = event.promoter;
+                } else if (type === 'sound' && (event.sound_system || event.soundSystem)) {
+                    operatorValue = event.sound_system || event.soundSystem;
+                } else if (type === 'lighting' && (event.lighting || event.lighting_designer)) {
+                    operatorValue = event.lighting || event.lighting_designer;
+                } else if (type === 'coordination' && (event.operator || event.operators)) {
+                    operatorValue = Array.isArray(event.operator || event.operators) 
+                        ? (event.operator || event.operators)[0] 
+                        : (event.operator || event.operators);
+                }
+                
+                if (operatorValue) {
+                    operators.push({
+                        event_uid: eventUid,
+                        operator_name: operatorValue,
+                        operator_type: type,
+                        role: typeConfig.roles[0] || typeConfig.label,
+                        is_primary: true
+                    });
+                }
+            });
+        });
+        
+        state.eventOperatorsData = operators;
+        return operators;
+    },
+
+    async fetchProvidersByType(operatorType) {
+        if (CONFIG.flags.debug) console.log('Loading providers by type:', operatorType);
+        
+        try {
+            // Try to fetch from operators table if it exists
+            const { data, error } = await state.supabaseClient
+                .from('operators')
+                .select('*')
+                .eq('type', operatorType);
+            
+            if (error) {
+                // If table doesn't exist, extract from event operators
+                if (CONFIG.flags.debug) console.log('operators table not found, extracting from event operators');
+                return this.extractProvidersFromEventOperators(operatorType);
+            }
+            
+            // Enhance with calculated stats
+            const providers = (data || []).map(async provider => {
+                const stats = await this.calculateProviderStats(provider.name, operatorType);
+                return {
+                    ...provider,
+                    past_events_total: stats.pastEventsTotal,
+                    upcoming_total: stats.upcomingTotal,
+                    rating: provider.rating || stats.rating,
+                    review_count: provider.review_count || stats.reviewCount,
+                    event_count: stats.pastEventsTotal + stats.upcomingTotal
+                };
+            });
+            
+            const enhancedProviders = await Promise.all(providers);
+            
+            if (!state.providersData[operatorType]) {
+                state.providersData[operatorType] = [];
+            }
+            state.providersData[operatorType] = enhancedProviders;
+            if (CONFIG.flags.debug) console.log(`Providers loaded for ${operatorType}:`, state.providersData[operatorType].length);
+            return state.providersData[operatorType];
+            
+        } catch (error) {
+            console.error('Error loading providers:', error);
+            return this.extractProvidersFromEventOperators(operatorType);
+        }
+    },
+
+    async fetchProviderReviews(providerName, providerType) {
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('provider_reviews')
+                .select('*')
+                .eq('provider_name', providerName)
+                .eq('provider_type', providerType)
+                .order('created_at', { ascending: false });
+            
+            if (error) {
+                if (CONFIG.flags.debug) console.log('provider_reviews table not found or error:', error);
+                return [];
+            }
+            
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching provider reviews:', error);
+            return [];
+        }
+    },
+
+    async calculateProviderStats(providerName, providerType) {
+        // Calculate past events, upcoming events, and get ratings
+        const now = new Date();
+        const providerEvents = (state.eventOperatorsData || []).filter(eo => 
+            eo.operator_name === providerName && eo.operator_type === providerType
+        );
+        
+        let pastEventsTotal = 0;
+        let upcomingTotal = 0;
+        
+        providerEvents.forEach(eo => {
+            const event = state.eventsData.find(e => (e.event_uid || e.title || e.name) === eo.event_uid);
+            if (event && event.date) {
+                const eventDate = new Date(event.date);
+                if (eventDate < now) {
+                    pastEventsTotal++;
+                } else {
+                    upcomingTotal++;
+                }
+            }
+        });
+        
+        // Fetch ratings from operators table
+        let rating = 0;
+        let reviewCount = 0;
+        try {
+            const { data, error } = await state.supabaseClient
+                .from('operators')
+                .select('rating, review_count')
+                .eq('name', providerName)
+                .eq('type', providerType)
+                .single();
+            
+            if (!error && data) {
+                rating = data.rating || 0;
+                reviewCount = data.review_count || 0;
+            }
+        } catch (error) {
+            // Table might not exist yet
+        }
+        
+        return {
+            pastEventsTotal,
+            upcomingTotal,
+            rating,
+            reviewCount
+        };
+    },
+
+    extractProvidersFromEventOperators(operatorType) {
+        // Extract unique providers from event operators data
+        const providers = new Map();
+        
+        (state.eventOperatorsData || []).forEach(eo => {
+            if (eo.operator_type === operatorType) {
+                if (!providers.has(eo.operator_name)) {
+                    providers.set(eo.operator_name, {
+                        name: eo.operator_name,
+                        type: operatorType,
+                        role: eo.role,
+                        event_count: 0,
+                        upcoming_count: 0,
+                        past_events_total: 0,
+                        upcoming_total: 0,
+                        rating: 0,
+                        review_count: 0
+                    });
+                }
+                const provider = providers.get(eo.operator_name);
+                provider.event_count++;
+                
+                // Check if event is upcoming (all future events, not just next 7 days)
+                const event = state.eventsData.find(e => (e.event_uid || e.title || e.name) === eo.event_uid);
+                if (event && event.date) {
+                    const eventDate = new Date(event.date);
+                    const now = new Date();
+                    if (eventDate >= now) {
+                        provider.upcoming_count++;
+                        provider.upcoming_total++;
+                    } else {
+                        provider.past_events_total++;
+                    }
+                }
+            }
+        });
+        
+        return Array.from(providers.values());
     },
 
     async fetchFriends() {
@@ -3693,7 +4402,7 @@ const views = {
     },
 
     createEventCard(event) {
-        // Safely parse date - handle both string and Date object
+        // Compact list view (default)
         let time = '--:--';
         if (event.date) {
             try {
@@ -3706,43 +4415,268 @@ const views = {
             }
         }
         
-        // Get title - try multiple possible field names
         const title = event.title || event.name || 'Event';
+        const eventUid = event.event_uid || title;
+        
+        // Check if user is logged in and if event is in any list
+        const currentUser = state.currentUser || state.emulatedUser;
+        const isSaved = currentUser && state.userEventLists.saved.includes(eventUid);
+        const isMaybe = currentUser && state.userEventLists.maybe.includes(eventUid);
+        const isGoing = currentUser && state.userEventLists.going.includes(eventUid);
+        
+        // Build action buttons (only show if logged in)
+        let actionButtons = '';
+        if (currentUser) {
+            actionButtons = '<span class="event-actions">';
+            if (isSaved) {
+                actionButtons += `<a href="#" class="event-action saved" onclick="event.stopPropagation(); router.removeEventFromList('${eventUid}', 'saved'); return false;">[SAVED]</a>`;
+            } else {
+                actionButtons += `<a href="#" class="event-action" onclick="event.stopPropagation(); router.addEventToList('${eventUid}', 'saved'); return false;">[SAVE]</a>`;
+            }
+            if (isMaybe) {
+                actionButtons += `<a href="#" class="event-action maybe" onclick="event.stopPropagation(); router.removeEventFromList('${eventUid}', 'maybe'); return false;">[MAYBE]</a>`;
+            } else {
+                actionButtons += `<a href="#" class="event-action" onclick="event.stopPropagation(); router.addEventToList('${eventUid}', 'maybe'); return false;">[MAYBE]</a>`;
+            }
+            if (isGoing) {
+                actionButtons += `<a href="#" class="event-action going" onclick="event.stopPropagation(); router.removeEventFromList('${eventUid}', 'going'); return false;">[GOING]</a>`;
+            } else {
+                actionButtons += `<a href="#" class="event-action" onclick="event.stopPropagation(); router.addEventToList('${eventUid}', 'going'); return false;">[GOING]</a>`;
+            }
+            actionButtons += '</span>';
+        }
+        
+        // Build provider tags - showcase ALL providers for DIY culture emphasis
+        let providerTags = [];
+        if (event.dj || (event.artists && event.artists.length > 0)) {
+            const djs = event.dj ? [event.dj] : (event.artists || []);
+            providerTags.push(`DJ: ${djs.slice(0, 2).join(', ')}${djs.length > 2 ? ` +${djs.length - 2}` : ''}`);
+        }
+        if (event.venue) {
+            providerTags.push(`VENUE: ${event.venue}`);
+        }
+        if (event.promoter) {
+            providerTags.push(`PROMOTER: ${event.promoter}`);
+        }
+        if (event.sound_system || event.soundSystem) {
+            providerTags.push(`SOUND: ${event.sound_system || event.soundSystem}`);
+        }
+        if (event.operator || event.operators) {
+            const operators = Array.isArray(event.operator || event.operators) ? (event.operator || event.operators) : [event.operator || event.operators];
+            providerTags.push(`OP: ${operators.slice(0, 2).join(', ')}${operators.length > 2 ? ` +${operators.length - 2}` : ''}`);
+        }
+        if (event.visual_artist || event.visualArtist) {
+            providerTags.push(`VISUAL: ${event.visual_artist || event.visualArtist}`);
+        }
+        if (event.lighting || event.lighting_designer) {
+            providerTags.push(`LIGHTING: ${event.lighting || event.lighting_designer}`);
+        }
+        const providerDisplay = providerTags.length > 0 ? `<span class="providers">${providerTags.join(' | ')}</span>` : '';
         
         return `
-            <div class="event-listing">
+            <div class="event-listing" onclick="router.showEventDetailsModal('${title}')" data-event-uid="${eventUid}">
                 <span class="time">${time}</span>
                 <span class="type">[${(event.type || 'EVENT').toUpperCase()}]</span>
                 <span>${title}</span>
-                <span class="location">${event.location || 'Location TBD'}</span>
-                ${event.dj ? `<span class="dj">DJ: <span class="dj-name" onclick="router.showDJProfileView('${event.dj}')" style="cursor: pointer; text-decoration: underline;">${event.dj}</span></span>` : ''}
+                <span class="location">${event.location || event.venue || 'Location TBD'}</span>
+                ${providerDisplay}
                 ${event.friendsGoing !== undefined ? `<span class="friends-attending">[${event.friendsGoing || 0}/${event.attending || 0}]</span>` : ''}
-                <a href="#" class="details-link" onclick="event.preventDefault(); router.showEventDetailsView('${title}'); return false;">[DETAILS]</a>
+                ${actionButtons}
+                <a href="#" class="details-link" onclick="event.stopPropagation(); router.showEventDetailsModal('${title}'); return false;">[DETAILS]</a>
+            </div>
+        `;
+    },
+    
+    createEventCardExpanded(event) {
+        // Expanded card view (optional mode) - similar to DJ expanded cards
+        const title = event.title || event.name || 'Event';
+        
+        // Parse date
+        let eventDate = 'Date TBD';
+        let eventTime = '--:--';
+        if (event.date) {
+            try {
+                const dateObj = typeof event.date === 'string' ? new Date(event.date) : event.date;
+                if (!isNaN(dateObj.getTime())) {
+                    eventDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    eventTime = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                }
+            } catch (e) {
+                // Keep defaults
+            }
+        }
+        
+        // Get artists/lineup
+        const artists = event.dj ? [event.dj] : (event.artists || []);
+        const artistPreview = artists.length > 0 ? artists.slice(0, 2).join(', ') + (artists.length > 2 ? ` +${artists.length - 2}` : '') : 'TBD';
+        
+        // Get genres
+        const genres = event.genres || [];
+        const genrePreview = genres.length > 0 ? genres.slice(0, 2).join(', ') + (genres.length > 2 ? ` +${genres.length - 2}` : '') : 'Electronic';
+        
+        // Venue
+        const venue = event.venue || event.location || 'TBD';
+        
+        // Status indicator (upcoming/past)
+        const now = new Date();
+        const eventDateObj = event.date ? (typeof event.date === 'string' ? new Date(event.date) : event.date) : null;
+        const isUpcoming = eventDateObj && eventDateObj > now;
+        const status = isUpcoming ? 'UPCOMING' : 'PAST';
+        const statusClass = isUpcoming ? 'status-active' : 'status-recent';
+        
+        // Check if user is logged in and if event is in any list
+        const currentUser = state.currentUser || state.emulatedUser;
+        const eventUid = event.event_uid || (event.title || event.name);
+        const isSaved = currentUser && state.userEventLists.saved.includes(eventUid);
+        const isMaybe = currentUser && state.userEventLists.maybe.includes(eventUid);
+        const isGoing = currentUser && state.userEventLists.going.includes(eventUid);
+        
+        // Build action buttons (only show if logged in)
+        let actionButtons = '';
+        if (currentUser) {
+            actionButtons = '<div class="event-card-list-actions">';
+            if (isSaved) {
+                actionButtons += `<a href="#" class="event-action saved" onclick="event.stopPropagation(); router.removeEventFromList('${eventUid}', 'saved'); return false;">[SAVED]</a>`;
+            } else {
+                actionButtons += `<a href="#" class="event-action" onclick="event.stopPropagation(); router.addEventToList('${eventUid}', 'saved'); return false;">[SAVE]</a>`;
+            }
+            if (isMaybe) {
+                actionButtons += `<a href="#" class="event-action maybe" onclick="event.stopPropagation(); router.removeEventFromList('${eventUid}', 'maybe'); return false;">[MAYBE]</a>`;
+            } else {
+                actionButtons += `<a href="#" class="event-action" onclick="event.stopPropagation(); router.addEventToList('${eventUid}', 'maybe'); return false;">[MAYBE]</a>`;
+            }
+            if (isGoing) {
+                actionButtons += `<a href="#" class="event-action going" onclick="event.stopPropagation(); router.removeEventFromList('${eventUid}', 'going'); return false;">[GOING]</a>`;
+            } else {
+                actionButtons += `<a href="#" class="event-action" onclick="event.stopPropagation(); router.addEventToList('${eventUid}', 'going'); return false;">[GOING]</a>`;
+            }
+            actionButtons += '</div>';
+        }
+        
+        return `
+            <div class="event-card-compact" data-event-title="${title}" data-event-uid="${eventUid}">
+                <div class="event-card-header">
+                    <span class="event-name-compact">${title}</span>
+                    <span class="event-status ${statusClass}">${status}</span>
+                </div>
+                <div class="event-card-stats">
+                    <span class="stat-item"><span class="stat-label">DATE:</span> ${eventDate}</span>
+                    ${eventTime !== '--:--' ? `<span class="stat-item"><span class="stat-label">TIME:</span> ${eventTime}</span>` : ''}
+                    <span class="stat-item"><span class="stat-label">VENUE:</span> ${venue}</span>
+                    ${artists.length > 0 ? `<span class="stat-item"><span class="stat-label">LINEUP:</span> ${artistPreview}</span>` : ''}
+                    ${genres.length > 0 ? `<span class="stat-item"><span class="stat-label">GENRES:</span> ${genrePreview}</span>` : ''}
+                    ${event.promoter ? `<span class="stat-item"><span class="stat-label">PROMOTER:</span> ${event.promoter}</span>` : ''}
+                    ${event.sound_system || event.soundSystem ? `<span class="stat-item"><span class="stat-label">SOUND:</span> ${event.sound_system || event.soundSystem}</span>` : ''}
+                    ${event.operator || (event.operators && event.operators.length > 0) ? `<span class="stat-item"><span class="stat-label">OPERATOR:</span> ${Array.isArray(event.operator || event.operators) ? (event.operator || event.operators).slice(0, 2).join(', ') + ((event.operator || event.operators).length > 2 ? ` +${(event.operator || event.operators).length - 2}` : '') : (event.operator || event.operators)}</span>` : ''}
+                    ${event.cost ? `<span class="stat-item"><span class="stat-label">COST:</span> ${event.cost}</span>` : ''}
+                    ${event.interested !== undefined && event.interested !== null ? `<span class="stat-item"><span class="stat-label">INTERESTED:</span> ${event.interested}</span>` : ''}
+                </div>
+                ${actionButtons}
+                <div class="event-card-actions">
+                    <a href="#" class="view-full-link" onclick="event.stopPropagation(); router.showEventDetailsModal('${title}'); return false;">[VIEW DETAILS]</a>
+                </div>
             </div>
         `;
     },
 
     createDJCard(djInfo) {
         // djInfo can be a profile object OR a week activity object with {name, eventCount, venues, events}
+        // Default: Compact listing style (reverted from card view)
         const djName = djInfo.name;
         const eventCount = djInfo.eventCount || 0;
         const venues = djInfo.venues || [];
         const venueList = venues.length > 0 ? venues.join(', ') : 'TBD';
         
         return `
-            <div class="dj-listing" onclick="router.showDJProfileView('${djName}')" style="cursor: pointer;">
+            <div class="dj-listing" onclick="router.showDJDetailsModal('${djName}')">
                 <span class="dj-name">${djName}</span>
                 ${eventCount > 0 ? `<span class="dj-event-count">${eventCount} ${eventCount === 1 ? 'event' : 'events'}</span>` : ''}
                 ${venues.length > 0 ? `<span class="dj-venues">${venueList}</span>` : ''}
-                <a href="#" class="details-link" onclick="event.stopPropagation(); router.showDJProfileView('${djName}'); return false;">[PROFILE]</a>
+                <a href="#" class="details-link" onclick="event.stopPropagation(); router.showDJDetailsModal('${djName}'); return false;">[DETAILS]</a>
             </div>
         `;
     },
+    
+    createDJCardExpanded(djInfo) {
+        // Expanded card view (optional mode) - see docs/DJ_CARD_VIEW_MODE.md
+        const djName = djInfo.name;
+        const eventCount = djInfo.eventCount || 0;
+        const venues = djInfo.venues || [];
+        const stats = aggregateDJStats(djName);
+        const rating = djInfo.rating !== undefined ? djInfo.rating : null;
+        const reviewCount = djInfo.reviewCount || 0;
+        const genres = djInfo.genres || (stats.topStyles ? stats.topStyles.slice(0, 2).map(s => s.style) : []);
+        const status = stats.activityStatus || 'UNKNOWN';
+        const statusClass = status === 'ACTIVE' ? 'status-active' : status === 'RECENT' ? 'status-recent' : 'status-inactive';
+        const venueList = venues.length > 2 ? venues.slice(0, 2).join(', ') + ` +${venues.length - 2}` : venues.join(', ');
+        
+        return `
+            <div class="dj-card-compact" data-dj-name="${djName}">
+                <div class="dj-card-header">
+                    <span class="dj-name-compact">${djName}</span>
+                    <span class="dj-status ${statusClass}">${status}</span>
+                </div>
+                <div class="dj-card-stats">
+                    ${eventCount > 0 ? `<span class="stat-item"><span class="stat-label">EVENTS:</span> ${eventCount}</span>` : ''}
+                    ${rating !== null && rating !== undefined ? `<span class="stat-item"><span class="stat-label">RATING:</span> ${typeof rating === 'number' ? rating.toFixed(1) : rating}/5</span>` : ''}
+                    ${reviewCount > 0 ? `<span class="stat-item"><span class="stat-label">REVIEWS:</span> ${reviewCount}</span>` : ''}
+                    ${genres.length > 0 ? `<span class="stat-item"><span class="stat-label">GENRES:</span> ${genres.join(', ')}</span>` : ''}
+                </div>
+                ${venues.length > 0 ? `
+                <div class="dj-card-venues">
+                    <span class="venues-label">VENUES:</span> ${venueList}
+                </div>
+                ` : ''}
+                <div class="dj-card-actions">
+                    <a href="#" class="view-full-link" onclick="event.stopPropagation(); router.showDJProfileView('${djName}'); return false;">[VIEW FULL PROFILE]</a>
+                </div>
+            </div>
+        `;
+    },
+    
+    async enrichDJCardData(djInfo) {
+        // Enrich DJ card with editorial data and reviews for compact display
+        try {
+            // Fetch editorial attributes
+            const { data: editorialData } = await state.supabaseClient
+                .from('dj_editorial_attributes')
+                .select('editorial_rating, genres')
+                .eq('name', djInfo.name)
+                .single();
+            
+            // Fetch review aggregate
+            const { data: reviewData } = await state.supabaseClient
+                .from('dj_reviews_aggregate')
+                .select('average_rating, review_count')
+                .eq('dj_name', djInfo.name)
+                .single();
+            
+            return {
+                ...djInfo,
+                rating: reviewData?.average_rating || editorialData?.editorial_rating || null,
+                reviewCount: reviewData?.review_count || 0,
+                genres: editorialData?.genres || []
+            };
+        } catch (error) {
+            // If no data found, return original info
+            return djInfo;
+        }
+    },
 
-    renderEvents(events) {
-        const container = document.getElementById('events-container');
+    renderEvents(events, containerId = 'events-container') {
+        // Apply time range filter if not already filtered
+        if (state.timeRange && state.timeRange !== 'all') {
+            const { startDate, endDate } = router.getTimeRangeDates();
+            events = events.filter(event => {
+                const eventDate = event.date || event.start;
+                if (!eventDate) return false;
+                const date = new Date(eventDate);
+                return date >= startDate && date <= endDate;
+            });
+        }
+        const container = document.getElementById(containerId);
         if (!container) {
-            console.error('Events container not found!');
+            console.error(`Events container "${containerId}" not found!`);
             return;
         }
 
@@ -3756,27 +4690,175 @@ const views = {
             return;
         }
 
-        // Sort events by date (upcoming first, then past)
-        const now = new Date();
-        const sortedEvents = [...events].sort((a, b) => {
+        // Sort events based on active sort type
+        let sortedEvents = [...events];
+        
+        if (state.activeSort === 'start') {
+            sortedEvents.sort((a, b) => {
+                const timeA = a.start ? new Date(a.start).getTime() : (a.date ? new Date(a.date).getTime() : 0);
+                const timeB = b.start ? new Date(b.start).getTime() : (b.date ? new Date(b.date).getTime() : 0);
+                if (timeA === 0 && timeB === 0) return 0;
+                if (timeA === 0) return 1;
+                if (timeB === 0) return -1;
+                return state.timeSortOrder.start === 'asc' ? timeA - timeB : timeB - timeA;
+            });
+        } else if (state.activeSort === 'end') {
+            sortedEvents.sort((a, b) => {
+                const timeA = a.end ? new Date(a.end).getTime() : 0;
+                const timeB = b.end ? new Date(b.end).getTime() : 0;
+                if (timeA === 0 && timeB === 0) return 0;
+                if (timeA === 0) return 1;
+                if (timeB === 0) return -1;
+                return state.timeSortOrder.end === 'asc' ? timeA - timeB : timeB - timeA;
+            });
+        } else {
+            // Default: sort by date
+            sortedEvents.sort((a, b) => {
             const dateA = a.date || a.start;
             const dateB = b.date || b.start;
             if (!dateA && !dateB) return 0;
             if (!dateA) return 1;
             if (!dateB) return -1;
-            const timeA = new Date(dateA);
-            const timeB = new Date(dateB);
-            return timeA - timeB;
-        });
+                const timeA = new Date(dateA).getTime();
+                const timeB = new Date(dateB).getTime();
+                return state.dateSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+            });
+        }
         
-        // Clear container and add events as flat list
-        container.innerHTML = sortedEvents.map(this.createEventCard).join('');
+        // Check view mode
+        const useCards = state.eventViewMode === 'cards';
         
-        console.log(`✅ Rendered ${sortedEvents.length} events`);
+        if (useCards) {
+            // Expanded card view
+            const cardsHTML = sortedEvents.map(event => this.createEventCardExpanded(event)).join('');
+            container.innerHTML = cardsHTML;
+        } else {
+            // Table view (default) - matching MAKERS style
+            container.innerHTML = this.renderEventsTable(sortedEvents);
+        }
+        
+        console.log(`✅ Rendered ${sortedEvents.length} events in ${state.eventViewMode} mode`);
         if (CONFIG.flags.debug) console.log('Events rendered');
     },
+    
+    renderEventsTable(events) {
+        let html = '<table class="operators-table">';
+        html += '<thead><tr>';
+        html += `<th class="sortable-header" onclick="router.toggleDateSort()" style="cursor: pointer;">DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}</th>`;
+        html += `<th class="sortable-header" onclick="router.filterByTime('start')" style="cursor: pointer;">START ${state.timeSortOrder.start === 'asc' ? '↑' : '↓'}</th>`;
+        html += `<th class="sortable-header" onclick="router.filterByTime('end')" style="cursor: pointer;">END ${state.timeSortOrder.end === 'asc' ? '↑' : '↓'}</th>`;
+        html += '<th>PARTY</th>';
+        html += '<th>VENUE</th>';
+        html += '<th>DJ</th>';
+        html += '<th>ACTIONS</th>';
+        html += '</tr></thead>';
+        html += '<tbody>';
+        
+        events.forEach(event => {
+            const title = event.title || event.name || 'Event';
+            const eventUid = event.event_uid || title;
+            
+            // Format date
+            let dateDisplay = 'TBD';
+            let startDisplay = '--:--';
+            let endDisplay = '--:--';
+            
+            // Try to get start time from event.start or event.date
+            if (event.start) {
+                try {
+                    const startObj = typeof event.start === 'string' ? new Date(event.start) : event.start;
+                    if (!isNaN(startObj.getTime())) {
+                        startDisplay = startObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    }
+                } catch (e) {
+                    // Keep default
+                }
+            } else if (event.date) {
+                try {
+                    const dateObj = typeof event.date === 'string' ? new Date(event.date) : event.date;
+                    if (!isNaN(dateObj.getTime())) {
+                        dateDisplay = this.formatEventDate(event);
+                        startDisplay = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    }
+                } catch (e) {
+                    // Keep defaults
+                }
+            }
+            
+            // Try to get end time from event.end
+            if (event.end) {
+                try {
+                    const endObj = typeof event.end === 'string' ? new Date(event.end) : event.end;
+                    if (!isNaN(endObj.getTime())) {
+                        endDisplay = endObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    }
+                } catch (e) {
+                    // Keep default
+                }
+            }
+            
+            // Get date display if not already set
+            if (dateDisplay === 'TBD' && event.date) {
+                try {
+                    const dateObj = typeof event.date === 'string' ? new Date(event.date) : event.date;
+                    if (!isNaN(dateObj.getTime())) {
+                        dateDisplay = this.formatEventDate(event);
+                    }
+                } catch (e) {
+                    // Keep default
+                }
+            }
+            
+            // Get DJ
+            const dj = event.dj || (event.artists && event.artists.length > 0 ? event.artists[0] : '') || 'TBD';
+            const djDisplay = event.artists && event.artists.length > 1 ? `${dj} +${event.artists.length - 1}` : dj;
+            
+            // Get venue
+            const venue = event.venue || event.location || 'TBD';
+            
+            // Check if user is logged in and if event is in any list
+            const currentUser = state.currentUser || state.emulatedUser;
+            const isSaved = currentUser && state.userEventLists.saved.includes(eventUid);
+            const isMaybe = currentUser && state.userEventLists.maybe.includes(eventUid);
+            const isGoing = currentUser && state.userEventLists.going.includes(eventUid);
+            
+            // Build action buttons (only show if logged in)
+            let actionButtons = '';
+            if (currentUser) {
+                if (isSaved) {
+                    actionButtons += `<a href="#" class="event-action saved" onclick="event.stopPropagation(); router.removeEventFromList('${eventUid}', 'saved'); return false;">[SAVED]</a> `;
+                } else {
+                    actionButtons += `<a href="#" class="event-action" onclick="event.stopPropagation(); router.addEventToList('${eventUid}', 'saved'); return false;">[SAVE]</a> `;
+                }
+                if (isMaybe) {
+                    actionButtons += `<a href="#" class="event-action maybe" onclick="event.stopPropagation(); router.removeEventFromList('${eventUid}', 'maybe'); return false;">[MAYBE]</a> `;
+                } else {
+                    actionButtons += `<a href="#" class="event-action" onclick="event.stopPropagation(); router.addEventToList('${eventUid}', 'maybe'); return false;">[MAYBE]</a> `;
+                }
+                if (isGoing) {
+                    actionButtons += `<a href="#" class="event-action going" onclick="event.stopPropagation(); router.removeEventFromList('${eventUid}', 'going'); return false;">[GOING]</a> `;
+                } else {
+                    actionButtons += `<a href="#" class="event-action" onclick="event.stopPropagation(); router.addEventToList('${eventUid}', 'going'); return false;">[GOING]</a> `;
+                }
+            }
+            actionButtons += `<a href="#" class="details-link" onclick="event.stopPropagation(); router.showEventDetailsModal('${title}'); return false;">[DETAILS]</a>`;
+            
+            html += '<tr onclick="router.showEventDetailsModal(\'' + title + '\')" style="cursor: pointer;">';
+            html += `<td class="date-cell">${dateDisplay}</td>`;
+            html += `<td class="time-cell">${startDisplay}</td>`;
+            html += `<td class="time-cell">${endDisplay}</td>`;
+            html += `<td>${title}</td>`;
+            html += `<td>${venue}</td>`;
+            html += `<td>${djDisplay}</td>`;
+            html += `<td onclick="event.stopPropagation();" style="cursor: default;">${actionButtons}</td>`;
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        return html;
+    },
 
-    renderDJProfiles(profiles, highlightName = null) {
+    async renderDJProfiles(profiles, highlightName = null) {
         const container = document.getElementById('dj-profiles-container');
         if (!container) {
             console.error('DJ profiles container not found!');
@@ -3788,31 +4870,283 @@ const views = {
             return;
         }
 
-        // Create DJ cards - profiles is now array of week activity objects
-        const cardsHTML = profiles.map(this.createDJCard).join('');
-        container.innerHTML = cardsHTML;
+        // Sort DJs based on active sort type
+        let sortedProfiles = [...profiles];
         
-        if (CONFIG.flags.debug) console.log('DJ profiles rendered');
+        if (state.activeSort === 'start') {
+            sortedProfiles.sort((a, b) => {
+                let timeA = 0, timeB = 0;
+                
+                if (a.events && a.events.length > 0) {
+                    const nextEventA = a.events[0];
+                    timeA = nextEventA.start ? new Date(nextEventA.start).getTime() : (nextEventA.date ? new Date(nextEventA.date).getTime() : 0);
+                }
+                
+                if (b.events && b.events.length > 0) {
+                    const nextEventB = b.events[0];
+                    timeB = nextEventB.start ? new Date(nextEventB.start).getTime() : (nextEventB.date ? new Date(nextEventB.date).getTime() : 0);
+                }
+                
+                if (timeA === 0 && timeB === 0) return 0;
+                if (timeA === 0) return 1;
+                if (timeB === 0) return -1;
+                
+                return state.timeSortOrder.start === 'asc' ? timeA - timeB : timeB - timeA;
+            });
+        } else if (state.activeSort === 'end') {
+            sortedProfiles.sort((a, b) => {
+                let timeA = 0, timeB = 0;
+                
+                if (a.events && a.events.length > 0) {
+                    const nextEventA = a.events[0];
+                    timeA = nextEventA.end ? new Date(nextEventA.end).getTime() : 0;
+                }
+                
+                if (b.events && b.events.length > 0) {
+                    const nextEventB = b.events[0];
+                    timeB = nextEventB.end ? new Date(nextEventB.end).getTime() : 0;
+                }
+                
+                if (timeA === 0 && timeB === 0) return 0;
+                if (timeA === 0) return 1;
+                if (timeB === 0) return -1;
+                
+                return state.timeSortOrder.end === 'asc' ? timeA - timeB : timeB - timeA;
+            });
+        } else {
+            // Default: sort by date
+            sortedProfiles.sort((a, b) => {
+                // Get next event date for each DJ
+                const dateA = a.events && a.events.length > 0 ? a.events[0].date : null;
+                const dateB = b.events && b.events.length > 0 ? b.events[0].date : null;
+                
+                if (!dateA && !dateB) return 0;
+                if (!dateA) return 1;
+                if (!dateB) return -1;
+                
+                const timeA = dateA instanceof Date ? dateA.getTime() : new Date(dateA).getTime();
+                const timeB = dateB instanceof Date ? dateB.getTime() : new Date(dateB).getTime();
+                
+                return state.dateSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+            });
+        }
+
+        // Check view mode
+        const useCards = state.djViewMode === 'cards';
+        
+        if (useCards) {
+            // Show loading state
+            container.innerHTML = '<div class="empty-state">> Loading DJ profiles...</div>';
+            
+            // Enrich profiles with editorial data and reviews for card view
+            const enrichedProfiles = await Promise.all(
+                sortedProfiles.map(dj => this.enrichDJCardData(dj))
+            );
+            
+            // Create expanded DJ cards
+            const cardsHTML = enrichedProfiles.map(dj => this.createDJCardExpanded(dj)).join('');
+            container.innerHTML = cardsHTML;
+        } else {
+            // Table view (default) - matching MAKERS style
+            container.innerHTML = this.renderDJsTable(sortedProfiles);
+        }
+        
+        if (CONFIG.flags.debug) console.log('DJ profiles rendered in', state.djViewMode, 'mode');
         
         // Highlight specific DJ if requested
         if (highlightName) {
             setTimeout(() => this.highlightDJ(highlightName), 100);
         }
     },
+    
+    renderDJsTable(profiles) {
+        let html = '<table class="operators-table">';
+        html += '<thead><tr>';
+        html += `<th class="sortable-header" onclick="router.toggleDateSort()" style="cursor: pointer;">DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}</th>`;
+        html += `<th class="sortable-header" onclick="router.filterByTime('start')" style="cursor: pointer;">START ${state.timeSortOrder.start === 'asc' ? '↑' : '↓'}</th>`;
+        html += `<th class="sortable-header" onclick="router.filterByTime('end')" style="cursor: pointer;">END ${state.timeSortOrder.end === 'asc' ? '↑' : '↓'}</th>`;
+        html += '<th>DJ</th>';
+        html += '<th>EVENTS</th>';
+        html += '<th>VENUES</th>';
+        html += '<th>ACTIONS</th>';
+        html += '</tr></thead>';
+        html += '<tbody>';
+        
+        profiles.forEach(djInfo => {
+            const djName = djInfo.name;
+            const eventCount = djInfo.eventCount || 0;
+            const venues = djInfo.venues || [];
+            const venueList = venues.length > 0 ? (venues.length > 2 ? venues.slice(0, 2).join(', ') + ` +${venues.length - 2}` : venues.join(', ')) : 'TBD';
+            
+            // Get next event date, start, and end
+            let dateDisplay = 'TBD';
+            let startDisplay = '--:--';
+            let endDisplay = '--:--';
+            
+            if (djInfo.events && djInfo.events.length > 0) {
+                const nextEvent = djInfo.events[0];
+                const eventDate = nextEvent.date;
+                
+                if (eventDate) {
+                    try {
+                        const dateObj = eventDate instanceof Date ? eventDate : new Date(eventDate);
+                        if (!isNaN(dateObj.getTime())) {
+                            // Create a minimal event object for formatEventDate
+                            const eventObj = { date: dateObj };
+                            dateDisplay = this.formatEventDate(eventObj);
+                            
+                            // Get start time from nextEvent.start or use date
+                            if (nextEvent.start) {
+                                const startObj = nextEvent.start instanceof Date ? nextEvent.start : new Date(nextEvent.start);
+                                if (!isNaN(startObj.getTime())) {
+                                    startDisplay = startObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                                }
+                            } else {
+                                startDisplay = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                            }
+                            
+                            // Get end time from nextEvent.end
+                            if (nextEvent.end) {
+                                const endObj = nextEvent.end instanceof Date ? nextEvent.end : new Date(nextEvent.end);
+                                if (!isNaN(endObj.getTime())) {
+                                    endDisplay = endObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // Keep defaults
+                    }
+                }
+            }
+            
+            html += '<tr onclick="router.showDJDetailsModal(\'' + djName + '\')" style="cursor: pointer;">';
+            html += `<td class="date-cell">${dateDisplay}</td>`;
+            html += `<td class="time-cell">${startDisplay}</td>`;
+            html += `<td class="time-cell">${endDisplay}</td>`;
+            html += `<td>${djName}</td>`;
+            html += `<td>${eventCount} ${eventCount === 1 ? 'event' : 'events'}</td>`;
+            html += `<td>${venueList}</td>`;
+            html += `<td onclick="event.stopPropagation();" style="cursor: default;"><a href="#" class="details-link" onclick="event.stopPropagation(); router.showDJDetailsModal('${djName}'); return false;">[DETAILS]</a></td>`;
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        return html;
+    },
 
     highlightDJ(djName) {
-        const cards = document.querySelectorAll('#dj-profiles-container .dj-card');
+        // Support both table rows and card/listings
+        const cards = document.querySelectorAll('#dj-profiles-container .dj-card, #dj-profiles-container .dj-listing, #dj-profiles-container tr');
         cards.forEach(card => {
-            const nameElement = card.querySelector('.dj-name');
-            if (nameElement && nameElement.textContent.includes(djName)) {
+            const nameElement = card.querySelector('.dj-name, .dj-name-compact');
+            const textContent = card.textContent || '';
+            if ((nameElement && nameElement.textContent.includes(djName)) || textContent.includes(djName)) {
+                if (card.tagName === 'TR') {
+                    card.style.backgroundColor = '#e3f2fd';
+                    card.style.border = '2px solid #007bff';
+                    setTimeout(() => {
+                        card.style.backgroundColor = '';
+                        card.style.border = '';
+                    }, 3000);
+                } else {
                 card.style.backgroundColor = '#e3f2fd';
                 card.style.border = '2px solid #007bff';
                 setTimeout(() => {
                     card.style.backgroundColor = '';
                     card.style.border = '';
                 }, 3000);
+                }
             }
         });
+    },
+    
+    async renderDJDetailsModal(djName) {
+        // Compact modal view (similar to event details)
+        const modal = document.getElementById('dj-details-modal');
+        const titleElement = document.getElementById('dj-details-modal-title');
+        const bodyElement = document.getElementById('dj-details-modal-body');
+        
+        if (!modal || !titleElement || !bodyElement) {
+            console.error('DJ details modal elements not found');
+            return;
+        }
+        
+        // Update title
+        titleElement.textContent = `${djName} - Details`;
+        
+        // Show loading
+        bodyElement.innerHTML = '<div class="empty-state">> Loading DJ details...</div>';
+        
+        try {
+            // Fetch profile data
+            const profile = await api.fetchDJProfile(djName);
+            const stats = aggregateDJStats(djName);
+            const [editorial, reviews] = await Promise.all([
+                api.fetchDJEditorialAttributes(djName),
+                api.fetchDJReviewsAggregate(djName)
+            ]);
+            
+            // Build compact details HTML
+            let html = '<div class="dj-details-compact">';
+            
+            // Key stats
+            html += '<div class="dj-details-stats">';
+            if (stats && stats.totalEvents > 0) {
+                html += `<div class="detail-stat"><span class="detail-label">EVENTS:</span> ${stats.totalEvents}</div>`;
+            }
+            if (reviews && reviews.review_count > 0) {
+                html += `<div class="detail-stat"><span class="detail-label">RATING:</span> ${reviews.average_rating}/5 (${reviews.review_count} reviews)</div>`;
+            } else if (editorial && editorial.editorial_rating !== null && editorial.editorial_rating !== undefined) {
+                html += `<div class="detail-stat"><span class="detail-label">RATING:</span> ${editorial.editorial_rating}/5</div>`;
+            }
+            if (stats && stats.activityStatus) {
+                html += `<div class="detail-stat"><span class="detail-label">STATUS:</span> ${stats.activityStatus}</div>`;
+            }
+            if (editorial && editorial.genres && editorial.genres.length > 0) {
+                html += `<div class="detail-stat"><span class="detail-label">GENRES:</span> ${editorial.genres.join(', ')}</div>`;
+            }
+            if (editorial && editorial.style_tags && editorial.style_tags.length > 0) {
+                html += `<div class="detail-stat"><span class="detail-label">STYLE:</span> ${editorial.style_tags.join(', ')}</div>`;
+            }
+            html += '</div>';
+            
+            // Upcoming events (next 3)
+            if (stats && stats.upcomingEvents && stats.upcomingEvents.length > 0) {
+                html += '<div class="dj-details-upcoming">';
+                html += '<div class="detail-section-label">UPCOMING</div>';
+                stats.upcomingEvents.slice(0, 3).forEach(event => {
+                    const date = event.date instanceof Date ? event.date : new Date(event.date);
+                    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    html += `<div class="detail-event">${dateStr} - ${event.venue}${event.city ? ` [${event.city}]` : ''}</div>`;
+                });
+                html += '</div>';
+            }
+            
+            // Actions
+            html += '<div class="dj-details-actions">';
+            html += `<button class="terminal-button" onclick="views.closeDJDetailsModal(); state.djNavigationSource = 'modal'; router.showDJProfileView('${djName}');">[VIEW FULL PROFILE]</button>`;
+            if (reviews && reviews.review_count > 0) {
+                html += `<button class="terminal-button secondary" onclick="views.closeDJDetailsModal(); state.djNavigationSource = 'modal'; router.showDJReviews('${djName}');">[VIEW REVIEWS]</button>`;
+            }
+            html += '</div>';
+            
+            html += '</div>';
+            bodyElement.innerHTML = html;
+            
+            // Show modal
+            modal.style.display = 'flex';
+        } catch (error) {
+            console.error('Error loading DJ details:', error);
+            bodyElement.innerHTML = `<div class="empty-state">> Error loading DJ details: ${error.message}</div>`;
+            modal.style.display = 'flex';
+        }
+    },
+    
+    closeDJDetailsModal() {
+        const modal = document.getElementById('dj-details-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
     },
 
     async renderDJProfile(profile) {
@@ -4329,20 +5663,53 @@ const views = {
         }
     },
 
-    createVenueCard(venue) {
+    createVenueCard(venueInfo) {
+        // Compact line view (default) - similar to DJs
+        const venueName = venueInfo.name;
+        const pastEvents = venueInfo.pastEvents || 0;
+        const upcomingCount = venueInfo.upcomingEvents ? venueInfo.upcomingEvents.length : 0;
+        const rating = venueInfo.rating || 0;
+        const reviewCount = venueInfo.reviewCount || 0;
+        
         return `
-            <div class="venue-card" onclick="router.showVenueDetails('${venue.name}')" style="cursor: pointer;">
-                <h3 class="venue-name">🏢 ${venue.name}</h3>
-                <p class="venue-location">📍 ${venue.location}</p>
-                <p class="venue-capacity">👥 Capacity: ${venue.capacity}</p>
-                <p class="venue-sound">🔊 Sound: ${venue.soundSystem}</p>
-                <p class="venue-about">${venue.about}</p>
-                <p class="click-hint">Click to view venue details</p>
+            <div class="venue-listing" onclick="router.showVenueDetailsModal('${venueName}')">
+                <span class="venue-name">${venueName}</span>
+                ${rating > 0 ? `<span class="venue-rating">${rating.toFixed(1)} ⭐ (${reviewCount})</span>` : ''}
+                ${pastEvents > 0 ? `<span class="venue-past-events">${pastEvents} past</span>` : ''}
+                ${upcomingCount > 0 ? `<span class="venue-upcoming-events">${upcomingCount} upcoming</span>` : ''}
+                <a href="#" class="details-link" onclick="event.stopPropagation(); router.showVenueDetailsModal('${venueName}'); return false;">[DETAILS]</a>
             </div>
         `;
     },
 
-    renderVenues(venues) {
+    createVenueCardExpanded(venueInfo) {
+        // Expanded card view (optional mode) - similar to DJ expanded cards
+        const venueName = venueInfo.name;
+        const pastEvents = venueInfo.pastEvents || 0;
+        const upcomingCount = venueInfo.upcomingEvents ? venueInfo.upcomingEvents.length : 0;
+        const rating = venueInfo.rating || 0;
+        const reviewCount = venueInfo.reviewCount || 0;
+        const stats = aggregateVenueStats(venueName);
+        
+        return `
+            <div class="venue-card-compact" data-venue-name="${venueName}">
+                <div class="venue-card-header">
+                    <span class="venue-name-compact">${venueName}</span>
+                </div>
+                <div class="venue-card-stats">
+                    ${pastEvents > 0 ? `<span class="stat-item"><span class="stat-label">PAST EVENTS:</span> ${pastEvents}</span>` : ''}
+                    ${upcomingCount > 0 ? `<span class="stat-item"><span class="stat-label">UPCOMING:</span> ${upcomingCount}</span>` : ''}
+                    ${rating > 0 ? `<span class="stat-item"><span class="stat-label">RATING:</span> ${rating.toFixed(1)}/5</span>` : ''}
+                    ${reviewCount > 0 ? `<span class="stat-item"><span class="stat-label">REVIEWS:</span> ${reviewCount}</span>` : ''}
+                </div>
+                <div class="venue-card-actions">
+                    <a href="#" class="view-full-link" onclick="event.stopPropagation(); router.showVenueProfileView('${venueName}'); return false;">[VIEW FULL PROFILE]</a>
+                </div>
+            </div>
+        `;
+    },
+
+    async renderVenues(venues) {
         const container = document.getElementById('venues-container');
         if (!container) {
             console.error('Venues container not found!');
@@ -4350,18 +5717,285 @@ const views = {
         }
 
         if (!venues || venues.length === 0) {
-            container.innerHTML = '<p>No venues found.</p>';
+            const cityContext = state.userCity ? ` in ${state.userCity}` : '';
+            container.innerHTML = `<div class="empty-state">> No venues found${cityContext}.</div>`;
             return;
         }
 
-        // Create venue cards
-        const cardsHTML = venues.map(this.createVenueCard).join('');
-        container.innerHTML = cardsHTML;
+        // Apply time range filter to venues (filter by their events)
+        if (state.timeRange && state.timeRange !== 'all' && router) {
+            const { startDate, endDate } = router.getTimeRangeDates();
+            venues = venues.filter(venue => {
+                if (!venue.upcomingEvents || venue.upcomingEvents.length === 0) return false;
+                return venue.upcomingEvents.some(event => {
+                    const eventDate = event.date || event.start;
+                    if (!eventDate) return false;
+                    const date = new Date(eventDate);
+                    return date >= startDate && date <= endDate;
+                });
+            });
+        }
+
+        // Sort venues based on active sort type (similar to DJs)
+        let sortedVenues = [...venues];
         
-        if (CONFIG.flags.debug) console.log('Venues rendered');
+        if (state.activeSort === 'start') {
+            sortedVenues.sort((a, b) => {
+                let timeA = 0, timeB = 0;
+                
+                if (a.upcomingEvents && a.upcomingEvents.length > 0) {
+                    const nextEventA = a.upcomingEvents[0];
+                    timeA = nextEventA.start ? new Date(nextEventA.start).getTime() : (nextEventA.date ? new Date(nextEventA.date).getTime() : 0);
+                }
+                
+                if (b.upcomingEvents && b.upcomingEvents.length > 0) {
+                    const nextEventB = b.upcomingEvents[0];
+                    timeB = nextEventB.start ? new Date(nextEventB.start).getTime() : (nextEventB.date ? new Date(nextEventB.date).getTime() : 0);
+                }
+                
+                if (timeA === 0 && timeB === 0) return 0;
+                if (timeA === 0) return 1;
+                if (timeB === 0) return -1;
+                
+                return state.timeSortOrder.start === 'asc' ? timeA - timeB : timeB - timeA;
+            });
+        } else if (state.activeSort === 'end') {
+            sortedVenues.sort((a, b) => {
+                let timeA = 0, timeB = 0;
+                
+                if (a.upcomingEvents && a.upcomingEvents.length > 0) {
+                    const nextEventA = a.upcomingEvents[0];
+                    timeA = nextEventA.end ? new Date(nextEventA.end).getTime() : 0;
+                }
+                
+                if (b.upcomingEvents && b.upcomingEvents.length > 0) {
+                    const nextEventB = b.upcomingEvents[0];
+                    timeB = nextEventB.end ? new Date(nextEventB.end).getTime() : 0;
+                }
+                
+                if (timeA === 0 && timeB === 0) return 0;
+                if (timeA === 0) return 1;
+                if (timeB === 0) return -1;
+                
+                return state.timeSortOrder.end === 'asc' ? timeA - timeB : timeB - timeA;
+            });
+        } else {
+            // Default: sort by date
+            sortedVenues.sort((a, b) => {
+                const dateA = a.upcomingEvents && a.upcomingEvents.length > 0 ? a.upcomingEvents[0].date : null;
+                const dateB = b.upcomingEvents && b.upcomingEvents.length > 0 ? b.upcomingEvents[0].date : null;
+                
+                if (!dateA && !dateB) return 0;
+                if (!dateA) return 1;
+                if (!dateB) return -1;
+                
+                const timeA = dateA instanceof Date ? dateA.getTime() : new Date(dateA).getTime();
+                const timeB = dateB instanceof Date ? dateB.getTime() : new Date(dateB).getTime();
+                
+                return state.dateSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+            });
+        }
+
+        // Check view mode
+        const useCards = state.venueViewMode === 'cards';
+        
+        if (useCards) {
+            // Show loading state
+            container.innerHTML = '<div class="empty-state">> Loading venue profiles...</div>';
+            
+            // Enrich venues with stats for card view
+            const enrichedVenues = await Promise.all(
+                sortedVenues.map(venue => this.enrichVenueCardData(venue))
+            );
+            
+            // Create expanded venue cards
+            const cardsHTML = enrichedVenues.map(venue => this.createVenueCardExpanded(venue)).join('');
+        container.innerHTML = cardsHTML;
+        } else {
+            // Table view (default) - matching Events and DJs style
+            container.innerHTML = this.renderVenuesTable(sortedVenues);
+        }
+        
+        if (CONFIG.flags.debug) console.log('Venues rendered in', state.venueViewMode, 'mode');
+    },
+    
+    renderVenuesTable(venues) {
+        let html = '<table class="operators-table">';
+        html += '<thead><tr>';
+        html += `<th class="sortable-header" onclick="router.toggleDateSort()" style="cursor: pointer;">DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}</th>`;
+        html += `<th class="sortable-header" onclick="router.filterByTime('start')" style="cursor: pointer;">START ${state.timeSortOrder.start === 'asc' ? '↑' : '↓'}</th>`;
+        html += `<th class="sortable-header" onclick="router.filterByTime('end')" style="cursor: pointer;">END ${state.timeSortOrder.end === 'asc' ? '↑' : '↓'}</th>`;
+        html += '<th>VENUE</th>';
+        html += '<th>RATING</th>';
+        html += '<th>PAST</th>';
+        html += '<th>UPCOMING</th>';
+        html += '<th>ACTIONS</th>';
+        html += '</tr></thead>';
+        html += '<tbody>';
+        
+        venues.forEach(venueInfo => {
+            const venueName = venueInfo.name;
+            const pastEvents = venueInfo.pastEvents || 0;
+            const upcomingCount = venueInfo.upcomingEvents ? venueInfo.upcomingEvents.length : 0;
+            const rating = venueInfo.rating || 0;
+            const reviewCount = venueInfo.reviewCount || 0;
+            
+            // Get next event date, start, and end
+            let dateDisplay = 'TBD';
+            let startDisplay = '--:--';
+            let endDisplay = '--:--';
+            
+            if (venueInfo.upcomingEvents && venueInfo.upcomingEvents.length > 0) {
+                const nextEvent = venueInfo.upcomingEvents[0];
+                const eventDate = nextEvent.date;
+                
+                if (eventDate) {
+                    try {
+                        const dateObj = eventDate instanceof Date ? eventDate : new Date(eventDate);
+                        if (!isNaN(dateObj.getTime())) {
+                            // Create a minimal event object for formatEventDate
+                            const eventObj = { date: dateObj };
+                            dateDisplay = this.formatEventDate(eventObj);
+                            
+                            // Get start time from nextEvent.start or use date
+                            if (nextEvent.start) {
+                                const startObj = nextEvent.start instanceof Date ? nextEvent.start : new Date(nextEvent.start);
+                                if (!isNaN(startObj.getTime())) {
+                                    startDisplay = startObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                                }
+                            } else {
+                                startDisplay = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                            }
+                            
+                            // Get end time from nextEvent.end
+                            if (nextEvent.end) {
+                                const endObj = nextEvent.end instanceof Date ? nextEvent.end : new Date(nextEvent.end);
+                                if (!isNaN(endObj.getTime())) {
+                                    endDisplay = endObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // Keep defaults
+                    }
+                }
+            }
+            
+            // Format rating display
+            let ratingDisplay = '--';
+            if (rating > 0) {
+                ratingDisplay = `${rating.toFixed(1)} ⭐`;
+                if (reviewCount > 0) {
+                    ratingDisplay += ` (${reviewCount})`;
+                }
+            }
+            
+            html += '<tr onclick="router.showVenueDetailsModal(\'' + venueName + '\')" style="cursor: pointer;">';
+            html += `<td class="date-cell">${dateDisplay}</td>`;
+            html += `<td class="time-cell">${startDisplay}</td>`;
+            html += `<td class="time-cell">${endDisplay}</td>`;
+            html += `<td>${venueName}</td>`;
+            html += `<td>${ratingDisplay}</td>`;
+            html += `<td>${pastEvents}</td>`;
+            html += `<td>${upcomingCount}</td>`;
+            html += `<td onclick="event.stopPropagation();" style="cursor: default;"><a href="#" class="details-link" onclick="event.stopPropagation(); router.showVenueDetailsModal('${venueName}'); return false;">[DETAILS]</a></td>`;
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        return html;
+    },
+    
+    async enrichVenueCardData(venueInfo) {
+        // Enrich venue card with stats for expanded display
+        try {
+            const stats = aggregateVenueStats(venueInfo.name);
+            return {
+                ...venueInfo,
+                stats: stats
+            };
+        } catch (error) {
+            console.error('Error enriching venue data:', error);
+            return venueInfo;
+        }
     },
 
-    renderVenueDetails(venue) {
+    async renderVenueDetailsModal(venueName) {
+        // Compact modal view (similar to DJ details modal)
+        const modal = document.getElementById('dj-details-modal'); // Reuse DJ modal for now
+        const titleElement = document.getElementById('dj-details-modal-title');
+        const bodyElement = document.getElementById('dj-details-modal-body');
+        
+        if (!modal || !titleElement || !bodyElement) {
+            console.error('Venue details modal elements not found');
+            return;
+        }
+        
+        // Update title
+        titleElement.textContent = `${venueName} - Details`;
+        
+        // Show loading
+        bodyElement.innerHTML = '<div class="empty-state">> Loading venue details...</div>';
+        modal.style.display = 'block';
+        
+        try {
+            // Get venue data
+            const venue = state.venuesData.find(v => v.name === venueName);
+            if (!venue) {
+                await api.fetchVenues();
+                const updatedVenue = state.venuesData.find(v => v.name === venueName);
+                if (!updatedVenue) {
+                    bodyElement.innerHTML = '<div class="empty-state">> Venue not found.</div>';
+                    return;
+                }
+                return this.renderVenueDetailsModal(venueName); // Retry
+            }
+            
+            const stats = aggregateVenueStats(venueName);
+            
+            // Build compact details HTML
+            let html = '<div class="venue-details-compact">';
+            
+            // Key stats
+            html += '<div class="venue-details-stats">';
+            if (stats && stats.totalEvents > 0) {
+                html += `<div class="detail-stat"><span class="detail-label">EVENTS:</span> ${stats.totalEvents}</div>`;
+                html += `<div class="detail-stat"><span class="detail-label">PAST:</span> ${stats.pastEvents}</div>`;
+                html += `<div class="detail-stat"><span class="detail-label">UPCOMING:</span> ${stats.upcomingEvents.length}</div>`;
+            }
+            if (venue.rating > 0) {
+                html += `<div class="detail-stat"><span class="detail-label">RATING:</span> ${venue.rating.toFixed(1)}/5 (${venue.reviewCount} reviews)</div>`;
+            }
+            if (stats && stats.activityStatus) {
+                html += `<div class="detail-stat"><span class="detail-label">STATUS:</span> ${stats.activityStatus}</div>`;
+            }
+            html += '</div>';
+            
+            // Upcoming events preview
+            if (stats && stats.upcomingEvents && stats.upcomingEvents.length > 0) {
+                html += '<div class="venue-upcoming-preview">';
+                html += '<div class="detail-label">UPCOMING EVENTS:</div>';
+                stats.upcomingEvents.slice(0, 3).forEach(event => {
+                    html += `<div class="upcoming-event-item">`;
+                    html += `<span>${new Date(event.date).toLocaleDateString()}</span> - ${event.title}`;
+                    html += `</div>`;
+                });
+                html += '</div>';
+            }
+            
+            html += '<div class="venue-modal-actions">';
+            html += `<a href="#" class="view-full-link" onclick="router.showVenueProfileView('${venueName}'); return false;">[VIEW FULL PROFILE]</a>`;
+            html += '</div>';
+            html += '</div>';
+            
+            bodyElement.innerHTML = html;
+        } catch (error) {
+            console.error('Error rendering venue details modal:', error);
+            bodyElement.innerHTML = '<div class="empty-state">> Error loading venue details.</div>';
+        }
+    },
+    
+    async renderVenueProfile(venue) {
         const container = document.getElementById('venue-details-container');
         if (!container) {
             console.error('Venue details container not found!');
@@ -4369,43 +6003,114 @@ const views = {
         }
 
         if (!venue) {
-            container.innerHTML = '<p>Venue details not found.</p>';
+            container.innerHTML = '<div class="empty-state">> Venue not found.</div>';
             return;
         }
 
-        // Create detailed venue HTML
-        container.innerHTML = `
-            <div class="venue-details-card">
-                <div class="venue-details-header">
-                    <h1 class="venue-details-name">🏢 ${venue.name}</h1>
-                    <p class="venue-details-location">📍 ${venue.location}</p>
+        try {
+            const stats = aggregateVenueStats(venue.name);
+            const formatDate = (date) => {
+                if (!date) return 'Unknown';
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            };
+            
+            let html = `
+                <div class="venue-profile">
+                    <div class="venue-profile-header">
+                        <h1 class="venue-profile-name">${venue.name}</h1>
                 </div>
+            `;
+
+            // Reviews (if available)
+            if (venue.rating > 0) {
+                html += `
+                    <div class="venue-profile-section">
+                        <div class="section-label">REVIEWS</div>
+                        <div class="section-content">
+                            <span class="reviews-link">${venue.rating.toFixed(1)}/5</span>
+                            <span class="review-count">(${venue.reviewCount} reviews)</span>
+                    </div>
+                    </div>`;
+            }
+
+            // Status
+            if (stats && stats.activityStatus) {
+                html += `
+                    <div class="venue-profile-section">
+                        <div class="section-label">STATUS</div>
+                        <div class="section-content">${stats.activityStatus}</div>
+                    </div>`;
+            }
+
+            // Statistics
+            if (stats && stats.totalEvents > 0) {
+                html += `
+                    <div class="venue-profile-section">
+                        <div class="section-label">STATISTICS</div>
+                        <div class="section-content">`;
                 
-                <div class="venue-details-content">
-                    <div class="venue-details-info">
-                        <h3>Venue Information</h3>
-                        <p><strong>Capacity:</strong> ${venue.capacity} people</p>
-                        <p><strong>Address:</strong> ${venue.address}</p>
-                        <p><strong>About:</strong> ${venue.about}</p>
+                html += `<div class="stat-line"><span class="stat-label">TOTAL EVENTS:</span> ${stats.totalEvents}</div>`;
+                html += `<div class="stat-line"><span class="stat-label">PAST EVENTS:</span> ${stats.pastEvents}</div>`;
+                html += `<div class="stat-line"><span class="stat-label">UPCOMING:</span> ${stats.upcomingEvents.length}</div>`;
+                
+                if (stats.firstAppearance) {
+                    html += `<div class="stat-line"><span class="stat-label">FIRST EVENT:</span> ${formatDate(stats.firstAppearance)}</div>`;
+                }
+                if (stats.lastAppearance) {
+                    html += `<div class="stat-line"><span class="stat-label">LAST EVENT:</span> ${formatDate(stats.lastAppearance)}</div>`;
+                }
+                
+                html += `</div></div>`;
+            }
+
+            // Top DJs
+            if (stats && stats.topDJs && stats.topDJs.length > 0) {
+                html += `
+                    <div class="venue-profile-section">
+                        <div class="section-label">TOP DJS</div>
+                        <div class="section-content">
+                            ${stats.topDJs.map(d => `${d.dj} (${d.count})`).join(' | ')}
                     </div>
-                    
-                    <div class="venue-details-sound">
-                        <h3>Sound System</h3>
-                        <p><strong>System:</strong> ${venue.soundSystem}</p>
-                        <p>This venue is known for its premium sound quality.</p>
+                    </div>`;
+            }
+
+            // Top Styles/Genres
+            if (stats && stats.topStyles && stats.topStyles.length > 0) {
+                html += `
+                    <div class="venue-profile-section">
+                        <div class="section-label">GENRES</div>
+                        <div class="section-content">
+                            ${stats.topStyles.map(s => `${s.style} (${s.count})`).join(' | ')}
                     </div>
-                    
-                    <div class="venue-details-links">
-                        <h3>Links</h3>
-                        <a href="https://${venue.website}" target="_blank" class="venue-website-link">
-                            🌐 Visit Venue Website
-                        </a>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        if (CONFIG.flags.debug) console.log('Venue details rendered');
+                    </div>`;
+            }
+
+            // Upcoming events
+            if (stats && stats.upcomingEvents && stats.upcomingEvents.length > 0) {
+                html += `
+                    <div class="venue-profile-section">
+                        <div class="section-label">UPCOMING EVENTS</div>
+                        <div class="section-content">`;
+                stats.upcomingEvents.forEach(event => {
+                    html += `
+                        <div class="upcoming-event">
+                            <span class="event-date">${formatDate(event.date)}</span>
+                            <span class="event-title">${event.title}</span>
+                            ${event.dj ? `<span class="event-dj">${event.dj}</span>` : ''}
+                            <a href="#" class="details-link" onclick="router.showEventDetailsView('${event.title}'); return false;">[DETAILS]</a>
+                        </div>`;
+                });
+                html += `</div></div>`;
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+            
+            if (CONFIG.flags.debug) console.log('Venue profile rendered');
+        } catch (error) {
+            console.error('Error rendering venue profile:', error);
+            container.innerHTML = '<div class="empty-state">> Error loading venue profile.</div>';
+        }
     },
 
     createOperatorCard(operatorInfo) {
@@ -4450,6 +6155,662 @@ const views = {
         if (CONFIG.flags.debug) console.log('Operators rendered');
     },
 
+    async renderOperatorsTable(operatorType) {
+        const container = document.getElementById('operators-table-container');
+        if (!container) {
+            console.error('Operators table container not found!');
+            return;
+        }
+
+        views.showLoading('operators-table-container');
+
+        try {
+            // Get events filtered by time range
+            let startDate, endDate;
+            if (state.timeRange && router) {
+                const rangeDates = router.getTimeRangeDates();
+                startDate = rangeDates.startDate;
+                endDate = rangeDates.endDate;
+            } else {
+                // Default to next 7 days
+                const now = new Date();
+                startDate = now;
+                endDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            }
+            
+            let upcomingEvents = (state.eventsData || []).filter(event => {
+                const date = event.date || event.start;
+                if (!date) return false;
+                try {
+                    const eventDate = new Date(date);
+                    return eventDate >= startDate && eventDate <= endDate;
+                } catch (e) {
+                    return false;
+                }
+            });
+
+            // Fetch operator data for these events
+            const eventUids = upcomingEvents.map(e => e.event_uid || e.title || e.name);
+            await api.fetchEventOperators(eventUids);
+
+            // Filter events to only show those with operators of the selected type
+            if (operatorType === 'sound') {
+                upcomingEvents = upcomingEvents.filter(event => {
+                    const eventUid = event.event_uid || event.title || event.name;
+                    return state.eventOperatorsData.some(eo => 
+                        eo.event_uid === eventUid && eo.operator_type === 'sound'
+                    );
+                });
+            } else if (operatorType === 'lighting') {
+                upcomingEvents = upcomingEvents.filter(event => {
+                    const eventUid = event.event_uid || event.title || event.name;
+                    return state.eventOperatorsData.some(eo => 
+                        eo.event_uid === eventUid && eo.operator_type === 'lighting'
+                    );
+                });
+            } else if (operatorType === 'leads') {
+                // Leads includes both 'leads' and 'curators' operator types
+                upcomingEvents = upcomingEvents.filter(event => {
+                    const eventUid = event.event_uid || event.title || event.name;
+                    return state.eventOperatorsData.some(eo => 
+                        eo.event_uid === eventUid && (eo.operator_type === 'leads' || eo.operator_type === 'curators')
+                    );
+                });
+            } else if (operatorType === 'hospitality') {
+                upcomingEvents = upcomingEvents.filter(event => {
+                    const eventUid = event.event_uid || event.title || event.name;
+                    return state.eventOperatorsData.some(eo => 
+                        eo.event_uid === eventUid && eo.operator_type === 'hospitality'
+                    );
+                });
+            }
+
+            // Sort by date based on current sort order, then alphabetically
+            upcomingEvents.sort((a, b) => {
+                const dateA = new Date(a.date || a.start);
+                const dateB = new Date(b.date || b.start);
+                if (dateA.getTime() !== dateB.getTime()) {
+                    return state.dateSortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+                }
+                const titleA = (a.title || a.name || '').toLowerCase();
+                const titleB = (b.title || b.name || '').toLowerCase();
+                return titleA.localeCompare(titleB);
+            });
+
+            if (upcomingEvents.length === 0) {
+                container.innerHTML = '<div class="empty-state">> No events in the next 7 days for this category.</div>';
+                return;
+            }
+
+            // Render table based on operator type
+            let html = '';
+            if (operatorType === 'sound') {
+                html = await this.renderSoundTable(upcomingEvents);
+            } else if (operatorType === 'lighting') {
+                html = this.renderLightingTable(upcomingEvents);
+            } else if (operatorType === 'leads') {
+                html = this.renderLeadsTable(upcomingEvents);
+            } else if (operatorType === 'hospitality') {
+                html = this.renderHospitalityTable(upcomingEvents);
+            } else {
+                container.innerHTML = '<div class="empty-state">> Unknown operator type.</div>';
+                return;
+            }
+
+            container.innerHTML = html;
+            
+            // Update sort indicators in table headers after rendering
+            const sortHeaders = container.querySelectorAll('.sortable-header');
+            sortHeaders.forEach(header => {
+                header.textContent = `DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}`;
+            });
+            console.log(`✅ Rendered ${operatorType} table with ${upcomingEvents.length} events`);
+            
+        } catch (error) {
+            console.error('Error rendering operators table:', error);
+            views.showError('operators-table-container', 'Failed to load table data');
+        }
+    },
+
+    formatEventDate(event) {
+        if (!event.date) return 'TBD';
+        try {
+            const date = new Date(event.date);
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const dayName = days[date.getDay()];
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${dayName} <span class="date-digits">${month}/${day}</span>`;
+        } catch (e) {
+            return 'TBD';
+        }
+    },
+
+    async renderSoundTable(events) {
+        // Fetch provider ratings for all sound and equipment providers
+        const allSoundProviders = new Set();
+        const allGearProviders = new Set();
+        
+        events.forEach(event => {
+            const eventUid = event.event_uid || event.title || event.name;
+            const soundOps = state.eventOperatorsData.filter(eo => 
+                eo.event_uid === eventUid && eo.operator_type === 'sound'
+            );
+            const gearOps = state.eventOperatorsData.filter(eo => 
+                eo.event_uid === eventUid && eo.operator_type === 'equipment'
+            );
+            
+            soundOps.forEach(op => allSoundProviders.add(op.operator_name));
+            gearOps.forEach(op => allGearProviders.add(op.operator_name));
+        });
+        
+        // Fetch ratings for all providers
+        const providerRatings = {};
+        const providerPromises = [];
+        
+        [...allSoundProviders].forEach(name => {
+            providerPromises.push(
+                api.calculateProviderStats(name, 'sound').then(stats => {
+                    providerRatings[`sound:${name}`] = stats;
+                })
+            );
+        });
+        
+        [...allGearProviders].forEach(name => {
+            providerPromises.push(
+                api.calculateProviderStats(name, 'equipment').then(stats => {
+                    providerRatings[`equipment:${name}`] = stats;
+                })
+            );
+        });
+        
+        await Promise.all(providerPromises);
+        
+        // Sort events by date based on current sort order
+        const sortedEvents = [...events].sort((a, b) => {
+            const dateA = a.date || a.start;
+            const dateB = b.date || b.start;
+            if (!dateA && !dateB) return 0;
+            if (!dateA) return 1;
+            if (!dateB) return -1;
+            const timeA = new Date(dateA).getTime();
+            const timeB = new Date(dateB).getTime();
+            return state.dateSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+        });
+        
+        let html = '<table class="operators-table">';
+        html += '<thead><tr>';
+        html += `<th class="sortable-header" onclick="router.toggleDateSort()" style="cursor: pointer;">DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}</th>`;
+        html += '<th>SOUND</th>';
+        html += '<th>GEAR</th>';
+        html += '</tr></thead>';
+        html += '<tbody>';
+        
+        sortedEvents.forEach(event => {
+            const eventUid = event.event_uid || event.title || event.name;
+            const soundOperators = state.eventOperatorsData.filter(eo => 
+                eo.event_uid === eventUid && eo.operator_type === 'sound'
+            );
+            const gearOperators = state.eventOperatorsData.filter(eo => 
+                eo.event_uid === eventUid && eo.operator_type === 'equipment'
+            );
+            
+            html += '<tr>';
+            
+            // Date column
+            html += '<td class="date-cell">';
+            html += this.formatEventDate(event);
+            html += '</td>';
+            
+            // Sound column with rating
+            html += '<td>';
+            if (soundOperators.length > 0) {
+                const primary = soundOperators.find(op => op.is_primary) || soundOperators[0];
+                const soundKey = `sound:${primary.operator_name}`;
+                const soundStats = providerRatings[soundKey] || { rating: 0, reviewCount: 0 };
+                const rating = soundStats.rating || 0;
+                const reviewCount = soundStats.reviewCount || 0;
+                
+                html += `<div class="provider-cell">`;
+                html += `<span class="provider-name">${primary.operator_name}</span>`;
+                if (soundOperators.length > 1) {
+                    html += ` <span class="provider-count">+${soundOperators.length - 1}</span>`;
+                }
+                html += `<div class="provider-rating">${rating.toFixed(1)} ⭐ (${reviewCount})</div>`;
+                html += `</div>`;
+            } else {
+                html += '[claim]';
+            }
+            html += '</td>';
+            
+            // Gear column with rating
+            html += '<td>';
+            if (gearOperators.length > 0) {
+                const gearOp = gearOperators[0];
+                const soundOp = soundOperators[0];
+                const gearKey = `equipment:${gearOp.operator_name}`;
+                const gearStats = providerRatings[gearKey] || { rating: 0, reviewCount: 0 };
+                const rating = gearStats.rating || 0;
+                const reviewCount = gearStats.reviewCount || 0;
+                
+                html += `<div class="provider-cell">`;
+                // If gear owner is same as sound person, show name with 'owner' tag
+                if (soundOp && gearOp.operator_name === soundOp.operator_name) {
+                    html += `<span class="provider-name">${gearOp.operator_name} <span class="owner-tag">(owner)</span></span>`;
+                } else {
+                    html += `<span class="provider-name">${gearOp.operator_name}</span>`;
+                }
+                html += `<div class="provider-rating">${rating.toFixed(1)} ⭐ (${reviewCount})</div>`;
+                html += `</div>`;
+            } else {
+                html += '[claim]';
+            }
+            html += '</td>';
+            
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        return html;
+    },
+
+    renderLightingTable(events) {
+        // Sort events by date based on current sort order
+        const sortedEvents = [...events].sort((a, b) => {
+            const dateA = a.date || a.start;
+            const dateB = b.date || b.start;
+            if (!dateA && !dateB) return 0;
+            if (!dateA) return 1;
+            if (!dateB) return -1;
+            const timeA = new Date(dateA).getTime();
+            const timeB = new Date(dateB).getTime();
+            return state.dateSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+        });
+        
+        let html = '<table class="operators-table">';
+        html += '<thead><tr>';
+        html += `<th class="sortable-header" onclick="router.toggleDateSort()" style="cursor: pointer;">DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}</th>`;
+        html += '<th>LIGHTING</th>';
+        html += '<th>EQUIPMENT</th>';
+        html += '<th>VENUE</th>';
+        html += '<th>PARTY</th>';
+        html += '</tr></thead>';
+        html += '<tbody>';
+        
+        sortedEvents.forEach(event => {
+            const eventUid = event.event_uid || event.title || event.name;
+            const lightingOperators = state.eventOperatorsData.filter(eo => 
+                eo.event_uid === eventUid && eo.operator_type === 'lighting'
+            );
+            const equipmentOperators = state.eventOperatorsData.filter(eo => 
+                eo.event_uid === eventUid && eo.operator_type === 'equipment'
+            );
+            const venue = event.venue || event.location || 'TBD';
+            const partyName = event.title || event.name || 'TBD';
+            
+            html += '<tr>';
+            
+            // Date column
+            html += '<td class="date-cell">';
+            html += this.formatEventDate(event);
+            html += '</td>';
+            
+            // Lighting column
+            html += '<td>';
+            if (lightingOperators.length > 0) {
+                const primary = lightingOperators.find(op => op.is_primary) || lightingOperators[0];
+                html += primary.operator_name;
+            } else {
+                html += '[claim]';
+            }
+            html += '</td>';
+            
+            // Equipment column
+            html += '<td>';
+            if (equipmentOperators.length > 0) {
+                html += equipmentOperators[0].operator_name;
+            } else {
+                html += '[claim]';
+            }
+            html += '</td>';
+            
+            // Venue column
+            html += `<td>${venue}</td>`;
+            
+            // Party name column
+            html += `<td>${partyName}</td>`;
+            
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        return html;
+    },
+
+
+    renderLeadsTable(events) {
+        // Sort events by date based on current sort order
+        const sortedEvents = [...events].sort((a, b) => {
+            const dateA = a.date || a.start;
+            const dateB = b.date || b.start;
+            if (!dateA && !dateB) return 0;
+            if (!dateA) return 1;
+            if (!dateB) return -1;
+            const timeA = new Date(dateA).getTime();
+            const timeB = new Date(dateB).getTime();
+            return state.dateSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+        });
+        
+        let html = '<table class="operators-table">';
+        html += '<thead><tr>';
+        html += `<th class="sortable-header" onclick="router.toggleDateSort()" style="cursor: pointer;">DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}</th>`;
+        html += '<th>PARTY</th>';
+        html += '<th>VENUE</th>';
+        html += '<th>EVENT CURATOR</th>';
+        html += '<th>BAR LEAD</th>';
+        html += '<th>SAFETY LEAD</th>';
+        html += '<th>OPERATIONS LEAD</th>';
+        html += '<th>MEDICAL LEAD</th>';
+        html += '</tr></thead>';
+        html += '<tbody>';
+        
+        sortedEvents.forEach(event => {
+            const eventUid = event.event_uid || event.title || event.name;
+            // Include both 'leads' and 'curators' operator types
+            const leadsOperators = state.eventOperatorsData.filter(eo => 
+                eo.event_uid === eventUid && eo.operator_type === 'leads'
+            );
+            const curatorOperators = state.eventOperatorsData.filter(eo => 
+                eo.event_uid === eventUid && eo.operator_type === 'curators'
+            );
+            const partyName = event.title || event.name || 'TBD';
+            const venue = event.venue || event.location || 'TBD';
+            
+            // Group leads by role
+            const eventCurator = curatorOperators.find(op => op.role && (op.role.toLowerCase().includes('curator') || op.role.toLowerCase().includes('promoter'))) || curatorOperators[0];
+            const barLead = leadsOperators.find(op => op.role && op.role.toLowerCase().includes('bar'));
+            const safetyLead = leadsOperators.find(op => op.role && op.role.toLowerCase().includes('safety'));
+            const operationsLead = leadsOperators.find(op => op.role && (op.role.toLowerCase().includes('operation') || op.role.toLowerCase().includes('event manager')));
+            const medicalLead = leadsOperators.find(op => op.role && op.role.toLowerCase().includes('medical'));
+            
+            html += '<tr>';
+            
+            // Date column
+            html += '<td class="date-cell">';
+            html += this.formatEventDate(event);
+            html += '</td>';
+            
+            // Party name column
+            html += `<td>${partyName}</td>`;
+            
+            // Venue column
+            html += `<td>${venue}</td>`;
+            
+            // Event Curator column
+            html += '<td>';
+            html += eventCurator ? eventCurator.operator_name : '[claim]';
+            html += '</td>';
+            
+            // Bar Lead column
+            html += '<td>';
+            html += barLead ? barLead.operator_name : '[claim]';
+            html += '</td>';
+            
+            // Safety Lead column
+            html += '<td>';
+            html += safetyLead ? safetyLead.operator_name : '[claim]';
+            html += '</td>';
+            
+            // Operations Lead column
+            html += '<td>';
+            html += operationsLead ? operationsLead.operator_name : '[claim]';
+            html += '</td>';
+            
+            // Medical Lead column
+            html += '<td>';
+            html += medicalLead ? medicalLead.operator_name : '[claim]';
+            html += '</td>';
+            
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        return html;
+    },
+
+    renderHospitalityTable(events) {
+        // Sort events by date based on current sort order
+        const sortedEvents = [...events].sort((a, b) => {
+            const dateA = a.date || a.start;
+            const dateB = b.date || b.start;
+            if (!dateA && !dateB) return 0;
+            if (!dateA) return 1;
+            if (!dateB) return -1;
+            const timeA = new Date(dateA).getTime();
+            const timeB = new Date(dateB).getTime();
+            return state.dateSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+        });
+        
+        let html = '<table class="operators-table">';
+        html += '<thead><tr>';
+        html += `<th class="sortable-header" onclick="router.toggleDateSort()" style="cursor: pointer;">DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}</th>`;
+        html += '<th>PARTY</th>';
+        html += '<th>VENUE</th>';
+        html += '<th>SECURITY</th>';
+        html += '<th>BARTENDER</th>';
+        html += '<th>CASHIER</th>';
+        html += '<th>VIBE LIAISON</th>';
+        html += '<th>MEDICAL</th>';
+        html += '</tr></thead>';
+        html += '<tbody>';
+        
+        sortedEvents.forEach(event => {
+            const eventUid = event.event_uid || event.title || event.name;
+            const hospitalityOperators = state.eventOperatorsData.filter(eo => 
+                eo.event_uid === eventUid && eo.operator_type === 'hospitality'
+            );
+            const partyName = event.title || event.name || 'TBD';
+            const venue = event.venue || event.location || 'TBD';
+            
+            // Group hospitality by role
+            const security = hospitalityOperators.find(op => op.role && op.role.toLowerCase().includes('security'));
+            const bartender = hospitalityOperators.find(op => op.role && op.role.toLowerCase().includes('bartender'));
+            const cashier = hospitalityOperators.find(op => op.role && op.role.toLowerCase().includes('cashier'));
+            const vibeLiaison = hospitalityOperators.find(op => op.role && (op.role.toLowerCase().includes('vibe') || op.role.toLowerCase().includes('liaison')));
+            const medical = hospitalityOperators.find(op => op.role && op.role.toLowerCase().includes('medical'));
+            
+            html += '<tr>';
+            
+            // Date column
+            html += '<td class="date-cell">';
+            html += this.formatEventDate(event);
+            html += '</td>';
+            
+            // Party name column
+            html += `<td>${partyName}</td>`;
+            
+            // Venue column
+            html += `<td>${venue}</td>`;
+            
+            // Security column
+            html += '<td>';
+            html += security ? security.operator_name : '[claim]';
+            html += '</td>';
+            
+            // Bartender column
+            html += '<td>';
+            html += bartender ? bartender.operator_name : '[claim]';
+            html += '</td>';
+            
+            // Cashier column
+            html += '<td>';
+            html += cashier ? cashier.operator_name : '[claim]';
+            html += '</td>';
+            
+            // Vibe Liaison column
+            html += '<td>';
+            html += vibeLiaison ? vibeLiaison.operator_name : '[claim]';
+            html += '</td>';
+            
+            // Medical column
+            html += '<td>';
+            html += medical ? medical.operator_name : '[claim]';
+            html += '</td>';
+            
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        return html;
+    },
+
+    renderProviderList(operatorType) {
+        const container = document.getElementById('provider-list-container');
+        if (!container) {
+            console.error('Provider list container not found!');
+            return;
+        }
+
+        views.showLoading('provider-list-container');
+
+        // Fetch providers for this type
+        api.fetchProvidersByType(operatorType).then(providers => {
+            if (!providers || providers.length === 0) {
+                container.innerHTML = '<div class="empty-state">> No providers found for this category.</div>';
+                return;
+            }
+
+            // Sort alphabetically
+            providers.sort((a, b) => a.name.localeCompare(b.name));
+
+            const html = providers.map(provider => {
+                const rating = provider.rating || 0;
+                const reviewCount = provider.review_count || 0;
+                const pastTotal = provider.past_events_total || 0;
+                const upcomingTotal = provider.upcoming_total || 0;
+                
+                return `
+                    <div class="provider-list-row" onclick="router.showProviderDetail('${provider.name}', '${operatorType}')">
+                        <div class="provider-row-name">${provider.name}</div>
+                        <div class="provider-row-role">${provider.role || CONFIG.operatorTypes[operatorType].label}</div>
+                        <div class="provider-row-stats">
+                            <span class="stat-rating">${rating.toFixed(1)} ⭐ (${reviewCount})</span>
+                            <span class="stat">${pastTotal}</span>
+                            <span class="stat">${upcomingTotal}</span>
+                        </div>
+                        <a href="#" class="details-link" onclick="event.stopPropagation(); router.showProviderDetail('${provider.name}', '${operatorType}'); return false;">[MORE]</a>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+            console.log(`✅ Rendered ${providers.length} providers for ${operatorType}`);
+        }).catch(error => {
+            console.error('Error rendering provider list:', error);
+            views.showError('provider-list-container', 'Failed to load providers');
+        });
+    },
+
+    async renderProviderDetail(providerName, operatorType) {
+        const container = document.getElementById('provider-detail-container');
+        if (!container) {
+            console.error('Provider detail container not found!');
+            return;
+        }
+
+        views.showLoading('provider-detail-container');
+
+        // Find provider data
+        const providers = state.providersData[operatorType] || [];
+        const provider = providers.find(p => p.name === providerName);
+
+        if (!provider) {
+            container.innerHTML = '<div class="empty-state">> Provider not found.</div>';
+            return;
+        }
+
+        // Get events for this provider
+        const providerEvents = state.eventOperatorsData.filter(eo => 
+            eo.operator_name === providerName && eo.operator_type === operatorType
+        );
+
+        // Get upcoming events
+        const now = new Date();
+        const upcomingEvents = providerEvents.filter(eo => {
+            const event = state.eventsData.find(e => (e.event_uid || e.title || e.name) === eo.event_uid);
+            if (!event || !event.date) return false;
+            const eventDate = new Date(event.date);
+            return eventDate >= now;
+        });
+
+        // Fetch reviews for this provider
+        const reviews = await api.fetchProviderReviews(providerName, operatorType);
+        const rating = provider.rating || 0;
+        const reviewCount = provider.review_count || 0;
+        const pastTotal = provider.past_events_total || 0;
+        const upcomingTotal = provider.upcoming_total || 0;
+        
+        const html = `
+            <div class="provider-detail-card">
+                <div class="provider-detail-header">
+                    <h3>${provider.name}</h3>
+                    <span class="provider-type">${CONFIG.operatorTypes[operatorType].label}</span>
+                </div>
+                <div class="provider-detail-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">RATING:</span>
+                        <span class="stat-value">${rating.toFixed(1)} ⭐ (${reviewCount} reviews)</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">PAST EVENTS:</span>
+                        <span class="stat-value">${pastTotal}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">UPCOMING:</span>
+                        <span class="stat-value">${upcomingTotal}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">ROLE:</span>
+                        <span class="stat-value">${provider.role || 'N/A'}</span>
+                    </div>
+                </div>
+                ${reviews.length > 0 ? `
+                <div class="provider-reviews-section">
+                    <h4>RECENT REVIEWS</h4>
+                    <ul class="reviews-list">
+                        ${reviews.slice(0, 5).map(review => `
+                            <li class="review-item">
+                                <div class="review-rating">${review.rating.toFixed(1)} ⭐</div>
+                                <div class="review-comment">${review.comment || 'No comment'}</div>
+                                <div class="review-meta">${review.reviewer_name || 'Anonymous'} • ${new Date(review.created_at).toLocaleDateString()}</div>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+                ` : ''}
+                ${upcomingEvents.length > 0 ? `
+                <div class="provider-upcoming-events">
+                    <h4>UPCOMING EVENTS</h4>
+                    <ul>
+                        ${upcomingEvents.slice(0, 5).map(eo => {
+                            const event = state.eventsData.find(e => (e.event_uid || e.title || e.name) === eo.event_uid);
+                            if (!event) return '';
+                            const eventDate = event.date ? new Date(event.date).toLocaleDateString() : 'TBD';
+                            return `<li>${eventDate} - ${event.title || event.name}</li>`;
+                        }).join('')}
+                    </ul>
+                </div>
+                ` : ''}
+                <div class="provider-detail-actions">
+                    <button class="back-button" onclick="router.backToProviderList()">[BACK]</button>
+                    <button class="more-button" onclick="router.showFullProviderProfile('${providerName}', '${operatorType}')">[MORE]</button>
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = html;
+    },
+
     renderOperatorProfile(operator) {
         // Placeholder - will be expanded with editorial attributes similar to DJ profiles
         const container = document.getElementById('operator-profile-container');
@@ -4488,7 +6849,7 @@ const views = {
                     </div>
                     
                     <div class="operator-profile-actions">
-                        <button class="back-button" onclick="router.switchTab('operators')">[BACK]</button>
+                        <button class="back-button" onclick="router.switchTab('rave-operators')">[BACK]</button>
                     </div>
                 </div>
             </div>
@@ -4728,6 +7089,144 @@ const views = {
         }
     },
 
+    async renderEventDetailsModal(eventTitle) {
+        // Compact modal view (similar to DJ details modal)
+        const modal = document.getElementById('event-details-modal');
+        const titleElement = document.getElementById('event-details-modal-title');
+        const bodyElement = document.getElementById('event-details-modal-body');
+        
+        if (!modal || !titleElement || !bodyElement) {
+            console.error('Event details modal elements not found');
+            return;
+        }
+        
+        // Find event from state
+        const event = state.eventsData.find(e => {
+            const title = e.title || e.name || '';
+            return title === eventTitle;
+        });
+        
+        if (!event) {
+            bodyElement.innerHTML = '<div class="empty-state">> Event not found</div>';
+            modal.style.display = 'flex';
+            return;
+        }
+        
+        // Update title
+        const title = event.title || event.name || 'Event';
+        titleElement.textContent = title;
+        
+        // Show loading
+        bodyElement.innerHTML = '<div class="empty-state">> Loading event details...</div>';
+        modal.style.display = 'flex';
+        
+        try {
+            // Safely parse date
+            let eventDate = 'Date TBD';
+            let eventTime = '--:--';
+            if (event.date) {
+                try {
+                    const dateObj = typeof event.date === 'string' ? new Date(event.date) : event.date;
+                    if (!isNaN(dateObj.getTime())) {
+                        eventDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        eventTime = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    }
+                } catch (e) {
+                    // Keep defaults
+                }
+            }
+            
+            // Build compact details HTML
+            let html = '<div class="event-details-compact">';
+            
+            // Key info
+            html += '<div class="event-details-stats">';
+            html += `<div class="detail-stat"><span class="detail-label">DATE:</span> ${eventDate}</div>`;
+            if (eventTime !== '--:--') {
+                html += `<div class="detail-stat"><span class="detail-label">TIME:</span> ${eventTime}</div>`;
+            }
+            if (event.location || event.venue) {
+                html += `<div class="detail-stat"><span class="detail-label">VENUE:</span> ${event.venue || event.location || 'TBD'}</div>`;
+            }
+            if (event.address) {
+                html += `<div class="detail-stat"><span class="detail-label">ADDRESS:</span> ${event.address}</div>`;
+            }
+            if (event.dj || (event.artists && event.artists.length > 0)) {
+                const artists = event.dj ? [event.dj] : (event.artists || []);
+                if (artists.length > 0) {
+                    html += `<div class="detail-stat"><span class="detail-label">LINEUP:</span> ${artists.slice(0, 3).join(', ')}${artists.length > 3 ? ` +${artists.length - 3}` : ''}</div>`;
+                }
+            }
+            if (event.genres && event.genres.length > 0) {
+                html += `<div class="detail-stat"><span class="detail-label">GENRES:</span> ${event.genres.join(', ')}</div>`;
+            }
+            if (event.promoter) {
+                html += `<div class="detail-stat"><span class="detail-label">PROMOTER:</span> ${event.promoter}</div>`;
+            }
+            // Cost and minAge are always generated now
+            html += `<div class="detail-stat"><span class="detail-label">COST:</span> ${event.cost || 'TBD'}</div>`;
+            html += `<div class="detail-stat"><span class="detail-label">MIN AGE:</span> ${event.minAge || 'TBD'}</div>`;
+            if (event.interested !== undefined && event.interested !== null) {
+                html += `<div class="detail-stat"><span class="detail-label">INTERESTED:</span> ${event.interested}</div>`;
+            }
+            html += '</div>';
+            
+            // Description preview (first 150 chars)
+            if (event.description) {
+                const descPreview = event.description.length > 150 
+                    ? event.description.substring(0, 150) + '...' 
+                    : event.description;
+                html += `<div class="event-details-description"><span class="detail-section-label">DESCRIPTION:</span> ${descPreview}</div>`;
+            }
+            
+            // Add action buttons if user is logged in
+            const currentUser = state.currentUser || state.emulatedUser;
+            const eventUid = event.event_uid || title;
+            if (currentUser) {
+                const isSaved = state.userEventLists.saved.includes(eventUid);
+                const isMaybe = state.userEventLists.maybe.includes(eventUid);
+                const isGoing = state.userEventLists.going.includes(eventUid);
+                
+                html += '<div class="event-details-actions">';
+                if (isSaved) {
+                    html += `<a href="#" class="event-action saved" onclick="router.removeEventFromList('${eventUid}', 'saved'); views.closeEventDetailsModal(); return false;">[SAVED]</a>`;
+                } else {
+                    html += `<a href="#" class="event-action" onclick="router.addEventToList('${eventUid}', 'saved'); views.closeEventDetailsModal(); return false;">[SAVE]</a>`;
+                }
+                if (isMaybe) {
+                    html += `<a href="#" class="event-action maybe" onclick="router.removeEventFromList('${eventUid}', 'maybe'); views.closeEventDetailsModal(); return false;">[MAYBE]</a>`;
+                } else {
+                    html += `<a href="#" class="event-action" onclick="router.addEventToList('${eventUid}', 'maybe'); views.closeEventDetailsModal(); return false;">[MAYBE]</a>`;
+                }
+                if (isGoing) {
+                    html += `<a href="#" class="event-action going" onclick="router.removeEventFromList('${eventUid}', 'going'); views.closeEventDetailsModal(); return false;">[GOING]</a>`;
+                } else {
+                    html += `<a href="#" class="event-action" onclick="router.addEventToList('${eventUid}', 'going'); views.closeEventDetailsModal(); return false;">[GOING]</a>`;
+                }
+                html += '</div>';
+            }
+            
+            // Full details link
+            html += '<div class="event-details-actions">';
+            html += `<button class="terminal-button" onclick="views.closeEventDetailsModal(); router.showEventDetailsView('${title}');">[VIEW FULL DETAILS]</button>`;
+            html += '</div>';
+            
+            html += '</div>';
+            bodyElement.innerHTML = html;
+        } catch (error) {
+            console.error('Error loading event details:', error);
+            bodyElement.innerHTML = `<div class="empty-state">> Error loading event details: ${error.message}</div>`;
+            modal.style.display = 'flex';
+        }
+    },
+    
+    closeEventDetailsModal() {
+        const modal = document.getElementById('event-details-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    },
+
     renderEventDetails(event) {
         console.log('Rendering event details for:', event.title);
         
@@ -4761,37 +7260,611 @@ const views = {
         // Get title - try multiple possible field names
         const title = event.title || event.name || 'Event';
         
+        // Get all artists/lineup
+        const artists = event.dj ? [event.dj] : (event.artists || []);
+        
         container.innerHTML = `
             <div class="event-details-card">
                 <div class="event-details-header">
                     <h1 class="event-details-title">${title}</h1>
                     <p class="event-details-date">${eventDate} ${eventTime}</p>
-                    <p class="event-details-location">${event.location || 'Location TBD'}</p>
+                    ${event.location || event.venue ? `<p class="event-details-location">${event.venue || event.location}</p>` : ''}
+                    ${event.address ? `<p class="event-details-address">${event.address}</p>` : ''}
                 </div>
                 
                 <div class="event-details-content">
                     <div class="event-details-info">
-                        <p><strong>TYPE:</strong> ${(event.type || 'EVENT').toUpperCase()}</p>
-                        <p><strong>MUSIC:</strong> ${event.music || 'Electronic'}</p>
-                        <p><strong>ATTENDANCE:</strong> ${event.friendsGoing || 0}/${event.attending || 0}</p>
+                        ${event.type ? `<p><strong>TYPE:</strong> ${event.type.toUpperCase()}</p>` : ''}
+                        ${event.music ? `<p><strong>MUSIC:</strong> ${event.music}</p>` : ''}
+                        ${event.genres && event.genres.length > 0 ? `<p><strong>GENRES:</strong> ${event.genres.join(', ')}</p>` : ''}
+                        ${event.interested !== undefined && event.interested !== null ? `<p><strong>INTERESTED:</strong> ${event.interested} people</p>` : ''}
+                        ${event.friendsGoing !== undefined ? `<p><strong>ATTENDANCE:</strong> ${event.friendsGoing || 0}/${event.attending || 0}</p>` : ''}
                     </div>
                     
-                    ${event.dj ? `
-                    <div class="event-details-dj">
-                        <p><strong>DJ:</strong> <a href="#" onclick="router.showDJProfileView('${event.dj}'); return false;" style="color: var(--text-primary); text-decoration: underline;">${event.dj}</a></p>
+                    <!-- PROVIDERS SECTION - Showcase ALL providers for DIY culture emphasis -->
+                    <div class="event-details-providers">
+                        <p><strong>PROVIDERS:</strong></p>
+                    ${artists.length > 0 ? `
+                        <div class="provider-group">
+                            <strong>DJs / ARTISTS:</strong>
+                        <ul>
+                                ${artists.map(artist => `<li>${artist} <a href="#" onclick="router.showDJProfileView('${artist}'); return false;" style="color: var(--text-primary); text-decoration: underline;">[PROFILE]</a></li>`).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
+                        ${event.venue ? `
+                        <div class="provider-group">
+                            <strong>VENUE:</strong> ${event.venue}
+                        </div>
+                        ` : ''}
+                        ${event.promoter ? `
+                        <div class="provider-group">
+                            <strong>PROMOTER:</strong> ${event.promoter}
+                        </div>
+                        ` : ''}
+                        ${event.sound_system || event.soundSystem ? `
+                        <div class="provider-group">
+                            <strong>SOUND SYSTEM:</strong> ${event.sound_system || event.soundSystem}
+                        </div>
+                        ` : ''}
+                        ${event.operator || (event.operators && event.operators.length > 0) ? `
+                        <div class="provider-group">
+                            <strong>OPERATOR${(Array.isArray(event.operator || event.operators) ? (event.operator || event.operators) : [event.operator || event.operators]).length > 1 ? 'S' : ''}:</strong> ${Array.isArray(event.operator || event.operators) ? (event.operator || event.operators).join(', ') : (event.operator || event.operators)}
+                        </div>
+                        ` : ''}
+                        ${event.visual_artist || event.visualArtist ? `
+                        <div class="provider-group">
+                            <strong>VISUAL ARTIST:</strong> ${event.visual_artist || event.visualArtist}
+                        </div>
+                        ` : ''}
+                        ${event.lighting || event.lighting_designer ? `
+                        <div class="provider-group">
+                            <strong>LIGHTING:</strong> ${event.lighting || event.lighting_designer}
+                        </div>
+                        ` : ''}
+                        ${event.stage_design || event.stageDesign ? `
+                        <div class="provider-group">
+                            <strong>STAGE DESIGN:</strong> ${event.stage_design || event.stageDesign}
+                        </div>
+                        ` : ''}
+                        ${event.photographer || event.photo ? `
+                        <div class="provider-group">
+                            <strong>PHOTOGRAPHY:</strong> ${event.photographer || event.photo}
+                        </div>
+                        ` : ''}
+                    </div>
+                    
+                    ${event.description ? `
+                    <div class="event-details-description">
+                        <p><strong>DESCRIPTION:</strong></p>
+                        <p>${event.description}</p>
                     </div>
                     ` : ''}
                     
+                    <div class="event-details-pricing">
+                        <p><strong>COST:</strong> ${event.cost || 'TBD'}</p>
+                        <p><strong>MIN AGE:</strong> ${event.minAge || 'TBD'}</p>
+                    </div>
+                    
                     <div class="event-details-actions">
                         <button class="event-action-button secondary" onclick="router.switchTab('events')">
-                            [BACK]
+                            [BACK TO EVENTS]
                         </button>
                     </div>
                 </div>
             </div>
         `;
         
-        if (CONFIG.flags.debug) console.log('Event details rendered');
+            if (CONFIG.flags.debug) console.log('Event details rendered');
+        },
+        
+        renderMaybeComparison(events) {
+            const container = document.getElementById('maybe-comparison-container');
+            if (!container) {
+                console.error('Maybe comparison container not found');
+                return;
+            }
+            
+            if (!events || events.length === 0) {
+                container.innerHTML = '<div class="empty-state">> No events to compare</div>';
+                return;
+            }
+            
+            // Group events by date (day of week + date)
+            const groupedByDate = {};
+            events.forEach(event => {
+                let dateKey = 'UNKNOWN';
+                let dateObj = null;
+                
+                if (event.date) {
+                    try {
+                        dateObj = typeof event.date === 'string' ? new Date(event.date) : event.date;
+                        if (!isNaN(dateObj.getTime())) {
+                            const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+                            const dateStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                            dateKey = `${dayOfWeek}, ${dateStr}`;
+                        }
+                    } catch (e) {
+                        // Keep default
+                    }
+                }
+                
+                if (!groupedByDate[dateKey]) {
+                    groupedByDate[dateKey] = [];
+                }
+                groupedByDate[dateKey].push({ ...event, dateObj });
+            });
+            
+            // Sort date groups (upcoming first)
+            const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
+                const eventsA = groupedByDate[a];
+                const eventsB = groupedByDate[b];
+                const dateA = eventsA[0]?.dateObj;
+                const dateB = eventsB[0]?.dateObj;
+                
+                if (!dateA && !dateB) return 0;
+                if (!dateA) return 1;
+                if (!dateB) return -1;
+                return dateA - dateB;
+            });
+            
+            // Render grouped comparison
+            let html = '<div class="maybe-comparison-groups">';
+            
+            sortedDates.forEach(dateKey => {
+                const dateEvents = groupedByDate[dateKey];
+                
+                html += `<div class="comparison-date-group">`;
+                html += `<h3 class="comparison-date-header">${dateKey}</h3>`;
+                html += `<div class="comparison-events-stack">`;
+                
+                dateEvents.forEach(event => {
+                    const title = event.title || event.name || 'Event';
+                    const eventUid = event.event_uid || title;
+                    const venue = event.venue || event.location || 'TBD';
+                    const artists = event.dj ? [event.dj] : (event.artists || []);
+                    const genres = event.genres || [];
+                    const cost = event.cost || 'TBD';
+                    const interested = event.interested !== undefined && event.interested !== null ? event.interested : null;
+                    
+                    let time = '--:--';
+                    if (event.date && event.dateObj && !isNaN(event.dateObj.getTime())) {
+                        time = event.dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    }
+                    
+                    html += `<div class="comparison-event-item">`;
+                    html += `<div class="comparison-event-header">`;
+                    html += `<h4 class="comparison-event-title">${title}</h4>`;
+                    html += `<button class="comparison-remove-btn" onclick="router.removeEventFromList('${eventUid}', 'maybe')" title="Remove from maybe list">×</button>`;
+                    html += `</div>`;
+                    html += `<div class="comparison-event-details">`;
+                    html += `<div class="comparison-detail-row"><span class="comparison-label">TIME:</span> ${time}</div>`;
+                    html += `<div class="comparison-detail-row"><span class="comparison-label">VENUE:</span> ${venue}</div>`;
+                    if (artists.length > 0) {
+                        html += `<div class="comparison-detail-row"><span class="comparison-label">LINEUP:</span> ${artists.join(', ')}</div>`;
+                    }
+                    if (genres.length > 0) {
+                        html += `<div class="comparison-detail-row"><span class="comparison-label">GENRES:</span> ${genres.join(', ')}</div>`;
+                    }
+                    html += `<div class="comparison-detail-row"><span class="comparison-label">COST:</span> ${cost}</div>`;
+                    if (interested !== null) {
+                        html += `<div class="comparison-detail-row"><span class="comparison-label">INTERESTED:</span> ${interested}</div>`;
+                    }
+                    html += `</div>`;
+                    html += `<div class="comparison-event-actions">`;
+                    html += `<a href="#" class="comparison-action-btn" onclick="event.stopPropagation(); router.addEventToList('${eventUid}', 'going'); return false;">[MARK AS GOING]</a>`;
+                    html += `<a href="#" class="comparison-action-btn secondary" onclick="event.stopPropagation(); router.showEventDetailsModal('${title}'); return false;">[VIEW DETAILS]</a>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                });
+                
+                html += `</div>`; // Close comparison-events-stack
+                html += `</div>`; // Close comparison-date-group
+            });
+            
+            html += '</div>'; // Close maybe-comparison-groups
+            
+            container.innerHTML = html;
+            
+            if (CONFIG.flags.debug) console.log(`✅ Rendered ${events.length} events grouped into ${sortedDates.length} date groups`);
+        },
+    
+    async renderDJReviews(djName) {
+        const container = document.getElementById('dj-reviews-container');
+        if (!container) {
+            console.error('DJ reviews container not found!');
+            return;
+        }
+        
+        // Show loading
+        container.innerHTML = '<div class="empty-state">> Loading reviews...</div>';
+        
+        try {
+            // Fetch reviews and aggregate
+            const reviews = await api.fetchDJReviews(djName);
+            const aggregate = await api.fetchDJReviewsAggregate(djName);
+            
+            // If no reviews AND no aggregate data, show empty state
+            if ((!reviews || reviews.length === 0) && (!aggregate || aggregate.review_count === 0)) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        > No reviews yet.
+                        <br>
+                        <button class="terminal-button" onclick="views.openReviewModal('${djName}')" style="margin-top: 15px;">
+                            [SUBMIT FIRST REVIEW]
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            // If aggregate exists but no individual reviews, still show aggregate info
+            if ((!reviews || reviews.length === 0) && aggregate && aggregate.review_count > 0) {
+                // Show aggregate info (reviews may be pending or loading)
+                let html = '';
+                html += `
+                    <div class="dj-profile-section" style="margin-bottom: 30px;">
+                        <div class="section-label">REVIEWS SUMMARY</div>
+                        <div class="section-content">
+                            <div class="stat-line"><span class="stat-label">AVERAGE:</span> ${aggregate.average_rating}/5</div>
+                            <div class="stat-line"><span class="stat-label">TOTAL:</span> ${aggregate.review_count} reviews</div>
+                        </div>
+                    </div>
+                `;
+                html += `
+                    <div style="margin-bottom: 20px;">
+                        <button class="terminal-button" onclick="views.openReviewModal('${djName}')">
+                            [SUBMIT REVIEW]
+                        </button>
+                    </div>
+                `;
+                container.innerHTML = html;
+                return;
+            }
+            
+            // Format date helper
+            const formatDate = (dateString) => {
+                if (!dateString) return 'Unknown date';
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit'
+                });
+            };
+            
+            // Build reviews list
+            let html = '';
+            
+            // Header with aggregate info
+            if (aggregate) {
+                html += `
+                    <div class="dj-profile-section" style="margin-bottom: 30px;">
+                        <div class="section-label">REVIEWS SUMMARY</div>
+                        <div class="section-content">
+                            <div class="stat-line"><span class="stat-label">AVERAGE:</span> ${aggregate.average_rating}/5</div>
+                            <div class="stat-line"><span class="stat-label">TOTAL:</span> ${aggregate.review_count} reviews</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Add review button
+            html += `
+                <div style="margin-bottom: 20px;">
+                    <button class="terminal-button" onclick="views.openReviewModal('${djName}')">
+                        [SUBMIT REVIEW]
+                    </button>
+                </div>
+            `;
+            
+            // Reviews list
+            html += '<div class="reviews-list">';
+            reviews.forEach(review => {
+                html += `
+                    <div class="review-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-primary); background: var(--bg-secondary);">
+                        <div class="review-header" style="margin-bottom: 10px;">
+                            <span class="review-user" style="font-weight: 700; color: var(--accent);">${review.user_name || 'Anonymous'}</span>
+                            <span class="review-rating" style="margin-left: 15px; color: var(--text-primary);">${review.rating}/5</span>
+                            <span class="review-date" style="margin-left: 15px; color: var(--text-secondary); font-size: 0.85rem;">${formatDate(review.created_at)}</span>
+                        </div>
+                        ${review.comment ? `<div class="review-comment" style="margin-top: 8px; color: var(--text-primary); line-height: 1.6;">${review.comment}</div>` : ''}
+                        ${review.event_title ? `<div class="review-event" style="margin-top: 8px; color: var(--text-secondary); font-size: 0.85rem;">Event: ${review.event_title}</div>` : ''}
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+            
+            if (CONFIG.flags.debug) console.log('Reviews rendered:', reviews.length);
+        } catch (error) {
+            console.error('Error rendering reviews:', error);
+            container.innerHTML = `<div class="empty-state">> Error loading reviews: ${error.message}</div>`;
+        }
+    },
+    
+    async openReviewModal(djName) {
+        const modal = document.getElementById('review-modal');
+        if (!modal) {
+            console.error('Review modal not found!');
+            return;
+        }
+        
+        // Store current DJ
+        state.currentReviewDJ = djName;
+        
+        // Check if user is authenticated (real or emulated)
+        const hasUser = state.currentUser || state.emulatedUser;
+        
+        if (!hasUser) {
+            // Show user selector
+            document.getElementById('user-selector-section').style.display = 'block';
+            document.getElementById('review-form-section').style.display = 'none';
+            
+            // Load emulated users
+            try {
+                const users = await api.fetchEmulatedUsers();
+                const select = document.getElementById('emulated-user-select');
+                if (select) {
+                    select.innerHTML = '<option value="">-- Select User --</option>';
+                    users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.id;
+                        option.textContent = user.display_name || user.username;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading emulated users:', error);
+                alert('Error loading users. Please refresh and try again.');
+                return;
+            }
+        } else {
+            // User already selected, show form
+            document.getElementById('user-selector-section').style.display = 'none';
+            document.getElementById('review-form-section').style.display = 'block';
+        }
+        
+        // Show modal
+        modal.style.display = 'block';
+    },
+    
+    async confirmEmulatedUser() {
+        const select = document.getElementById('emulated-user-select');
+        if (!select || !select.value) {
+            alert('Please select a user');
+            return;
+        }
+        
+        try {
+            const user = await api.selectEmulatedUser(select.value);
+            if (user) {
+                // Hide selector, show form
+                document.getElementById('user-selector-section').style.display = 'none';
+                document.getElementById('review-form-section').style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error selecting user:', error);
+            alert('Error selecting user: ' + error.message);
+        }
+    },
+    
+    async submitReview() {
+        const djName = state.currentReviewDJ;
+        if (!djName) {
+            alert('No DJ selected');
+            return;
+        }
+        
+        const rating = parseFloat(document.getElementById('review-rating').value);
+        const comment = document.getElementById('review-comment').value.trim();
+        const eventTitle = document.getElementById('review-event').value.trim();
+        
+        if (isNaN(rating) || rating < 0 || rating > 5) {
+            alert('Please enter a valid rating between 0 and 5');
+            return;
+        }
+        
+        // Check user
+        const hasUser = state.currentUser || state.emulatedUser;
+        if (!hasUser) {
+            alert('Please select a user first');
+            return;
+        }
+        
+        try {
+            const submitBtn = document.getElementById('submit-review-btn');
+            if (submitBtn) submitBtn.disabled = true;
+            
+            const result = await api.submitReview({
+                dj_name: djName,
+                rating: rating,
+                comment: comment || null,
+                event_title: eventTitle || null
+            });
+            
+            if (result.success) {
+                // Close modal
+                this.closeReviewModal();
+                
+                // Refresh reviews if we're on the reviews page
+                if (state.currentView === 'dj-reviews') {
+                    await this.renderDJReviews(djName);
+                } else if (state.currentView === 'connections') {
+                    // Refresh user reviews in YOU tab
+                    await this.loadYouTab();
+                    // Show success message
+                    alert('Review submitted successfully!');
+                } else {
+                    // Show success message
+                    alert('Review submitted successfully!');
+                    // Optionally refresh DJ profile to show updated review count
+                    if (state.currentView === 'dj-profile') {
+                        const profile = await api.fetchDJProfile(djName);
+                        await views.renderDJProfile(profile);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error submitting review:', error);
+            alert('Error submitting review: ' + error.message);
+        } finally {
+            const submitBtn = document.getElementById('submit-review-btn');
+            if (submitBtn) submitBtn.disabled = false;
+        }
+    },
+    
+    closeReviewModal() {
+        const modal = document.getElementById('review-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+        
+        // Clear form
+        document.getElementById('review-rating').value = '5';
+        document.getElementById('review-comment').value = '';
+        document.getElementById('review-event').value = '';
+        
+        state.currentReviewDJ = null;
+    },
+    
+    initUserPortal() {
+        // Initialize user portal tabs
+        const tabButtons = document.querySelectorAll('.user-tab-button');
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const tabName = button.getAttribute('data-user-tab');
+                this.switchUserTab(tabName);
+            });
+        });
+        
+        // Load YOU tab by default
+        this.switchUserTab('you');
+    },
+    
+    switchUserTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.user-tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        const activeBtn = document.getElementById(`user-tab-${tabName}`);
+        if (activeBtn) activeBtn.classList.add('active');
+        
+        // Hide all tab content
+        document.querySelectorAll('.user-tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        
+        // Show selected tab content
+        const activeContent = document.getElementById(`user-tab-content-${tabName}`);
+        if (activeContent) activeContent.classList.add('active');
+        
+        // Load content based on tab
+        if (tabName === 'you') {
+            this.loadYouTab();
+        } else if (tabName === 'them') {
+            this.loadThemTab();
+        } else if (tabName === 'inbox') {
+            this.loadInboxTab();
+        }
+    },
+    
+    async loadYouTab() {
+        // Get current user (real or emulated)
+        const currentUser = state.currentUser || state.emulatedUser;
+        
+        if (!currentUser) {
+            // Not logged in - show login prompt
+            document.getElementById('user-reviews-container').innerHTML = `
+                <div class="empty-state">
+                    > Please select an emulated user or sign in to view your activity.
+                </div>
+            `;
+            return;
+        }
+        
+        // Load user reviews
+        await this.renderUserReviews(currentUser.id);
+    },
+    
+    async renderUserReviews(userId) {
+        const container = document.getElementById('user-reviews-container');
+        if (!container) return;
+        
+        container.innerHTML = '<div class="empty-state">> Loading your reviews...</div>';
+        
+        try {
+            const reviews = await api.fetchUserReviews(userId);
+            
+            if (!reviews || reviews.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        > No reviews submitted yet.
+                        <br>
+                        <span style="color: var(--text-secondary); font-size: 0.85rem;">
+                            Submit reviews on DJ profiles to see them here.
+                        </span>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Format date helper
+            const formatDate = (dateString) => {
+                if (!dateString) return 'Unknown date';
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric'
+                });
+            };
+            
+            let html = '';
+            reviews.forEach(review => {
+                html += `
+                    <div class="user-review-item">
+                        <div class="user-review-header">
+                            <div>
+                                <span class="user-review-target">${review.dj_name}</span>
+                                <span class="user-review-rating" style="margin-left: 15px;">${review.rating}/5</span>
+                            </div>
+                            <span class="user-review-date">${formatDate(review.created_at)}</span>
+                        </div>
+                        ${review.comment ? `<div class="user-review-comment">${review.comment}</div>` : ''}
+                        ${review.event_title ? `<div class="user-review-event">Event: ${review.event_title}</div>` : ''}
+                        <div style="margin-top: 10px;">
+                            <a href="#" class="user-review-link" onclick="router.showDJProfileView('${review.dj_name}'); return false;">
+                                [VIEW DJ PROFILE]
+                            </a>
+                            ${review.event_title ? `
+                                <a href="#" class="user-review-link" onclick="router.showEventDetailsView('${review.event_title}'); return false;" style="margin-left: 15px;">
+                                    [VIEW EVENT]
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Error rendering user reviews:', error);
+            container.innerHTML = `<div class="empty-state">> Error loading reviews: ${error.message}</div>`;
+        }
+    },
+    
+    loadThemTab() {
+        // Placeholder for THEM tab content
+        // Will be implemented later
+    },
+    
+    loadInboxTab() {
+        // Placeholder for INBOX tab content
+        // Appearance only for now
     }
 };
 
@@ -4841,10 +7914,496 @@ const router = {
         }
     },
 
+    toggleDJViewMode() {
+        // Toggle between list and card view modes
+        state.djViewMode = state.djViewMode === 'list' ? 'cards' : 'list';
+        
+        const toggleBtn = document.getElementById('dj-view-toggle');
+        if (toggleBtn) {
+            toggleBtn.textContent = state.djViewMode === 'list' ? '[EXPAND]' : '[LIST]';
+        }
+        
+        // Re-render DJ profiles with new mode
+        const activeDJs = getDJsActiveThisWeek();
+        views.renderDJProfiles(activeDJs);
+    },
+    
+    toggleVenueViewMode() {
+        // Toggle between list and card view modes for venues
+        state.venueViewMode = state.venueViewMode === 'list' ? 'cards' : 'list';
+        
+        const toggleBtn = document.getElementById('venue-view-toggle');
+        if (toggleBtn) {
+            toggleBtn.textContent = state.venueViewMode === 'list' ? '[EXPAND]' : '[LIST]';
+        }
+        
+        // Re-render venues with new mode
+        if (state.venuesData && state.venuesData.length > 0) {
+            views.renderVenues(state.venuesData);
+        } else {
+            // Fetch venues if not loaded
+            api.fetchVenues().then(venues => {
+                views.renderVenues(venues);
+            });
+        }
+    },
+    
+    toggleEventViewMode() {
+        // Toggle between list and card view modes for events
+        state.eventViewMode = state.eventViewMode === 'list' ? 'cards' : 'list';
+        
+        const toggleBtn = document.getElementById('event-view-toggle');
+        if (toggleBtn) {
+            toggleBtn.textContent = state.eventViewMode === 'list' ? '[EXPAND]' : '[LIST]';
+        }
+        
+        // Re-render events with new mode
+        if (state.eventsData && state.eventsData.length > 0) {
+            views.renderEvents(state.eventsData);
+        }
+    },
+    
+    toggleDateSort() {
+        // Set active sort to date
+        state.activeSort = 'date';
+        
+        // Toggle date sort order
+        state.dateSortOrder = state.dateSortOrder === 'asc' ? 'desc' : 'asc';
+        
+        // Update sort indicator in Events header
+        const eventsSortHeader = document.getElementById('events-date-sort');
+        if (eventsSortHeader) {
+            eventsSortHeader.textContent = `DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}`;
+        }
+        
+        // Update sort indicator in DJs header
+        const djsSortHeader = document.getElementById('djs-date-sort');
+        if (djsSortHeader) {
+            djsSortHeader.textContent = `DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}`;
+        }
+        
+        // Update sort indicator in Venues header
+        const venuesSortHeader = document.getElementById('venues-date-sort');
+        if (venuesSortHeader) {
+            venuesSortHeader.textContent = `DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}`;
+        }
+        
+        // Update sort indicators in table headers (only DATE headers)
+        const dateHeaders = document.querySelectorAll('.sortable-header');
+        dateHeaders.forEach(header => {
+            if (header.textContent.includes('DATE')) {
+                header.textContent = `DATE ${state.dateSortOrder === 'asc' ? '↑' : '↓'}`;
+            }
+        });
+        
+        // Re-render current view with new sort order
+        if (state.currentView === 'events' && state.eventsData && state.eventsData.length > 0) {
+            views.renderEvents(state.eventsData);
+        } else if (state.currentView === 'dj') {
+            const activeDJs = getDJsActiveThisWeek();
+            if (activeDJs.length > 0) {
+                views.renderDJProfiles(activeDJs);
+            }
+        } else if (state.currentView === 'venues') {
+            if (state.venuesData && state.venuesData.length > 0) {
+                views.renderVenues(state.venuesData);
+            } else {
+                api.fetchVenues().then(venues => {
+                    views.renderVenues(venues);
+                });
+            }
+        } else if (state.currentView === 'rave-operators') {
+            // Re-render current MAKERS sub-tab
+            const activeSubTab = document.querySelector('.sub-tab-button.active');
+            if (activeSubTab) {
+                const subTabName = activeSubTab.getAttribute('data-sub-tab');
+                views.renderOperatorsTable(subTabName);
+            }
+        }
+    },
+    
+    filterByTime(timeType) {
+        // Toggle sort order for START or END column
+        if (timeType === 'start' || timeType === 'end') {
+            // Set active sort to the clicked column
+            state.activeSort = timeType;
+            
+            // Toggle sort order
+            state.timeSortOrder[timeType] = state.timeSortOrder[timeType] === 'asc' ? 'desc' : 'asc';
+            
+            // Update sort indicators in table headers
+            const timeHeaders = document.querySelectorAll('.sortable-header');
+            timeHeaders.forEach(header => {
+                if (header.textContent.includes('START') && timeType === 'start') {
+                    header.textContent = `START ${state.timeSortOrder.start === 'asc' ? '↑' : '↓'}`;
+                } else if (header.textContent.includes('END') && timeType === 'end') {
+                    header.textContent = `END ${state.timeSortOrder.end === 'asc' ? '↑' : '↓'}`;
+                }
+            });
+            
+            // Re-render current view with new sort order
+            if (state.currentView === 'events' && state.eventsData && state.eventsData.length > 0) {
+                views.renderEvents(state.eventsData);
+            } else if (state.currentView === 'dj') {
+                const activeDJs = getDJsActiveThisWeek();
+                if (activeDJs.length > 0) {
+                    views.renderDJProfiles(activeDJs);
+                }
+            } else if (state.currentView === 'venues') {
+                if (state.venuesData && state.venuesData.length > 0) {
+                    views.renderVenues(state.venuesData);
+                } else {
+                    api.fetchVenues().then(venues => {
+                        views.renderVenues(venues);
+                    });
+                }
+            }
+        }
+    },
+    
+    syncTimeRangeButtons() {
+        // Update all time range buttons to show current selection
+        const buttonText = this.getTimeRangeButtonText(state.timeRange);
+        const buttons = document.querySelectorAll('.time-range-button');
+        buttons.forEach(btn => {
+            btn.textContent = buttonText;
+        });
+    },
+    
+    toggleTimeRangeMenu(view = 'events') {
+        // Close all menus first
+        const allMenus = document.querySelectorAll('.time-range-menu');
+        allMenus.forEach(menu => menu.style.display = 'none');
+        
+        // Get the menu for this view
+        const menuId = view === 'events' ? 'time-range-menu' : `time-range-menu-${view}`;
+        const menu = document.getElementById(menuId);
+        if (!menu) return;
+        
+        // Toggle this menu
+        const isVisible = menu.style.display !== 'none';
+        menu.style.display = isVisible ? 'none' : 'block';
+        
+        // Close menu when clicking outside
+        if (!isVisible) {
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && !e.target.closest('.time-range-button')) {
+                        menu.style.display = 'none';
+                        document.removeEventListener('click', closeMenu);
+                    }
+                }, { once: true });
+            }, 0);
+        }
+    },
+    
+    setTimeRange(range) {
+        state.timeRange = range;
+        
+        // Handle custom date selection - don't close menu, just show date selector
+        if (range === 'custom') {
+            this.showCustomDateSelector();
+            // Don't close menu, keep it open for date selection
+            return;
+        }
+        
+        // Update button text
+        const buttonText = this.getTimeRangeButtonText(range);
+        const buttons = document.querySelectorAll('.time-range-button');
+        buttons.forEach(btn => {
+            if (btn.id.includes('time-range-button')) {
+                btn.textContent = buttonText;
+            }
+        });
+        
+        // Hide custom date selector
+        const allCustom = document.querySelectorAll('.time-range-custom');
+        allCustom.forEach(custom => custom.style.display = 'none');
+        
+        // Close menu
+        const allMenus = document.querySelectorAll('.time-range-menu');
+        allMenus.forEach(menu => menu.style.display = 'none');
+        
+        // Apply filter and re-render
+        this.applyTimeRangeFilter();
+    },
+    
+    getTimeRangeButtonText(range) {
+        switch(range) {
+            case 'weekend': return '[WEEKEND]';
+            case 'week': return '[WEEK]';
+            case 'next-weekend': return '[NEXT WEEKEND]';
+            case 'custom': return state.customDate ? this.formatDateForButton(state.customDate) : '[CUSTOM]';
+            default: return '[WEEKEND]';
+        }
+    },
+    
+    formatDateForButton(date) {
+        const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+        const day = days[date.getDay()];
+        const month = date.getMonth() + 1;
+        const dayNum = date.getDate();
+        return `[${day}-${month}-${dayNum}]`;
+    },
+    
+    showCustomDateSelector() {
+        // Show custom date selector in all menus
+        const allCustom = document.querySelectorAll('.time-range-custom');
+        allCustom.forEach(custom => custom.style.display = 'block');
+        
+        // Generate date options (unlimited - generate on scroll)
+        const dateScrolls = document.querySelectorAll('.date-scroll');
+        dateScrolls.forEach(scroll => {
+            this.generateDateOptions(scroll);
+            // Set up infinite scroll
+            this.setupInfiniteDateScroll(scroll);
+        });
+    },
+    
+    generateDateOptions(container, startDay = 0, count = 100) {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+        let html = '';
+        
+        // Generate dates starting from startDay
+        for (let i = startDay; i < startDay + count; i++) {
+            const date = new Date(now);
+            date.setDate(now.getDate() + i);
+            const day = days[date.getDay()];
+            const month = date.getMonth() + 1;
+            const dayNum = date.getDate();
+            const dateStr = `${day}-${month}-${dayNum}`;
+            const isSelected = state.customDate && 
+                date.toDateString() === state.customDate.toDateString();
+            
+            html += `<div class="date-option ${isSelected ? 'selected' : ''}" 
+                          data-date-index="${i}"
+                          onclick="router.selectCustomDate('${date.toISOString()}')">
+                      ${dateStr}
+                    </div>`;
+        }
+        
+        if (startDay === 0) {
+            container.innerHTML = html;
+        } else {
+            // Append new dates
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            while (tempDiv.firstChild) {
+                container.appendChild(tempDiv.firstChild);
+            }
+        }
+    },
+    
+    setupInfiniteDateScroll(container) {
+        // Get the scroll container (parent of date-scroll which is date-scroll-container)
+        const scrollContainer = container.parentElement;
+        if (!scrollContainer || !scrollContainer.classList.contains('date-scroll-container')) {
+            return;
+        }
+        
+        // Remove existing scroll listener if any
+        if (scrollContainer._scrollHandler) {
+            scrollContainer.removeEventListener('scroll', scrollContainer._scrollHandler);
+        }
+        
+        // Track if we're currently loading to prevent duplicate loads
+        let isLoading = false;
+        
+        // Add infinite scroll to the scroll container
+        scrollContainer._scrollHandler = () => {
+            if (isLoading) return;
+            
+            const scrollTop = scrollContainer.scrollTop;
+            const scrollHeight = scrollContainer.scrollHeight;
+            const clientHeight = scrollContainer.clientHeight;
+            
+            // Load more when near bottom (within 200px)
+            if (scrollHeight - scrollTop - clientHeight < 200) {
+                isLoading = true;
+                const existingOptions = container.querySelectorAll('.date-option');
+                const lastIndex = existingOptions.length > 0 
+                    ? parseInt(existingOptions[existingOptions.length - 1].getAttribute('data-date-index') || '0')
+                    : 0;
+                
+                // Generate next batch
+                this.generateDateOptions(container, lastIndex + 1, 100);
+                
+                // Reset loading flag after a brief delay
+                setTimeout(() => {
+                    isLoading = false;
+                }, 100);
+            }
+        };
+        
+        scrollContainer.addEventListener('scroll', scrollContainer._scrollHandler);
+    },
+    
+    selectCustomDate(dateString) {
+        state.customDate = new Date(dateString);
+        state.timeRange = 'custom';
+        
+        // Update button text
+        const buttonText = this.formatDateForButton(state.customDate);
+        const buttons = document.querySelectorAll('.time-range-button');
+        buttons.forEach(btn => {
+            if (btn.id.includes('time-range-button')) {
+                btn.textContent = buttonText;
+            }
+        });
+        
+        // Update selected state in date options
+        const allDateOptions = document.querySelectorAll('.date-option');
+        allDateOptions.forEach(option => {
+            option.classList.remove('selected');
+            if (option.getAttribute('onclick')?.includes(dateString)) {
+                option.classList.add('selected');
+            }
+        });
+        
+        // Close menu
+        const allMenus = document.querySelectorAll('.time-range-menu');
+        allMenus.forEach(menu => menu.style.display = 'none');
+        
+        // Apply filter and re-render
+        this.applyTimeRangeFilter();
+    },
+    
+    getTimeRangeDates() {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        
+        let startDate, endDate;
+        
+        switch(state.timeRange) {
+            case 'weekend':
+                // This weekend (Friday 00:00 to Sunday 23:59:59)
+                // If weekend is over, show next weekend
+                const dayOfWeek = now.getDay();
+                let daysUntilFriday;
+                
+                if (dayOfWeek === 0) { // Sunday
+                    // Weekend is over, show next weekend
+                    daysUntilFriday = 5;
+                } else if (dayOfWeek <= 4) { // Monday-Thursday
+                    daysUntilFriday = 5 - dayOfWeek;
+                } else if (dayOfWeek === 5) { // Friday
+                    daysUntilFriday = 0; // This weekend
+                } else { // Saturday
+                    daysUntilFriday = -1; // This weekend (already started)
+                }
+                
+                startDate = new Date(now);
+                if (daysUntilFriday < 0) {
+                    // Weekend already started, use this Friday
+                    startDate.setDate(now.getDate() - (now.getDay() - 5));
+                } else {
+                    startDate.setDate(now.getDate() + daysUntilFriday);
+                }
+                startDate.setHours(0, 0, 0, 0);
+                
+                endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 2); // Sunday
+                endDate.setHours(23, 59, 59, 999);
+                
+                // If weekend is over, show next weekend
+                if (now > endDate) {
+                    startDate.setDate(startDate.getDate() + 7);
+                    endDate.setDate(endDate.getDate() + 7);
+                }
+                break;
+                
+            case 'week':
+                // Next 7 days
+                startDate = new Date(now);
+                endDate = new Date(now);
+                endDate.setDate(now.getDate() + 7);
+                endDate.setHours(23, 59, 59, 999);
+                break;
+                
+            case 'next-weekend':
+                // Next weekend (always future)
+                const dayOfWeek2 = now.getDay();
+                const daysUntilNextFriday = (5 - dayOfWeek2 + 7) % 7;
+                const nextFridayDays = daysUntilNextFriday === 0 ? 7 : daysUntilNextFriday;
+                
+                startDate = new Date(now);
+                startDate.setDate(now.getDate() + nextFridayDays);
+                startDate.setHours(0, 0, 0, 0);
+                
+                endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 2); // Sunday
+                endDate.setHours(23, 59, 59, 999);
+                break;
+                
+            case 'custom':
+                // Single day
+                if (state.customDate) {
+                    startDate = new Date(state.customDate);
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate = new Date(state.customDate);
+                    endDate.setHours(23, 59, 59, 999);
+                } else {
+                    startDate = now;
+                    endDate = new Date(now);
+                    endDate.setHours(23, 59, 59, 999);
+                }
+                break;
+                
+            default:
+                startDate = now;
+                endDate = new Date(now);
+                endDate.setDate(now.getDate() + 7);
+                endDate.setHours(23, 59, 59, 999);
+        }
+        
+        return { startDate, endDate };
+    },
+    
+    applyTimeRangeFilter() {
+        // Re-render based on current view (filtering happens in render functions)
+        if (state.currentView === 'events') {
+            if (state.eventsData && state.eventsData.length > 0) {
+                views.renderEvents(state.eventsData);
+            }
+        } else if (state.currentView === 'dj') {
+            const activeDJs = getDJsActiveThisWeek();
+            if (activeDJs.length > 0) {
+                views.renderDJProfiles(activeDJs);
+            }
+        } else if (state.currentView === 'venues') {
+            if (state.venuesData && state.venuesData.length > 0) {
+                views.renderVenues(state.venuesData);
+            } else {
+                api.fetchVenues().then(venues => {
+                    views.renderVenues(venues);
+                });
+            }
+        } else if (state.currentView === 'rave-operators') {
+            // Filter MAKERS events by time range
+            const activeSubTab = document.querySelector('.sub-tab-button.active');
+            if (activeSubTab) {
+                const subTabName = activeSubTab.getAttribute('data-sub-tab');
+                views.renderOperatorsTable(subTabName);
+            }
+        }
+    },
+    
+    async showDJDetailsModal(djName) {
+        // Show compact DJ details in modal (similar to event details)
+        await views.renderDJDetailsModal(djName);
+    },
+    
     async showDJProfileView(djName) {
         console.log('Switching to DJ profile view for:', djName);
         state.currentView = 'dj-profile';
         state.selectedDJ = djName;
+        
+        // If navigation source not set, default to 'list' (came from DJ list directly)
+        if (!state.djNavigationSource) {
+            state.djNavigationSource = 'list';
+        }
         
         // Hide all other views
         document.getElementById('events-view').style.display = 'none';
@@ -4853,11 +8412,31 @@ const router = {
         document.getElementById('event-details-view').style.display = 'none';
         const djUpcomingView = document.getElementById('dj-upcoming-view');
         if (djUpcomingView) djUpcomingView.style.display = 'none';
+        const reviewsView = document.getElementById('dj-reviews-view');
+        if (reviewsView) reviewsView.style.display = 'none';
         
         // Update the title
         const titleElement = document.getElementById('dj-profile-title');
         if (titleElement) {
             titleElement.textContent = `${djName} - Profile`;
+        }
+        
+        // Update back button based on navigation source
+        const backBtn = document.getElementById('back-to-dj-list');
+        if (backBtn) {
+            if (state.djNavigationSource === 'modal' || state.djNavigationSource === 'list') {
+                backBtn.textContent = '← Back to DJs';
+                backBtn.onclick = () => {
+                    state.djNavigationSource = null;
+                    this.switchTab('djs');
+                };
+            } else if (state.djNavigationSource === 'profile') {
+                backBtn.textContent = '← Back to Profile';
+                backBtn.onclick = () => {
+                    state.djNavigationSource = 'profile';
+                    this.showDJProfileView(djName);
+                };
+            }
         }
         
         // Load and render the DJ profile (now async)
@@ -4890,6 +8469,62 @@ const router = {
         views.renderDJUpcomingEvents(djName);
     },
 
+    async showDJReviews(djName) {
+        console.log('Showing reviews for DJ:', djName);
+        state.currentView = 'dj-reviews';
+        state.selectedDJ = djName;
+        
+        // If navigation source not set, default based on current view
+        if (!state.djNavigationSource) {
+            state.djNavigationSource = state.currentView === 'dj-profile' ? 'profile' : 'list';
+        }
+        
+        // Hide all other views
+        document.getElementById('events-view').style.display = 'none';
+        document.getElementById('dj-view').style.display = 'none';
+        document.getElementById('dj-profile-view').style.display = 'none';
+        document.getElementById('event-details-view').style.display = 'none';
+        document.getElementById('dj-upcoming-view').style.display = 'none';
+        const reviewsView = document.getElementById('dj-reviews-view');
+        if (reviewsView) {
+            reviewsView.style.display = 'block';
+        }
+        
+        // Update title
+        const titleElement = document.getElementById('dj-reviews-title');
+        if (titleElement) {
+            titleElement.textContent = `${djName} - Reviews`;
+        }
+        
+        // Wire up back button based on navigation source
+        const backBtn = document.getElementById('back-to-dj-profile-from-reviews');
+        if (backBtn) {
+            if (state.djNavigationSource === 'modal' || state.djNavigationSource === 'list') {
+                // Came from modal/list, go back to DJ list
+                backBtn.textContent = '← Back to DJs';
+                backBtn.onclick = () => {
+                    state.djNavigationSource = null;
+                    this.switchTab('djs');
+                };
+            } else if (state.djNavigationSource === 'profile') {
+                // Came from profile, go back to profile
+                backBtn.textContent = '← Back to Profile';
+                backBtn.onclick = () => {
+                    state.djNavigationSource = 'profile';
+                    this.showDJProfileView(djName);
+                };
+            }
+        }
+        
+        // Render reviews
+        await views.renderDJReviews(djName);
+    },
+
+    async showEventDetailsModal(eventTitle) {
+        // Show compact event details in modal (similar to DJ details modal)
+        await views.renderEventDetailsModal(eventTitle);
+    },
+    
     async showEventDetailsView(eventTitle) {
         console.log('Switching to event details view for:', eventTitle);
         state.currentView = 'event-details';
@@ -4900,6 +8535,8 @@ const router = {
         document.getElementById('dj-view').style.display = 'none';
         document.getElementById('dj-profile-view').style.display = 'none';
         document.getElementById('event-details-view').style.display = 'block';
+        const reviewsView = document.getElementById('dj-reviews-view');
+        if (reviewsView) reviewsView.style.display = 'none';
         
         // Update the title
         const titleElement = document.getElementById('event-details-title');
@@ -4908,7 +8545,10 @@ const router = {
         }
         
         // Find and render the event details
-        const event = state.eventsData.find(e => e.title === eventTitle);
+        const event = state.eventsData.find(e => {
+            const title = e.title || e.name || '';
+            return title === eventTitle;
+        });
         if (event) {
             views.renderEventDetails(event);
         } else {
@@ -4926,87 +8566,143 @@ const router = {
         });
         document.getElementById(`tab-${tabName}`).classList.add('active');
         
-        // Hide all views
-        document.getElementById('events-view').style.display = 'none';
-        document.getElementById('dj-view').style.display = 'none';
-        document.getElementById('dj-profile-view').style.display = 'none';
-        document.getElementById('event-details-view').style.display = 'none';
-        document.getElementById('venue-details-view').style.display = 'none';
-        document.getElementById('venues-view').style.display = 'none';
-        document.getElementById('operator-profile-view').style.display = 'none';
-        document.getElementById('operators-view').style.display = 'none';
-        document.getElementById('users-view').style.display = 'none';
-        const nostrView = document.getElementById('nostr-view');
-        if (nostrView) nostrView.style.display = 'none';
+        // Hide all views (safely check for existence)
+        const viewsToHide = [
+            'events-view', 'dj-view', 'dj-profile-view', 'event-details-view',
+            'venue-details-view', 'venues-view', 'operator-profile-view',
+            'rave-operators-view', 'connections-view', 'rave-operators-table-view',
+            'provider-list-view', 'provider-detail-view', 'nostr-view'
+        ];
+        viewsToHide.forEach(viewId => {
+            const view = document.getElementById(viewId);
+            if (view) view.style.display = 'none';
+        });
         const djUpcomingView = document.getElementById('dj-upcoming-view');
         if (djUpcomingView) djUpcomingView.style.display = 'none';
+        const djReviewsView = document.getElementById('dj-reviews-view');
+        if (djReviewsView) djReviewsView.style.display = 'none';
+        const savedEventsView = document.getElementById('saved-events-view');
+        if (savedEventsView) savedEventsView.style.display = 'none';
+        const maybeComparisonView = document.getElementById('maybe-comparison-view');
+        if (maybeComparisonView) maybeComparisonView.style.display = 'none';
+        const goingEventsView = document.getElementById('going-events-view');
+        if (goingEventsView) goingEventsView.style.display = 'none';
         
         // Show the selected tab's view
         switch(tabName) {
             case 'events':
                 document.getElementById('events-view').style.display = 'block';
                 state.currentView = 'events';
-                // Ensure all events are displayed (no city filtering)
+                // Sync time range button
+                this.syncTimeRangeButtons();
+                // Ensure all events are displayed (with time range filtering)
                 if (state.eventsData && state.eventsData.length > 0) {
                     views.renderEvents(state.eventsData);
+                } else {
+                    // Load events if not already loaded
+                    views.showLoading('events-container');
+                    api.fetchEvents().then(events => {
+                        views.renderEvents(events);
+                    }).catch(error => {
+                        console.error('Error loading events:', error);
+                        views.showError('events-container', 'Failed to load events');
+                    });
                 }
                 break;
             case 'djs':
                 document.getElementById('dj-view').style.display = 'block';
                 state.currentView = 'dj';
-                // Show only DJs active in next 7 days
+                // Sync time range button
+                this.syncTimeRangeButtons();
+                // Show only DJs active in time range
                 views.showLoading('dj-profiles-container');
+                
+                // Always ensure events are loaded first
+                const loadDJs = async () => {
+                    try {
+                        // Always fetch events to ensure we have the latest data
+                        await api.fetchEvents();
+                        console.log('Events loaded for DJs:', state.eventsData?.length || 0);
+                        
                 const activeDJs = getDJsActiveThisWeek();
+                        console.log('Active DJs found:', activeDJs.length);
+                        
                 if (activeDJs.length === 0) {
                     const cityContext = state.userCity ? ` in ${state.userCity}` : '';
                     views.showEmpty('dj-profiles-container', `> No DJs active in the next 7 days${cityContext}.`);
                 } else {
-                    views.renderDJProfiles(activeDJs);
-                }
+                            await views.renderDJProfiles(activeDJs);
+                        }
+                    } catch (error) {
+                        console.error('Error loading DJs:', error);
+                        views.showError('dj-profiles-container', 'Failed to load DJs: ' + (error.message || 'Unknown error'));
+                    }
+                };
+                
+                loadDJs();
                 break;
             case 'venues':
                 document.getElementById('venues-view').style.display = 'block';
                 state.currentView = 'venues';
-                // Load venues if not already loaded
-                if (state.venuesData.length === 0) {
+                // Sync time range button
+                this.syncTimeRangeButtons();
                     views.showLoading('venues-container');
-                    api.fetchVenues().then(venues => {
+                
+                // Always ensure events are loaded first (venues are extracted from events)
+                const loadVenues = async () => {
+                    try {
+                        // Always fetch events to ensure we have the latest data
+                        await api.fetchEvents();
+                        console.log('Events loaded for venues:', state.eventsData?.length || 0);
+                        
+                        const venues = await api.fetchVenues();
+                        console.log('Venues extracted:', venues?.length || 0);
+                        
+                        if (venues && venues.length > 0) {
                         views.renderVenues(venues);
-                    }).catch(error => {
-                        views.showError('venues-container', error.message);
-                    });
                 } else {
-                    views.renderVenues(state.venuesData);
-                }
+                            views.showEmpty('venues-container', '> No venues found in events data.');
+                        }
+                    } catch (error) {
+                        console.error('Error loading venues:', error);
+                        views.showError('venues-container', 'Failed to load venues: ' + (error.message || 'Unknown error'));
+                    }
+                };
+                
+                loadVenues();
                 break;
-            case 'operators':
-                document.getElementById('operators-view').style.display = 'block';
-                state.currentView = 'operators';
-                // Show only operators active in next 7 days (similar to DJs)
-                views.showLoading('operators-container');
-                const activeOperators = getOperatorsActiveThisWeek();
-                if (activeOperators.length === 0) {
-                    const cityContext = state.userCity ? ` in ${state.userCity}` : '';
-                    views.showEmpty('operators-container', `> No operators active in the next 7 days${cityContext}.`);
-                } else {
-                    views.renderOperators(activeOperators);
-                }
+            case 'rave-operators':
+                document.getElementById('rave-operators-view').style.display = 'block';
+                document.getElementById('rave-operators-table-view').style.display = 'block';
+                document.getElementById('provider-list-view').style.display = 'none';
+                document.getElementById('provider-detail-view').style.display = 'none';
+                state.currentView = 'rave-operators';
+                state.raveOperatorsView = 'table';
+                state.selectedOperatorType = 'sound';
+                // Sync time range button
+                this.syncTimeRangeButtons();
+                
+                // Always ensure events are loaded first
+                const loadOperators = async () => {
+                    try {
+                        // Always fetch events to ensure we have the latest data
+                        await api.fetchEvents();
+                        console.log('Events loaded for operators:', state.eventsData?.length || 0);
+                        
+                        await views.renderOperatorsTable('sound');
+                    } catch (error) {
+                        console.error('Error loading operators table:', error);
+                        views.showError('operators-table-container', 'Failed to load operators: ' + (error.message || 'Unknown error'));
+                    }
+                };
+                
+                loadOperators();
                 break;
-            case 'users':
-                document.getElementById('users-view').style.display = 'block';
-                state.currentView = 'users';
-                // Load social feed if not already loaded (internal: still uses social layer)
-                if (state.socialFeed.length === 0) {
-                    views.showLoading('social-feed-container');
-                    social.fetchSocialFeed().then(messages => {
-                        views.renderSocialFeed(messages);
-                    }).catch(error => {
-                        console.error('Error fetching social feed:', error);
-                        views.showError('social-feed-container', 'Failed to load social feed');
-                    });
-                } else {
-                    views.renderSocialFeed(state.socialFeed);
-                }
+            case 'connections':
+                document.getElementById('connections-view').style.display = 'block';
+                state.currentView = 'connections';
+                // Initialize user portal (load YOU tab by default)
+                views.initUserPortal();
                 break;
                 
             case 'nostr':
@@ -5021,9 +8717,15 @@ const router = {
         }
     },
 
-    async showVenueDetails(venueName) {
-        console.log('Switching to venue details view for:', venueName);
-        state.currentView = 'venue-details';
+    async showVenueDetailsModal(venueName) {
+        // Show compact venue details in modal (similar to DJ details modal)
+        await views.renderVenueDetailsModal(venueName);
+    },
+    
+    async showVenueProfileView(venueName) {
+        console.log('Switching to venue profile view for:', venueName);
+        state.currentView = 'venue-profile';
+        state.selectedVenue = venueName;
         
         // Hide all other views
         document.getElementById('events-view').style.display = 'none';
@@ -5037,15 +8739,27 @@ const router = {
         // Update the title
         const titleElement = document.getElementById('venue-details-title');
         if (titleElement) {
-            titleElement.textContent = `${venueName} - Details`;
+            titleElement.textContent = `${venueName} - Profile`;
         }
         
-        // Find and render the venue details
+        // Load and render the venue profile
+        views.showLoading('venue-details-container');
+        try {
         const venue = state.venuesData.find(v => v.name === venueName);
         if (venue) {
-            views.renderVenueDetails(venue);
+                await views.renderVenueProfile(venue);
+            } else {
+                // Try to fetch venues if not loaded
+                await api.fetchVenues();
+                const updatedVenue = state.venuesData.find(v => v.name === venueName);
+                if (updatedVenue) {
+                    await views.renderVenueProfile(updatedVenue);
         } else {
             views.showError('venue-details-container', 'Venue not found');
+                }
+            }
+        } catch (error) {
+            views.showError('venue-details-container', error.message);
         }
     },
 
@@ -5152,6 +8866,133 @@ const router = {
         }
     },
 
+    switchRaveOperatorsSubTab(subTabName) {
+        console.log('Switching to sub-tab:', subTabName);
+        state.selectedOperatorType = subTabName;
+        state.raveOperatorsView = 'table';
+        
+        // Update sub-tab button states
+        document.querySelectorAll('.sub-tab-button').forEach(button => {
+            button.classList.remove('active');
+        });
+        const subTabButton = document.getElementById(`sub-tab-${subTabName}`);
+        if (subTabButton) {
+            subTabButton.classList.add('active');
+        }
+        
+        // Show/hide views
+        document.getElementById('rave-operators-table-view').style.display = 'block';
+        document.getElementById('provider-list-view').style.display = 'none';
+        document.getElementById('provider-detail-view').style.display = 'none';
+        
+        // Render the appropriate table
+        views.renderOperatorsTable(subTabName);
+    },
+
+    filterByOperatorType(operatorType) {
+        console.log('Filtering by operator type:', operatorType);
+        // For now, just switch to the sub-tab
+        // Future: implement filtering logic in matrix view
+        this.switchRaveOperatorsSubTab(operatorType);
+    },
+
+    showOperatorDropdown(eventUid, operatorType, clickEvent) {
+        // Prevent event propagation
+        if (clickEvent) {
+            clickEvent.stopPropagation();
+        }
+        
+        // Find existing dropdown
+        const existingDropdown = document.querySelector('.operator-dropdown');
+        if (existingDropdown) {
+            // If clicking same cell, close dropdown
+            const cell = clickEvent?.target?.closest('.matrix-operator-cell');
+            if (cell && cell.contains(existingDropdown)) {
+                existingDropdown.remove();
+                return;
+            }
+            existingDropdown.remove();
+        }
+        
+        // Get operators for this event and type
+        const operators = state.eventOperatorsData.filter(eo => 
+            eo.event_uid === eventUid && eo.operator_type === operatorType
+        );
+        
+        if (operators.length === 0) return;
+        
+        // Create dropdown
+        const dropdown = document.createElement('div');
+        dropdown.className = 'operator-dropdown';
+        dropdown.innerHTML = `
+            <ul>
+                ${operators.map(op => `
+                    <li onclick="router.showProviderDetail('${op.operator_name}', '${operatorType}'); event.stopPropagation();">
+                        ${op.operator_name}${op.is_primary ? ' (primary)' : ''}
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+        
+        // Position dropdown near clicked cell
+        const cell = clickEvent?.target?.closest('.matrix-operator-cell');
+        if (cell) {
+            cell.style.position = 'relative';
+            cell.appendChild(dropdown);
+        }
+        
+        // Close dropdown when clicking elsewhere
+        setTimeout(() => {
+            const closeDropdown = (e) => {
+                if (!dropdown.contains(e.target) && e.target !== clickEvent?.target) {
+                    dropdown.remove();
+                    document.removeEventListener('click', closeDropdown);
+                }
+            };
+            document.addEventListener('click', closeDropdown);
+        }, 100);
+    },
+
+    claimOperatorSpot(eventUid, operatorType) {
+        console.log('Claim operator spot:', eventUid, operatorType);
+        // Future: implement claim functionality
+        alert(`Claim operator spot for ${operatorType} at event ${eventUid}. Feature coming soon!`);
+    },
+
+    showProviderDetail(providerName, operatorType) {
+        console.log('Showing provider detail:', providerName, operatorType);
+        state.selectedProvider = { name: providerName, type: operatorType };
+        state.raveOperatorsView = 'detail';
+        
+        // Hide list view, show detail view
+        document.getElementById('provider-list-view').style.display = 'none';
+        document.getElementById('provider-detail-view').style.display = 'block';
+        
+        views.renderProviderDetail(providerName, operatorType);
+    },
+
+    backToProviderList() {
+        console.log('Back to provider list');
+        state.raveOperatorsView = 'list';
+        state.selectedProvider = null;
+        
+        // Show list view, hide detail view
+        document.getElementById('provider-list-view').style.display = 'block';
+        document.getElementById('provider-detail-view').style.display = 'none';
+        
+        // Re-render list for current operator type
+        if (state.selectedOperatorType) {
+            views.renderProviderList(state.selectedOperatorType);
+        }
+    },
+
+    showFullProviderProfile(providerName, operatorType) {
+        console.log('Show full provider profile:', providerName, operatorType);
+        // Future: implement full profile page
+        // For now, just show alert
+        alert(`Full profile page for ${providerName} (${operatorType}). Feature coming soon!`);
+    },
+
     init() {
         console.log('Setting up navigation...');
         
@@ -5191,7 +9032,7 @@ const router = {
         // Back to sound systems button
         const backToOperatorsButton = document.getElementById('back-to-operators');
         if (backToOperatorsButton) {
-            backToOperatorsButton.addEventListener('click', () => this.switchTab('operators'));
+            backToOperatorsButton.addEventListener('click', () => this.switchTab('rave-operators'));
         }
         
         // Back to friends button
@@ -5201,6 +9042,14 @@ const router = {
             button.addEventListener('click', () => {
                 const tabName = button.getAttribute('data-tab');
                 this.switchTab(tabName);
+            });
+        });
+        
+        // Sub-tab button event listeners for Rave Operators
+        document.querySelectorAll('.sub-tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const subTabName = button.getAttribute('data-sub-tab');
+                this.switchRaveOperatorsSubTab(subTabName);
             });
         });
         
@@ -5274,11 +9123,11 @@ const router = {
             authSwitchBtn.addEventListener('click', () => this.switchAuthMode());
         }
         
-        // Account mode selection event listeners
-        const modeOptions = document.querySelectorAll('.mode-option');
-        modeOptions.forEach(option => {
-            option.addEventListener('click', () => this.selectAccountMode(option.dataset.mode));
-        });
+        // Email link button (independent action, not a toggle)
+        const authEmailLinkBtn = document.getElementById('auth-email-link-btn');
+        if (authEmailLinkBtn) {
+            authEmailLinkBtn.addEventListener('click', () => this.handleEmailLinkLogin());
+        }
         
         // Close modal when clicking outside
         if (authModal) {
@@ -5322,7 +9171,7 @@ const router = {
                 views.renderDJs(state.djs);
             } else if (state.currentView === 'venues') {
                 views.renderVenues(state.venues);
-            } else if (state.currentView === 'operators') {
+            } else if (state.currentView === 'rave-operators') {
                 const activeOperators = getOperatorsActiveThisWeek();
                 views.renderOperators(activeOperators);
             }
@@ -5350,51 +9199,69 @@ const router = {
         const authSubmitBtn = document.getElementById('auth-submit-btn');
         const authSwitchText = document.getElementById('auth-switch-text');
         const authSwitchBtn = document.getElementById('auth-switch-btn');
-        const accountModeSelection = document.getElementById('account-mode-selection');
         const passwordGroup = document.getElementById('password-group');
-        const recoveryPhraseGroup = document.getElementById('recovery-phrase-group');
+        const authMethodToggle = document.getElementById('auth-method-toggle');
         
         if (!authModal) return;
         
         // Set mode
         state.authModalMode = mode;
-        state.selectedAccountMode = null; // Reset account mode selection
+        state.authLoginMethod = 'password'; // Reset to password method
         
         // Update UI based on mode
         if (mode === 'login') {
             authModalTitle.textContent = 'Login';
-            authSubmitBtn.textContent = 'Login';
+            authSubmitBtn.textContent = 'Log in';
             authSwitchText.textContent = "Don't have an account?";
             authSwitchBtn.textContent = 'Sign Up';
             
-            // Hide account mode selection for login
-            if (accountModeSelection) accountModeSelection.style.display = 'none';
+            // Show password field and email link option (independent)
             if (passwordGroup) passwordGroup.style.display = 'block';
-            if (recoveryPhraseGroup) recoveryPhraseGroup.style.display = 'none';
-            
+            if (authMethodToggle) authMethodToggle.style.display = 'block';
+            // Always use password method for form submit
+            state.authLoginMethod = 'password';
         } else {
             authModalTitle.textContent = 'Sign Up';
             authSubmitBtn.textContent = 'Sign Up';
             authSwitchText.textContent = 'Already have an account?';
-            authSwitchBtn.textContent = 'Login';
+            authSwitchBtn.textContent = 'Log in';
             
-            // Show account mode selection for signup
-            if (accountModeSelection) accountModeSelection.style.display = 'block';
-            if (passwordGroup) passwordGroup.style.display = 'none';
-            if (recoveryPhraseGroup) recoveryPhraseGroup.style.display = 'none';
-            
-            // Reset mode selection
-            this.resetAccountModeSelection();
+            // Show password field, hide email link option for signup
+            if (passwordGroup) passwordGroup.style.display = 'block';
+            if (authMethodToggle) authMethodToggle.style.display = 'none';
+            state.authLoginMethod = 'password';
         }
         
         // Clear form
         document.getElementById('auth-email').value = '';
         document.getElementById('auth-password').value = '';
-        const recoveryPhraseInput = document.getElementById('auth-recovery-phrase');
-        if (recoveryPhraseInput) recoveryPhraseInput.value = '';
         
         // Show modal
         authModal.style.display = 'flex';
+    },
+    
+    async handleEmailLinkLogin() {
+        // Independent email link action - doesn't affect the form
+        const email = document.getElementById('auth-email').value.trim();
+        
+        if (!email) {
+            alert('Please enter your email address');
+            return;
+        }
+        
+        try {
+            const result = await this.handleLoginWithEmailLink(email);
+            
+            if (result.success && result.sent) {
+                this.hideAuthModal();
+                alert('Check your email for the login link! Click the link in your email to sign in.');
+            } else {
+                alert('Failed to send email link. Please try again.');
+            }
+        } catch (error) {
+            console.error('Email link error:', error);
+            alert('Failed to send email link: ' + error.message);
+        }
     },
 
     hideAuthModal() {
@@ -5412,106 +9279,41 @@ const router = {
         this.showAuthModal(newMode);
     },
 
-    selectAccountMode(mode) {
-        console.log('Account mode selected:', mode);
-        
-        state.selectedAccountMode = mode;
-        
-        // Update UI to show selected mode
-        const modeOptions = document.querySelectorAll('.mode-option');
-        modeOptions.forEach(option => {
-            option.classList.remove('selected');
-            if (option.dataset.mode === mode) {
-                option.classList.add('selected');
-            }
-        });
-        
-        // Show/hide form fields based on mode
-        const passwordGroup = document.getElementById('password-group');
-        const recoveryPhraseGroup = document.getElementById('recovery-phrase-group');
-        const modeWarning = document.getElementById('mode-warning');
-        
-        if (mode === 'light') {
-            // Light mode: Show password field, hide recovery phrase
-            if (passwordGroup) passwordGroup.style.display = 'block';
-            if (recoveryPhraseGroup) recoveryPhraseGroup.style.display = 'none';
-            if (modeWarning) modeWarning.style.display = 'none';
-            
-        } else if (mode === 'bold') {
-            // Bold mode: Show password field and recovery phrase, show warning
-            if (passwordGroup) passwordGroup.style.display = 'block';
-            if (recoveryPhraseGroup) recoveryPhraseGroup.style.display = 'block';
-            if (modeWarning) modeWarning.style.display = 'block';
-        }
-    },
-
-    resetAccountModeSelection() {
-        console.log('Resetting account mode selection');
-        
-        state.selectedAccountMode = null;
-        
-        // Remove selected class from all options
-        const modeOptions = document.querySelectorAll('.mode-option');
-        modeOptions.forEach(option => {
-            option.classList.remove('selected');
-        });
-        
-        // Hide warning
-        const modeWarning = document.getElementById('mode-warning');
-        if (modeWarning) modeWarning.style.display = 'none';
-    },
+    // Mode selection functions removed - see docs/NOSTR_AUTH_REMOVED.md for future Nostr integration
 
     async handleAuthSubmit(e) {
         e.preventDefault();
         console.log('Handling auth submit in', state.authModalMode, 'mode');
         
-        const email = document.getElementById('auth-email').value;
+        const email = document.getElementById('auth-email').value.trim();
         const password = document.getElementById('auth-password').value;
-        const recoveryPhrase = document.getElementById('auth-recovery-phrase').value;
         
-        // Validate based on mode
-        if (state.authModalMode === 'signup') {
-            if (!state.selectedAccountMode) {
-                alert('Please select an account mode (Light or Bold)');
-                return;
-            }
-            
-            if (!email || !password) {
-                alert('Please fill in all required fields');
-                return;
-            }
-            
-            if (state.selectedAccountMode === 'bold' && !recoveryPhrase) {
-                alert('Please enter your recovery phrase for Bold mode');
-                return;
-            }
-        } else {
-            // Login mode
-            if (!email || !password) {
-                alert('Please fill in all fields');
-                return;
-            }
+        // Validate
+        if (!email) {
+            alert('Please enter your email');
+            return;
+        }
+        
+        if (!password) {
+            alert('Please enter your password');
+            return;
         }
         
         try {
             let result;
             if (state.authModalMode === 'login') {
-                // For login, try both light and bold modes
-                result = await this.handleLogin(email, password, recoveryPhrase);
+                // Always use password login for form submit
+                result = await this.handleLogin(email, password);
             } else {
-                // For signup, use selected mode
-                result = await this.handleSignup(email, password, recoveryPhrase);
+                // Signup
+                result = await this.handleSignup(email, password);
             }
             
             if (result.success) {
                 this.hideAuthModal();
                 this.updateAuthStatus();
                 console.log('Authentication successful');
-                
-                // Show success message for Bold mode signup
-                if (state.authModalMode === 'signup' && state.selectedAccountMode === 'bold' && result.recoveryPhrase) {
-                    this.showRecoveryPhraseModal(result.recoveryPhrase);
-                }
+                alert(state.authModalMode === 'login' ? 'Logged in successfully!' : 'Account created successfully!');
             } else {
                 alert('Authentication failed: ' + (result.error || 'Unknown error'));
             }
@@ -5521,116 +9323,163 @@ const router = {
         }
     },
 
-    async handleLogin(email, password, recoveryPhrase) {
-        console.log('Handling login for', email);
+    async handleLogin(email, password) {
+        console.log('Handling login with password for', email);
         
         try {
-            // Try standard login first
-            const result = await social.signIn(email, password);
-            if (result.success) {
-                // Store account mode in state
-                state.userAccountMode = 'light'; // Default to light for existing users
-                return result;
-            }
-        } catch (error) {
-            console.log('Standard login failed, trying recovery phrase login');
+            // Standard Supabase login with password
+            const { data, error } = await state.supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
             
-            // If standard login fails and recovery phrase is provided, try recovery
-            if (recoveryPhrase) {
-                try {
-                    const recoveryResult = await social.recoverKeysWithRecoveryPhrase(email, recoveryPhrase, password);
-                    if (recoveryResult.success) {
-                        state.userAccountMode = 'bold';
-                        return recoveryResult;
-                    }
-                } catch (recoveryError) {
-                    console.error('Recovery phrase login failed:', recoveryError);
+            if (error) {
+                console.error('Login error details:', error);
+                
+                // Provide more helpful error messages
+                if (error.message.includes('Invalid login credentials')) {
+                    throw new Error('Invalid email or password. Please check your credentials.');
+                } else if (error.message.includes('Email not confirmed')) {
+                    throw new Error('Please check your email and click the confirmation link before logging in.');
+                } else {
+                    throw error;
                 }
             }
+            
+            // Check if session was created
+            if (!data.session) {
+                console.warn('Login succeeded but no session returned. User may need to confirm email.');
+                throw new Error('Account created but email confirmation required. Please check your email.');
+            }
+            
+            // Update state
+            state.currentUser = data.user;
+            state.isAuthenticated = true;
+            state.authSession = data.session;
+            
+            console.log('Login successful for:', data.user.email);
+            return { success: true, user: data.user };
+        } catch (error) {
+            console.error('Login error:', error);
+            throw new Error(error.message || 'Login failed. Please check your credentials.');
         }
+    },
+    
+    async handleLoginWithEmailLink(email) {
+        console.log('Handling login with email link for', email);
         
-        throw new Error('Login failed. Please check your credentials.');
+        try {
+            // Determine redirect URL
+            // Priority: CONFIG.appUrl > Supabase project URL with app path > current origin
+            let redirectUrl;
+            if (CONFIG.appUrl) {
+                // Use explicitly configured app URL
+                redirectUrl = `${CONFIG.appUrl}${window.location.pathname}`;
+            } else {
+                // Try to use Supabase preview URL pattern if available
+                // Supabase projects often have preview URLs like: https://[project-ref].supabase.app
+                // Extract project ref from supabaseUrl
+                const projectRefMatch = CONFIG.supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/);
+                if (projectRefMatch) {
+                    const projectRef = projectRefMatch[1];
+                    // Try Supabase preview/deployment URL pattern
+                    redirectUrl = `https://${projectRef}.supabase.app${window.location.pathname}`;
+                    console.log('Using Supabase preview URL for redirect:', redirectUrl);
+                } else {
+                    // Fallback to current origin
+                    redirectUrl = `${window.location.origin}${window.location.pathname}`;
+                    console.warn('Using current origin for redirect (may not work for email links):', redirectUrl);
+                    console.warn('Consider setting CONFIG.appUrl to your deployment URL or configure in Supabase Dashboard > Authentication > URL Configuration');
+                }
+            }
+            
+            // Send magic link via Supabase
+            const { data, error } = await state.supabaseClient.auth.signInWithOtp({
+                email: email,
+                options: {
+                    emailRedirectTo: redirectUrl
+                }
+            });
+            
+            if (error) throw error;
+            
+            console.log('Email link sent with redirect URL:', redirectUrl);
+            return { success: true, sent: true, email: email };
+        } catch (error) {
+            console.error('Email link error:', error);
+            throw new Error(error.message || 'Failed to send email link. Please try again.');
+        }
     },
 
-    async handleSignup(email, password, recoveryPhrase) {
-        console.log('Handling signup for', email, 'in', state.selectedAccountMode, 'mode');
+    async handleSignup(email, password) {
+        console.log('Handling signup for', email);
         
-        if (state.selectedAccountMode === 'light') {
-            // Light mode: Standard Supabase signup
-            const result = await social.signUpLight(email, password);
-            if (result.success) {
-                state.userAccountMode = 'light';
+        try {
+            // Standard Supabase signup
+            const { data, error } = await state.supabaseClient.auth.signUp({
+                email: email,
+                password: password
+            });
+            
+            if (error) {
+                console.error('Signup error details:', error);
+                
+                // Check if user already exists
+                if (error.message.includes('already registered') || error.message.includes('User already registered')) {
+                    // Try to sign in instead
+                    console.log('User already exists, attempting login...');
+                    return await this.handleLogin(email, password);
+                }
+                throw error;
             }
-            return result;
-        } else if (state.selectedAccountMode === 'bold') {
-            // Bold mode: Full Nostr key generation with recovery phrase
-            const result = await social.signUp(email, password);
-            if (result.success) {
-                state.userAccountMode = 'bold';
+            
+            // Check if session was created (depends on Supabase email confirmation settings)
+            if (data.session) {
+                // Session created - user is logged in
+                state.currentUser = data.user;
+                state.isAuthenticated = true;
+                state.authSession = data.session;
+                console.log('Signup successful with session for:', data.user.email);
+            } else {
+                // No session - email confirmation required
+                console.log('Signup successful but email confirmation required for:', data.user.email);
+                throw new Error('Account created! Please check your email and click the confirmation link to complete signup.');
             }
-            return result;
+            
+            return { success: true, user: data.user };
+        } catch (error) {
+            console.error('Signup error:', error);
+            throw new Error(error.message || 'Signup failed. Please try again.');
         }
-        
-        throw new Error('Invalid account mode selected');
     },
 
-    showRecoveryPhraseModal(recoveryPhrase) {
-        console.log('Showing recovery phrase modal');
-        
-        // Create a modal to display the recovery phrase
-        const modal = document.createElement('div');
-        modal.className = 'auth-modal';
-        modal.style.display = 'flex';
-        modal.innerHTML = `
-            <div class="auth-modal-content">
-                <div class="auth-modal-header">
-                    <h3>🔐 Save Your Recovery Phrase</h3>
-                </div>
-                <div class="auth-modal-body">
-                    <div class="recovery-phrase-display">
-                        <p><strong>Important:</strong> Save this recovery phrase in a secure location. You'll need it to recover your account.</p>
-                        <div class="phrase-container">
-                            <textarea readonly class="recovery-phrase-text">${recoveryPhrase}</textarea>
-                            <button class="copy-phrase-btn" onclick="navigator.clipboard.writeText('${recoveryPhrase}')">Copy</button>
-                        </div>
-                        <p class="warning-text">⚠️ We cannot recover your account without this phrase!</p>
-                    </div>
-                    <div class="auth-form-actions">
-                        <button class="auth-button" onclick="this.closest('.auth-modal').remove()">I've Saved It</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Auto-remove after 30 seconds
-        setTimeout(() => {
-            if (modal.parentNode) {
-                modal.remove();
-            }
-        }, 30000);
-    },
+    // Recovery phrase modal removed - see docs/NOSTR_AUTH_REMOVED.md for future Nostr integration
 
     async handleLogout() {
         console.log('Handling logout');
         
         try {
-            const result = await social.signOut();
-            if (result.success) {
-                console.log('Logout successful');
-                this.updateAuthStatus();
-                alert('Logged out successfully!');
-            } else {
-                alert('Logout failed. Please try again.');
-            }
+            // Sign out from Supabase
+            const { error } = await state.supabaseClient.auth.signOut();
+            
+            if (error) throw error;
+            
+            // Clear state
+            state.currentUser = null;
+            state.isAuthenticated = false;
+            state.authSession = null;
+            state.emulatedUser = null; // Also clear emulated user on logout
+            
+            // Update UI
+            this.updateAuthStatus();
+            alert('Logged out successfully!');
         } catch (error) {
             console.error('Logout error:', error);
             alert('Logout failed: ' + error.message);
         }
     },
 
-    updateAuthStatus() {
+    async updateAuthStatus() {
         console.log('Updating auth status...');
         
         const authStatus = document.getElementById('auth-status');
@@ -5638,6 +9487,7 @@ const router = {
         const loginBtn = document.getElementById('login-btn');
         const signupBtn = document.getElementById('signup-btn');
         const logoutBtn = document.getElementById('logout-btn');
+        const eventListsIndicators = document.getElementById('event-lists-indicators');
         
         if (!authStatus) return;
         
@@ -5647,63 +9497,233 @@ const router = {
             authUser.textContent = state.currentUser.email;
             authUser.style.display = 'inline';
             
-            // Add account mode indicator
-            this.updateAccountModeIndicator();
-            
             // Show/hide buttons
             if (loginBtn) loginBtn.style.display = 'none';
             if (signupBtn) signupBtn.style.display = 'none';
             if (logoutBtn) logoutBtn.style.display = 'inline-block';
+            
+            // Show event lists indicators
+            if (eventListsIndicators) {
+                eventListsIndicators.style.display = 'flex';
+            }
+            
+            // Load user event lists
+            try {
+                const userId = state.currentUser.id || state.currentUser.user_id;
+                if (userId) {
+                    const lists = await api.fetchUserEventLists(userId);
+                    state.userEventLists = lists;
+                    this.updateEventListCounts();
+                }
+            } catch (error) {
+                console.error('Error loading user event lists:', error);
+            }
         } else {
             // User is not authenticated
             authStatus.textContent = 'Not signed in';
             authUser.style.display = 'none';
             
-            // Remove account mode indicator
-            this.removeAccountModeIndicator();
-            
             // Show/hide buttons
             if (loginBtn) loginBtn.style.display = 'inline-block';
             if (signupBtn) signupBtn.style.display = 'inline-block';
             if (logoutBtn) logoutBtn.style.display = 'none';
+            
+            // Hide event lists indicators
+            if (eventListsIndicators) {
+                eventListsIndicators.style.display = 'none';
+            }
+            
+            // Clear event lists
+            state.userEventLists = { saved: [], maybe: [], going: [] };
+            this.updateEventListCounts();
         }
         
         console.log('Auth status updated:', state.isAuthenticated ? 'authenticated' : 'not authenticated');
     },
-
-    updateAccountModeIndicator() {
-        console.log('Updating account mode indicator for mode:', state.userAccountMode);
+    
+    updateEventListCounts() {
+        const savedCount = document.getElementById('saved-count');
+        const maybeCount = document.getElementById('maybe-count');
+        const goingCount = document.getElementById('going-count');
         
-        const authUser = document.getElementById('auth-user');
-        if (!authUser) return;
+        if (savedCount) savedCount.textContent = state.userEventLists.saved.length;
+        if (maybeCount) maybeCount.textContent = state.userEventLists.maybe.length;
+        if (goingCount) goingCount.textContent = state.userEventLists.going.length;
+    },
+    
+    async addEventToList(eventUid, listType) {
+        const currentUser = state.currentUser || state.emulatedUser;
+        if (!currentUser) {
+            alert('Please log in to save events');
+            return;
+        }
         
-        // Remove existing indicator
-        this.removeAccountModeIndicator();
+        const userId = currentUser.id || currentUser.user_id;
+        if (!userId) {
+            console.error('No user ID available');
+            return;
+        }
         
-        if (state.userAccountMode) {
-            // Create account mode indicator
-            const indicator = document.createElement('span');
-            indicator.className = `account-mode-indicator ${state.userAccountMode}`;
+        try {
+            await api.addEventToList(userId, eventUid, listType);
             
-            if (state.userAccountMode === 'light') {
-                indicator.innerHTML = '<span class="mode-icon">💡</span>Light';
-            } else if (state.userAccountMode === 'bold') {
-                indicator.innerHTML = '<span class="mode-icon">🔐</span>Bold';
+            // Update state
+            if (!state.userEventLists[listType].includes(eventUid)) {
+                state.userEventLists[listType].push(eventUid);
             }
             
-            authUser.appendChild(indicator);
+            // Remove from other lists
+            ['saved', 'maybe', 'going'].forEach(type => {
+                if (type !== listType) {
+                    const index = state.userEventLists[type].indexOf(eventUid);
+                    if (index > -1) {
+                        state.userEventLists[type].splice(index, 1);
+                    }
+                }
+            });
+            
+            this.updateEventListCounts();
+            
+            // Re-render events to update button states
+            if (state.eventsData && state.eventsData.length > 0) {
+                views.renderEvents(state.eventsData);
+            }
+        } catch (error) {
+            console.error('Error adding event to list:', error);
+            alert('Failed to add event to list. Please try again.');
+        }
+    },
+    
+    async removeEventFromList(eventUid, listType) {
+        const currentUser = state.currentUser || state.emulatedUser;
+        if (!currentUser) return;
+        
+        const userId = currentUser.id || currentUser.user_id;
+        if (!userId) return;
+        
+        try {
+            await api.removeEventFromList(userId, eventUid, listType);
+            
+            // Update state
+            const index = state.userEventLists[listType].indexOf(eventUid);
+            if (index > -1) {
+                state.userEventLists[listType].splice(index, 1);
+            }
+            
+            this.updateEventListCounts();
+            
+            // Re-render current view if it's a list view
+            if (state.currentView === 'saved' || state.currentView === 'going') {
+                if (listType === 'saved') {
+                    this.showSavedEvents();
+                } else if (listType === 'going') {
+                    this.showGoingEvents();
+                }
+            } else if (state.currentView === 'maybe') {
+                this.showMaybeComparison();
+            } else {
+                // Re-render events to update button states
+                if (state.eventsData && state.eventsData.length > 0) {
+                    views.renderEvents(state.eventsData);
+                }
+            }
+        } catch (error) {
+            console.error('Error removing event from list:', error);
+            alert('Failed to remove event from list. Please try again.');
+        }
+    },
+    
+    async showSavedEvents() {
+        console.log('Showing saved events');
+        state.currentView = 'saved';
+        
+        // Hide all other views
+        document.getElementById('events-view').style.display = 'none';
+        document.getElementById('dj-view').style.display = 'none';
+        document.getElementById('saved-events-view').style.display = 'block';
+        document.getElementById('maybe-comparison-view').style.display = 'none';
+        document.getElementById('going-events-view').style.display = 'none';
+        
+        const container = document.getElementById('saved-events-container');
+        if (!container) return;
+        
+        if (state.userEventLists.saved.length === 0) {
+            container.innerHTML = '<div class="empty-state">> No saved events</div>';
+            return;
+        }
+        
+        container.innerHTML = '<div class="empty-state">> Loading saved events...</div>';
+        
+        try {
+            const events = await api.getEventsByUids(state.userEventLists.saved);
+            views.renderEvents(events, 'saved-events-container');
+        } catch (error) {
+            console.error('Error loading saved events:', error);
+            container.innerHTML = '<div class="empty-state">> Error loading saved events</div>';
+        }
+    },
+    
+    async showMaybeComparison() {
+        console.log('Showing maybe events comparison');
+        state.currentView = 'maybe';
+        
+        // Hide all other views
+        document.getElementById('events-view').style.display = 'none';
+        document.getElementById('dj-view').style.display = 'none';
+        document.getElementById('saved-events-view').style.display = 'none';
+        document.getElementById('maybe-comparison-view').style.display = 'block';
+        document.getElementById('going-events-view').style.display = 'none';
+        
+        const container = document.getElementById('maybe-comparison-container');
+        if (!container) return;
+        
+        if (state.userEventLists.maybe.length === 0) {
+            container.innerHTML = '<div class="empty-state">> No events in maybe list</div>';
+            return;
+        }
+        
+        container.innerHTML = '<div class="empty-state">> Loading maybe events...</div>';
+        
+        try {
+            const events = await api.getEventsByUids(state.userEventLists.maybe);
+            views.renderMaybeComparison(events);
+        } catch (error) {
+            console.error('Error loading maybe events:', error);
+            container.innerHTML = '<div class="empty-state">> Error loading maybe events</div>';
+        }
+    },
+    
+    async showGoingEvents() {
+        console.log('Showing going events');
+        state.currentView = 'going';
+        
+        // Hide all other views
+        document.getElementById('events-view').style.display = 'none';
+        document.getElementById('dj-view').style.display = 'none';
+        document.getElementById('saved-events-view').style.display = 'none';
+        document.getElementById('maybe-comparison-view').style.display = 'none';
+        document.getElementById('going-events-view').style.display = 'block';
+        
+        const container = document.getElementById('going-events-container');
+        if (!container) return;
+        
+        if (state.userEventLists.going.length === 0) {
+            container.innerHTML = '<div class="empty-state">> No events marked as going</div>';
+            return;
+        }
+        
+        container.innerHTML = '<div class="empty-state">> Loading going events...</div>';
+        
+        try {
+            const events = await api.getEventsByUids(state.userEventLists.going);
+            views.renderEvents(events, 'going-events-container');
+        } catch (error) {
+            console.error('Error loading going events:', error);
+            container.innerHTML = '<div class="empty-state">> Error loading going events</div>';
         }
     },
 
-    removeAccountModeIndicator() {
-        const authUser = document.getElementById('auth-user');
-        if (!authUser) return;
-        
-        const existingIndicator = authUser.querySelector('.account-mode-indicator');
-        if (existingIndicator) {
-            existingIndicator.remove();
-        }
-    },
+    // Account mode indicator functions removed - see docs/NOSTR_AUTH_REMOVED.md for future Nostr integration
 };
 
 // ============================================================================
@@ -6113,6 +10133,104 @@ function aggregateDJStats(djName) {
     };
 }
 
+// Aggregate venue statistics from events data
+function aggregateVenueStats(venueName) {
+    const venueEvents = state.eventsData.filter(event => {
+        const eventVenue = event.venue || event.location || event.venue?.name || '';
+        return eventVenue.toLowerCase().includes(venueName.toLowerCase()) ||
+               venueName.toLowerCase().includes(eventVenue.toLowerCase());
+    });
+
+    if (venueEvents.length === 0) {
+        return null;
+    }
+
+    // Sort events by date
+    const sortedEvents = venueEvents
+        .map(e => {
+            const date = e.date || e.start;
+            return {
+                ...e,
+                dateObj: date ? new Date(date) : null
+            };
+        })
+        .filter(e => e.dateObj)
+        .sort((a, b) => a.dateObj - b.dateObj);
+
+    const now = new Date();
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+    // Calculate stats
+    const totalEvents = sortedEvents.length;
+    const firstEvent = sortedEvents[0];
+    const lastEvent = sortedEvents[sortedEvents.length - 1];
+    const firstAppearance = firstEvent?.dateObj;
+    const lastAppearance = lastEvent?.dateObj;
+
+    // Determine activity status
+    let activityStatus = null;
+    if (lastAppearance && lastAppearance >= ninetyDaysAgo) {
+        activityStatus = 'ACTIVE';
+    } else if (lastAppearance) {
+        activityStatus = `INACTIVE SINCE ${lastAppearance.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+
+    // Get upcoming events (future events)
+    const upcomingEvents = sortedEvents
+        .filter(e => e.dateObj && e.dateObj > now)
+        .slice(0, 5)
+        .map(e => ({
+            date: e.dateObj,
+            title: e.title || e.name || 'Event',
+            dj: e.dj || (e.artists && e.artists[0]) || 'TBD',
+            city: e.city || e.venue?.city || null
+        }));
+
+    // Get past events
+    const pastEvents = sortedEvents.filter(e => e.dateObj && e.dateObj < now);
+
+    // Aggregate DJs who have played here
+    const djCounts = {};
+    sortedEvents.forEach(e => {
+        const dj = e.dj || (e.artists && e.artists[0]);
+        if (dj) {
+            djCounts[dj] = (djCounts[dj] || 0) + 1;
+        }
+    });
+    const topDJs = Object.entries(djCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([dj, count]) => ({ dj, count }));
+
+    // Aggregate genres/styles
+    const styleCounts = {};
+    sortedEvents.forEach(e => {
+        const styles = e.styles || (e.genre ? [e.genre] : []) || (e.genres || []);
+        styles.forEach(style => {
+            if (style) {
+                styleCounts[style] = (styleCounts[style] || 0) + 1;
+            }
+        });
+    });
+    const topStyles = Object.entries(styleCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([style, count]) => ({ style, count, percentage: Math.round((count / totalEvents) * 100) }));
+
+    return {
+        totalEvents,
+        pastEvents: pastEvents.length,
+        upcomingEvents: upcomingEvents.length,
+        firstAppearance,
+        lastAppearance,
+        activityStatus,
+        upcomingEvents,
+        topDJs,
+        topStyles,
+        allEvents: sortedEvents
+    };
+}
+
 // Generate x.dance URL slug from DJ name
 function generateXDanceSlug(name) {
     return name
@@ -6123,23 +10241,45 @@ function generateXDanceSlug(name) {
 
 // Helper function to get DJs active in next 7 days with event details
 function getDJsActiveThisWeek() {
-    const now = new Date();
-    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    if (!state.eventsData || state.eventsData.length === 0) {
+        console.warn('getDJsActiveThisWeek: No events data available');
+        return [];
+    }
     
-    // Get all events in next 7 days
+    // Use time range filter if set, otherwise default to 7 days
+    let startDate, endDate;
+    if (state.timeRange && router) {
+        const rangeDates = router.getTimeRangeDates();
+        startDate = rangeDates.startDate;
+        endDate = rangeDates.endDate;
+    } else {
+    const now = new Date();
+        startDate = now;
+        endDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    }
+    
+    // Get all events in time range
     const upcomingEvents = state.eventsData.filter(event => {
         const date = event.date || event.start;
         if (!date) return false;
+        try {
         const eventDate = new Date(date);
-        return eventDate >= now && eventDate <= sevenDaysLater;
+            return eventDate >= startDate && eventDate <= endDate;
+        } catch (e) {
+            console.warn('Invalid date in event:', date, event);
+            return false;
+        }
     });
+    
+    console.log('Upcoming events in next 7 days:', upcomingEvents.length);
     
     // Group by DJ
     const djMap = {};
     
     upcomingEvents.forEach(event => {
-        const djName = event.dj || event.organizer?.name || '';
-        if (!djName) return;
+        // Try multiple fields for DJ name
+        const djName = event.dj || event.artist || event.artists?.[0] || event.organizer?.name || '';
+        if (!djName || djName === 'TBD') return;
         
         if (!djMap[djName]) {
             djMap[djName] = {
@@ -6385,6 +10525,14 @@ async function init() {
     
     // Set up navigation
     router.init();
+    
+    // Initialize time range buttons
+    router.syncTimeRangeButtons();
+    
+    // Update auth status after router is initialized (to restore UI state)
+    if (router.updateAuthStatus) {
+        router.updateAuthStatus();
+    }
     
     // Load initial events
     views.showLoading('events-container');

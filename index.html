@@ -33,11 +33,11 @@
                 <button class="tab-button" data-tab="venues" id="tab-venues">
                     <span class="tab-label">Venues</span>
                 </button>
-                <button class="tab-button" data-tab="operators" id="tab-operators">
-                    <span class="tab-label">OPERATORS</span>
+                <button class="tab-button" data-tab="rave-operators" id="tab-rave-operators">
+                    <span class="tab-label">MAKERS</span>
                 </button>
-                <button class="tab-button" data-tab="users" id="tab-users">
-                    <span class="tab-label">USERS</span>
+                <button class="tab-button" data-tab="connections" id="tab-connections">
+                    <span class="tab-label">CONNECT</span>
                 </button>
                 <!-- NOSTR Dev Tab (only shown if nostrDevTab flag enabled) -->
                 <button class="tab-button nostr-dev-tab" data-tab="nostr" id="tab-nostr" style="display: none;">
@@ -54,6 +54,12 @@
                     <span class="auth-status" id="auth-status">Not signed in</span>
                     <span class="auth-user" id="auth-user" style="display: none;"></span>
                 </div>
+                <!-- Event Lists Indicators (only shown when logged in) -->
+                <div class="event-lists-indicators" id="event-lists-indicators" style="display: none;">
+                    <span class="list-indicator" id="saved-indicator" onclick="router.showSavedEvents()">[SAVED: <span id="saved-count">0</span>]</span>
+                    <span class="list-indicator" id="maybe-indicator" onclick="router.showMaybeComparison()">[MAYBE: <span id="maybe-count">0</span>]</span>
+                    <span class="list-indicator" id="going-indicator" onclick="router.showGoingEvents()">[GOING: <span id="going-count">0</span>]</span>
+                </div>
                 <div class="auth-actions" id="auth-actions">
                     <button class="auth-button" id="login-btn">Login</button>
                     <button class="auth-button" id="signup-btn">Sign Up</button>
@@ -66,6 +72,30 @@
         <div class="events-view" id="events-view">
             <div class="view-header">
                 <h2>yDance Events</h2>
+                <div class="view-header-actions">
+                    <div class="time-range-selector" id="time-range-selector">
+                        <button class="time-range-button" id="time-range-button" onclick="router.toggleTimeRangeMenu()">
+                            [WEEKEND]
+                        </button>
+                        <div class="time-range-menu" id="time-range-menu" style="display: none;">
+                            <button class="time-range-option" onclick="router.setTimeRange('weekend')">[WEEKEND]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('week')">[WEEK]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('next-weekend')">[NEXT WEEKEND]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('custom'); return false;">[CUSTOM]</button>
+                            <div class="time-range-custom" id="time-range-custom" style="display: none;">
+                                <div class="date-scroll-container">
+                                    <div class="date-scroll" id="date-scroll"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <span id="events-date-sort" class="sortable-date-header" onclick="router.toggleDateSort()" style="cursor: pointer; margin-right: 15px;">
+                        DATE ↑
+                    </span>
+                    <button id="event-view-toggle" class="view-toggle-button" onclick="router.toggleEventViewMode()" title="Toggle between list and card view">
+                        [EXPAND]
+                    </button>
+                </div>
             </div>
             <div class="events-container" id="events-container">
                 <!-- Events will be loaded here dynamically -->
@@ -77,6 +107,30 @@
             <div class="view-header">
                 <button id="back-to-events" class="back-button">← Back to Events</button>
                 <h2>DJ Profiles</h2>
+                <div class="view-header-actions">
+                    <div class="time-range-selector" id="time-range-selector-djs">
+                        <button class="time-range-button" id="time-range-button-djs" onclick="router.toggleTimeRangeMenu('djs')">
+                            [WEEKEND]
+                        </button>
+                        <div class="time-range-menu" id="time-range-menu-djs" style="display: none;">
+                            <button class="time-range-option" onclick="router.setTimeRange('weekend')">[WEEKEND]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('week')">[WEEK]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('next-weekend')">[NEXT WEEKEND]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('custom'); return false;">[CUSTOM]</button>
+                            <div class="time-range-custom" id="time-range-custom-djs" style="display: none;">
+                                <div class="date-scroll-container">
+                                    <div class="date-scroll" id="date-scroll-djs"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <span id="djs-date-sort" class="sortable-date-header" onclick="router.toggleDateSort()" style="cursor: pointer; margin-right: 15px;">
+                        DATE ↑
+                    </span>
+                    <button id="dj-view-toggle" class="view-toggle-button" onclick="router.toggleDJViewMode()" title="Toggle between list and card view">
+                        [EXPAND]
+                    </button>
+                </div>
             </div>
             <div class="dj-profiles-container" id="dj-profiles-container">
                 <!-- DJ profiles will be loaded here when needed -->
@@ -102,6 +156,93 @@
             </div>
             <div class="dj-upcoming-container" id="dj-upcoming-container">
                 <!-- DJ's upcoming events will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- DJ Reviews View -->
+        <div class="dj-reviews-view" id="dj-reviews-view" style="display: none;">
+            <div class="view-header">
+                <button id="back-to-dj-profile-from-reviews" class="back-button">← Back to Profile</button>
+                <h2 id="dj-reviews-title">Reviews</h2>
+            </div>
+            <div class="dj-reviews-container" id="dj-reviews-container">
+                <!-- Reviews will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- User Event Lists Views -->
+        <!-- SAVED Events View -->
+        <div class="user-events-view" id="saved-events-view" style="display: none;">
+            <div class="view-header">
+                <button class="back-button" onclick="router.switchTab('events')">← Back to Events</button>
+                <h2>SAVED Events</h2>
+            </div>
+            <div class="events-container" id="saved-events-container">
+                <!-- Saved events will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- MAYBE Events Comparison View -->
+        <div class="maybe-comparison-view" id="maybe-comparison-view" style="display: none;">
+            <div class="view-header">
+                <button class="back-button" onclick="router.switchTab('events')">← Back to Events</button>
+                <h2>COMPARE MAYBE Events</h2>
+            </div>
+            <div class="maybe-comparison-container" id="maybe-comparison-container">
+                <!-- Comparison view will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- GOING Events View -->
+        <div class="user-events-view" id="going-events-view" style="display: none;">
+            <div class="view-header">
+                <button class="back-button" onclick="router.switchTab('events')">← Back to Events</button>
+                <h2>GOING Events</h2>
+            </div>
+            <div class="events-container" id="going-events-container">
+                <!-- Going events will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Review Submission Modal -->
+        <div class="modal" id="review-modal" style="display: none;">
+            <div class="modal-content terminal-modal">
+                <div class="modal-header">
+                    <h2>Submit Review</h2>
+                    <button class="modal-close" onclick="views.closeReviewModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <!-- User Selector (if no real user) -->
+                    <div id="user-selector-section" style="display: none;">
+                        <div class="form-group">
+                            <label>Select User:</label>
+                            <select id="emulated-user-select" class="terminal-input">
+                                <option value="">-- Select User --</option>
+                            </select>
+                        </div>
+                        <button id="confirm-user-btn" class="terminal-button" onclick="views.confirmEmulatedUser()">Confirm User</button>
+                    </div>
+                    
+                    <!-- Review Form -->
+                    <div id="review-form-section" style="display: none;">
+                        <div class="form-group">
+                            <label>Rating (0-5):</label>
+                            <input type="number" id="review-rating" class="terminal-input" min="0" max="5" step="0.1" value="5">
+                        </div>
+                        <div class="form-group">
+                            <label>Comment:</label>
+                            <textarea id="review-comment" class="terminal-input" rows="4" placeholder="Your review..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Event (optional):</label>
+                            <input type="text" id="review-event" class="terminal-input" placeholder="Event title">
+                        </div>
+                        <div class="form-actions">
+                            <button id="submit-review-btn" class="terminal-button" onclick="views.submitReview()">Submit Review</button>
+                            <button class="terminal-button secondary" onclick="views.closeReviewModal()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -133,27 +274,102 @@
         <div class="venues-view" id="venues-view" style="display: none;">
             <div class="view-header">
                 <h2>Venues</h2>
+                <div class="view-header-actions">
+                    <div class="time-range-selector" id="time-range-selector-venues">
+                        <button class="time-range-button" id="time-range-button-venues" onclick="router.toggleTimeRangeMenu('venues')">
+                            [WEEKEND]
+                        </button>
+                        <div class="time-range-menu" id="time-range-menu-venues" style="display: none;">
+                            <button class="time-range-option" onclick="router.setTimeRange('weekend')">[WEEKEND]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('week')">[WEEK]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('next-weekend')">[NEXT WEEKEND]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('custom'); return false;">[CUSTOM]</button>
+                            <div class="time-range-custom" id="time-range-custom-venues" style="display: none;">
+                                <div class="date-scroll-container">
+                                    <div class="date-scroll" id="date-scroll-venues"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <span id="venues-date-sort" class="sortable-date-header" onclick="router.toggleDateSort()" style="cursor: pointer; margin-right: 15px;">
+                        DATE ↑
+                    </span>
+                    <button id="venue-view-toggle" class="view-toggle-button" onclick="router.toggleVenueViewMode()" title="Toggle between list and card view">
+                        [EXPAND]
+                    </button>
+                </div>
             </div>
             <div class="venues-container" id="venues-container">
-                <!-- Venues will be loaded here when implemented -->
-                <p class="coming-soon">Coming Soon - Venue listings</p>
+                <!-- Venues will be loaded here dynamically -->
             </div>
         </div>
         
-        <!-- Operators View -->
-        <div class="operators-view" id="operators-view" style="display: none;">
+        <!-- MAKERS View -->
+        <div class="rave-operators-view" id="rave-operators-view" style="display: none;">
             <div class="view-header">
-                <h2>OPERATORS</h2>
+                <h2>MAKERS</h2>
+                <div class="view-header-actions">
+                    <div class="time-range-selector" id="time-range-selector-makers">
+                        <button class="time-range-button" id="time-range-button-makers" onclick="router.toggleTimeRangeMenu('makers')">
+                            [WEEKEND]
+                        </button>
+                        <div class="time-range-menu" id="time-range-menu-makers" style="display: none;">
+                            <button class="time-range-option" onclick="router.setTimeRange('weekend')">[WEEKEND]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('week')">[WEEK]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('next-weekend')">[NEXT WEEKEND]</button>
+                            <button class="time-range-option" onclick="router.setTimeRange('custom'); return false;">[CUSTOM]</button>
+                            <div class="time-range-custom" id="time-range-custom-makers" style="display: none;">
+                                <div class="date-scroll-container">
+                                    <div class="date-scroll" id="date-scroll-makers"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="operators-container" id="operators-container">
-                <!-- Operators will be loaded here dynamically -->
+            
+            <!-- Sub-Tabs for MAKERS -->
+            <div class="rave-operators-sub-tabs" id="rave-operators-sub-tabs">
+                <button class="sub-tab-button active" data-sub-tab="sound" id="sub-tab-sound">
+                    <span class="sub-tab-label">SOUND</span>
+                </button>
+                <button class="sub-tab-button" data-sub-tab="lighting" id="sub-tab-lighting">
+                    <span class="sub-tab-label">LIGHTING</span>
+                </button>
+                <button class="sub-tab-button" data-sub-tab="leads" id="sub-tab-leads">
+                    <span class="sub-tab-label">LEADS</span>
+                </button>
+                <button class="sub-tab-button" data-sub-tab="hospitality" id="sub-tab-hospitality">
+                    <span class="sub-tab-label">HOSPITALITY</span>
+                </button>
+            </div>
+            
+            <!-- Event Table Views (one for each sub-tab) -->
+            <div class="rave-operators-table-view" id="rave-operators-table-view">
+                <div class="operators-table-container" id="operators-table-container">
+                    <!-- Table will be loaded here based on selected sub-tab -->
+                </div>
+            </div>
+            
+            <!-- Provider List Views (for each sub-tab) -->
+            <div class="provider-list-view" id="provider-list-view" style="display: none;">
+                <div class="provider-list-container" id="provider-list-container">
+                    <!-- Provider list will be loaded here -->
+                </div>
+            </div>
+            
+            <!-- Provider Detail View (Expanded) -->
+            <div class="provider-detail-view" id="provider-detail-view" style="display: none;">
+                <div class="provider-detail-container" id="provider-detail-container">
+                    <!-- Provider detail will be loaded here -->
+                </div>
             </div>
         </div>
         
-        <!-- Individual Operator Profile View -->
+        <!-- Individual Operator Profile View (Legacy - keep for backward compatibility) -->
         <div class="operator-profile-view" id="operator-profile-view" style="display: none;">
             <div class="view-header">
-                <button id="back-to-operators" class="back-button">← Back to Operators</button>
+                <button id="back-to-rave-operators" class="back-button">← Back to Rave Operators</button>
                 <h2 id="operator-profile-title">Operator Profile</h2>
             </div>
             <div class="operator-profile-container" id="operator-profile-container">
@@ -161,21 +377,98 @@
             </div>
         </div>
         
-        <!-- Users View (formerly Social) -->
-        <div class="users-view" id="users-view" style="display: none;">
+        <!-- Connections View (formerly Users) -->
+        <div class="connections-view" id="connections-view" style="display: none;">
             <div class="view-header">
-                <h2>USERS</h2>
+                <h2>CONNECTIONS</h2>
             </div>
             
-            <!-- Message Input -->
-            <div class="message-input-container">
-                <textarea id="message-input" placeholder="Share an event, mention a DJ, or post about the scene..." rows="3"></textarea>
-                <button id="send-message" class="send-button">Send</button>
+            <!-- User Portal Tabs -->
+            <div class="user-portal-tabs">
+                <button class="user-tab-button active" data-user-tab="you" id="user-tab-you">
+                    <span class="tab-label">YOU</span>
+                </button>
+                <button class="user-tab-button" data-user-tab="them" id="user-tab-them">
+                    <span class="tab-label">THEM</span>
+                </button>
+                <button class="user-tab-button" data-user-tab="inbox" id="user-tab-inbox">
+                    <span class="tab-label">INBOX</span>
+                </button>
             </div>
             
-            <!-- Social Feed -->
-            <div class="social-feed-container" id="social-feed-container">
-                <!-- Social messages will be loaded here -->
+            <!-- YOU Tab Content -->
+            <div class="user-tab-content active" id="user-tab-content-you">
+                <div class="user-section">
+                    <div class="section-header">
+                        <h3>YOUR REVIEWS</h3>
+                    </div>
+                    <div class="user-reviews-container" id="user-reviews-container">
+                        <!-- User's reviews will be loaded here -->
+                    </div>
+                </div>
+                
+                <div class="user-section">
+                    <div class="section-header">
+                        <h3>EVENTS</h3>
+                        <span class="section-note">(Feature coming: mark events as 'going' or 'went')</span>
+                    </div>
+                    <div class="user-events-container" id="user-events-container">
+                        <div class="empty-state">> Event tracking coming soon</div>
+                    </div>
+                </div>
+                
+                <div class="user-section">
+                    <div class="section-header">
+                        <h3>INTERACTIONS</h3>
+                        <span class="section-note">(Profiles associated with your activity)</span>
+                    </div>
+                    <div class="user-interactions-container" id="user-interactions-container">
+                        <div class="empty-state">> Interactions coming soon</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- THEM Tab Content -->
+            <div class="user-tab-content" id="user-tab-content-them">
+                <div class="user-section">
+                    <div class="section-header">
+                        <h3>DJs YOU DIG</h3>
+                    </div>
+                    <div class="user-djs-container" id="user-djs-container">
+                        <div class="empty-state">> DJs you follow coming soon</div>
+                    </div>
+                </div>
+                
+                <div class="user-section">
+                    <div class="section-header">
+                        <h3>LINKED PROFILES</h3>
+                    </div>
+                    <div class="user-linked-profiles-container" id="user-linked-profiles-container">
+                        <div class="empty-state">> Linked profiles coming soon</div>
+                    </div>
+                </div>
+                
+                <div class="user-section">
+                    <div class="section-header">
+                        <h3>EVENT SUGGESTIONS</h3>
+                    </div>
+                    <div class="user-suggestions-container" id="user-suggestions-container">
+                        <div class="empty-state">> Suggestions coming soon</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- INBOX Tab Content -->
+            <div class="user-tab-content" id="user-tab-content-inbox">
+                <div class="user-section">
+                    <div class="section-header">
+                        <h3>INBOX</h3>
+                        <span class="section-note">(Appearance only - development pending)</span>
+                    </div>
+                    <div class="user-inbox-container" id="user-inbox-container">
+                        <div class="empty-state">> Inbox feature coming soon</div>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -278,70 +571,26 @@
                     <button class="auth-modal-close" id="auth-modal-close">&times;</button>
                 </div>
                 <div class="auth-modal-body">
-                    <!-- Account Mode Selection (Sign Up Only) -->
-                    <div class="account-mode-selection" id="account-mode-selection" style="display: none;">
-                        <h4>Choose Your Security Level</h4>
-                        <div class="mode-options">
-                            <div class="mode-option" data-mode="light">
-                                <div class="mode-header">
-                                    <span class="mode-icon">💡</span>
-                                    <span class="mode-title">Light Mode</span>
-                                </div>
-                                <div class="mode-description">
-                                    <p><strong>Standard Security</strong></p>
-                                    <ul>
-                                        <li>Email link authentication</li>
-                                        <li>Standard password recovery</li>
-                                        <li>Familiar web app experience</li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="mode-option" data-mode="bold">
-                                <div class="mode-header">
-                                    <span class="mode-icon">🔐</span>
-                                    <span class="mode-title">Bold Mode</span>
-                                </div>
-                                <div class="mode-description">
-                                    <p><strong>Maximum Security</strong></p>
-                                    <ul>
-                                        <li>Password + recovery phrase</li>
-                                        <li>Cryptocurrency-grade security</li>
-                                        <li>No password reset possible</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mode-warning" id="mode-warning" style="display: none;">
-                            <div class="warning-icon">⚠️</div>
-                            <div class="warning-content">
-                                <h5>Important Security Notice</h5>
-                                <p>In Bold Mode, account recovery requires:</p>
-                                <ul>
-                                    <li>Access to your email</li>
-                                    <li>Your recovery phrase (12 words)</li>
-                                </ul>
-                                <p><strong>We cannot recover your account without both.</strong></p>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Authentication Form -->
                     <form id="auth-form">
                         <div class="auth-form-group">
                             <label for="auth-email">Email:</label>
-                            <input type="email" id="auth-email" required>
+                            <input type="email" id="auth-email" placeholder="your@email.com" required>
                         </div>
                         <div class="auth-form-group" id="password-group">
                             <label for="auth-password">Password:</label>
-                            <input type="password" id="auth-password" required>
-                        </div>
-                        <div class="auth-form-group" id="recovery-phrase-group" style="display: none;">
-                            <label for="auth-recovery-phrase">Recovery Phrase (12 words):</label>
-                            <textarea id="auth-recovery-phrase" placeholder="Enter your 12-word recovery phrase..." rows="2"></textarea>
+                            <input type="password" id="auth-password" placeholder="Enter password" required>
                         </div>
                         <div class="auth-form-actions">
-                            <button type="submit" id="auth-submit-btn">Login</button>
+                            <button type="submit" id="auth-submit-btn">Log in</button>
                             <button type="button" id="auth-cancel-btn">Cancel</button>
+                        </div>
+                        <!-- Email link option (only for login mode, independent) -->
+                        <div class="auth-method-toggle" id="auth-method-toggle" style="display: none;">
+                            <div class="auth-divider">OR</div>
+                            <button type="button" id="auth-email-link-btn" class="auth-link-button">
+                                Get email link (no password needed)
+                            </button>
                         </div>
                     </form>
                     <div class="auth-switch">
@@ -353,6 +602,32 @@
         </div>
     </div>
     
+        <!-- DJ Details Modal (Compact View) -->
+        <div class="modal" id="dj-details-modal" style="display: none;">
+            <div class="modal-content terminal-modal dj-details-modal">
+                <div class="modal-header">
+                    <h2 id="dj-details-modal-title">DJ Details</h2>
+                    <button class="modal-close" onclick="views.closeDJDetailsModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="dj-details-modal-body">
+                    <!-- DJ details will be loaded here -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Event Details Modal (Compact View) -->
+        <div class="modal" id="event-details-modal" style="display: none;">
+            <div class="modal-content terminal-modal event-details-modal">
+                <div class="modal-header">
+                    <h2 id="event-details-modal-title">Event Details</h2>
+                    <button class="modal-close" onclick="views.closeEventDetailsModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="event-details-modal-body">
+                    <!-- Event details will be loaded here -->
+                </div>
+            </div>
+        </div>
+        
         <!-- Location Selection Modal -->
         <div class="location-modal" id="location-modal" style="display: none;">
             <div class="location-modal-content">
