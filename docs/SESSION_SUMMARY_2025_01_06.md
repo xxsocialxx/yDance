@@ -680,6 +680,144 @@ No url found for submodule path 'RAsCrap/ScrappedData/ra-scraper-exploration' in
 
 ## 📖 Quick Reference for Next AI Agent
 
+### Project Overview: yDance Events
+
+**What is yDance?**
+yDance is an electronic music event discovery platform built as a Progressive Web App. It's designed to help people discover underground electronic music events (raves, warehouse parties, club nights) and connect with the community of DJs, venues, sound systems, and other event contributors.
+
+**Core Philosophy:**
+- **Minimal & Fast:** Terminal-style UI, text-first, zero clutter
+- **Trustworthy:** Versioned data, append-only pipeline, clear provenance
+- **Community-Focused:** Equal-value tabs for Events, DJs, Venues, Makers (operators), Connect
+- **Data Integrity:** Deterministic, idempotent processing with deduplication
+
+**Technical Stack:**
+- **Frontend:** Vanilla JavaScript (no frameworks), HTML, CSS
+- **Backend:** Supabase (PostgreSQL + RLS)
+- **Architecture:** 7-layer modular architecture (CONFIG → STATE → API → SOCIAL → VIEWS → ROUTER → INIT)
+- **Deployment:** GitHub Pages (static site)
+
+**Key Features:**
+- Event discovery with time range filtering (weekend, week, custom dates)
+- DJ profiles with reviews, ratings, and social links
+- Venue profiles with event history
+- Makers (operators) system: Sound, Lighting, Leads, Hospitality
+- User connections and event lists (saved, maybe, going)
+- Social features (isolated Nostr module)
+
+**Critical Files:**
+- `contract.md` - Non-negotiable principles and acceptance criteria
+- `AI_DEVELOPMENT_GUIDELINES.md` - Architectural rules and patterns
+- `docs/SUPABASE_OPERATIONS.md` - Database operations guide
+- `schema/event.schema.json` - Canonical event schema
+
+### How to Work with This User Effectively
+
+#### Communication Style
+- **Be Direct & Clear:** User appreciates straightforward explanations without fluff
+- **Show Understanding:** Demonstrate you understand the context before implementing
+- **Document Learnings:** User values when you document what you learned (like this session summary)
+- **Ask When Uncertain:** Better to ask for clarification than make assumptions
+
+#### Working Preferences
+1. **Architectural Discipline:**
+   - Follow the 7-layer architecture strictly
+   - Don't add code outside designated modules
+   - Preserve existing patterns and conventions
+   - Read `AI_DEVELOPMENT_GUIDELINES.md` before making changes
+
+2. **Data Integrity:**
+   - Respect the append-only pipeline (raw_events → normalized_events)
+   - Never write directly to normalized tables from UI
+   - Use versioning for updates (insert new version, don't update)
+   - Always validate against `schema/event.schema.json`
+
+3. **UI/UX Philosophy:**
+   - Terminal aesthetic: greyscale, monospace fonts, minimal styling
+   - Text-first: no images in listing views
+   - Fast scanning: minimal clicks, clear hierarchy
+   - Consistent: match existing patterns (centering, spacing, fonts)
+
+4. **Code Quality:**
+   - Commit immediately after completing work
+   - Document session learnings for future reference
+   - Follow existing patterns rather than creating new ones
+   - Test changes before committing
+
+5. **Problem-Solving Approach:**
+   - Investigate root causes, not just symptoms
+   - Check existing documentation first
+   - Reference similar implementations in codebase
+   - Explain your approach before implementing
+
+6. **Feedback Style:**
+   - User gives direct, specific feedback ("check how lists in 'djs' tab are centered")
+   - Appreciates when you learn from existing patterns
+   - Values consistency across similar features
+   - Prefers fixes that address root causes
+
+#### Red Flags to Avoid
+- ❌ Breaking architectural boundaries
+- ❌ Modifying protected files without discussion (`contract.md`, `schema/event.schema.json`)
+- ❌ Creating new patterns when existing ones work
+- ❌ Skipping documentation
+- ❌ Making assumptions about user intent
+- ❌ Implementing without understanding context
+- ❌ Breaking data pipeline rules (direct UI writes to normalized tables)
+
+#### Green Flags (What User Appreciates)
+- ✅ Following existing patterns consistently
+- ✅ Documenting learnings and decisions
+- ✅ Proactive investigation of root causes
+- ✅ Clear explanations of approach
+- ✅ Respecting architectural boundaries
+- ✅ Committing work immediately after completion
+- ✅ Asking for clarification when uncertain
+
+### Psychological Profile for Effective Collaboration
+
+#### Cognitive Style
+- **Systematic Thinker:** Values architectural consistency and clear patterns
+- **Detail-Oriented:** Notices inconsistencies (e.g., "line view isn't on par with events and with Djs")
+- **Quality-Focused:** Prefers correct implementation over quick fixes
+- **Context-Aware:** Appreciates when you understand the bigger picture
+
+#### Communication Preferences
+- **Direct & Efficient:** Prefers concise, actionable communication
+- **Evidence-Based:** Values when you reference existing code/patterns
+- **Learning-Oriented:** Appreciates documentation of what was learned
+- **Iterative:** Open to feedback and refinement ("try harder", "check how...")
+
+#### Work Style Indicators
+- **Proactive Documentation:** User explicitly asks for session summaries
+- **Architectural Discipline:** Strong emphasis on following established patterns
+- **Data Integrity Focus:** Careful about data pipeline and versioning
+- **UI Consistency:** Notices and fixes inconsistencies across views
+- **Long-Term Thinking:** Values documentation for future AI agents
+
+#### What This Means for AI Agents
+
+**Do:**
+- Read existing documentation thoroughly before starting
+- Understand the architectural patterns before implementing
+- Document your learnings and decisions
+- Reference similar implementations in the codebase
+- Ask clarifying questions when the request is ambiguous
+- Show your understanding of the context
+- Follow existing patterns rather than creating new ones
+- Commit work immediately after completion
+
+**Don't:**
+- Make assumptions about user intent
+- Break architectural boundaries
+- Skip documentation
+- Create new patterns when existing ones work
+- Implement without understanding the full context
+- Rush to solutions without investigating root causes
+
+**Key Insight:**
+The user values **understanding and consistency** over speed. They appreciate when you demonstrate that you understand the system architecture, existing patterns, and the reasoning behind decisions. They want the codebase to be maintainable and consistent, which is why architectural discipline is so important.
+
 ### Supabase Access Checklist
 - [ ] Use `state.supabaseClient` (never create new clients)
 - [ ] Query `normalized_events_latest` view (not `normalized_events` table)
