@@ -1,5 +1,5 @@
 # Session Summary: January 6, 2025
-## Custom Date Selector Improvements & GitHub Pages Deployment
+## Supabase Access Patterns, Table Structures & Workflow Decisions
 
 ---
 
@@ -13,6 +13,349 @@
 2. **GitHub Pages Deployment Troubleshooting**
    - Identified and fixed broken git submodule causing build failures
    - Configured proper static site deployment
+
+3. **Documented Supabase Architecture & Access Patterns**
+   - Table structures and relationships
+   - API access patterns and workflow choices
+   - Migration strategies and RLS policies
+
+---
+
+## 🗄️ Supabase Architecture & Access Patterns
+
+### Database Structure
+
+#### Core Tables
+
+**1. `normalized_events` (Versioned Event Storage)**
+- **Purpose:** Stores all event data with versioning support
+- **Key Fields:**
+  - `event_uid` (TEXT, unique identifier)
+  - `version` (INTEGER, for versioning)
+  - `normalized_json` (JSONB, complete event data)
+  - `dedupe_key` (TEXT, unique constraint)
+- **Access Pattern:** Read from `normalized_events_latest` view (shows latest version per event)
+- **RLS:** Public read via view, service role write
+- **Migration:** `20241102200001_fix_rls_policies.sql`
+
+**2. `event_operators` (Junction Table)**
+- **Purpose:** Links events to operators with their roles
+- **Key Fields:**
+  - `event_uid` (TEXT, FK to events)
+  - `operator_name` (TEXT, FK to operators)
+  - `operator_type` (TEXT, CHECK constraint: 'curators', 'sound', 'lighting', 'hospitality', 'coordination', 'equipment')
+  - `role` (TEXT, specific role name)
+  - `is_primary` (BOOLEAN, marks primary operator)
+- **Unique Constraint:** `(event_uid, operator_name, operator_type, role)`
+- **Indexes:** On `event_uid`, `operator_name`, `operator_type`, `(event_uid, operator_type)`
+- **RLS:** Public SELECT, service role INSERT/UPDATE
+- **Migration:** `20250103000001_create_event_operators.sql`
+
+**3. `operators` (Provider Profiles)**
+- **Purpose:** Stores operator/provider information and profiles
+- **Key Fields:**
+  - `name` (TEXT, PRIMARY KEY)
+  - `type` (TEXT, CHECK constraint matching event_operators)
+  - `role` (TEXT, specific role)
+  - `bio` (TEXT, optional)
+  - `social_links` (JSONB, optional)
+  - `rating` (NUMERIC, added later)
+  - `review_count` (INTEGER, added later)
+- **Indexes:** On `type`, `role`, `(type, role)`
+- **RLS:** Public SELECT, service role INSERT/UPDATE
+- **Migration:** `20250103000002_create_operators.sql`
+
+**4. `provider_reviews` (Operator Reviews)**
+- **Purpose:** Stores reviews and ratings for operators
+- **Key Fields:**
+  - `id` (UUID, PRIMARY KEY)
+  - `operator_name` (TEXT, FK to operators)
+  - `operator_type` (TEXT)
+  - `rating` (INTEGER, 1-5)
+  - `review_text` (TEXT)
+  - `user_id` (TEXT, optional)
+  - `created_at` (TIMESTAMPTZ)
+- **RLS:** Public SELECT, authenticated INSERT
+- **Migration:** `20250103000005_create_provider_reviews.sql`
+
+### Access Patterns
+
+#### Client-Side Access (Frontend)
+
+**Initialization:**
+```javascript
+// In CONFIG section
+const CONFIG = {
+    supabaseUrl: 'https://rymcfymmigomaytblqml.supabase.co',
+    supabaseKey: 'sb_publishable_sk0GTezrQ8me8sPRLsWo4g_8UEQgztQ'
+};
+
+// In STATE section - single client instance
+const state = {
+    supabaseClient: null, // Initialized in init()
+    // ... other state
+};
+
+// In INIT section
+state.supabaseClient = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+```
+
+**API Pattern (All in `api` module):**
+```javascript
+// Standard fetch pattern
+async fetchEvents() {
+    const { data, error } = await state.supabaseClient
+        .from('normalized_events_latest')  // Always use view for latest
+        .select('*')
+        .order('date', { ascending: true });
+    
+    if (error) {
+        console.error('Error:', error);
+        return [];
+    }
+    return data || [];
+}
+
+// With filtering
+async fetchEventOperators(eventUids) {
+    const { data, error } = await state.supabaseClient
+        .from('event_operators')
+        .select('*')
+        .in('event_uid', eventUids);
+    
+    return data || [];
+}
+
+// With joins (using Supabase's select syntax)
+async fetchVenues() {
+    // Fetch from operators where type='venue'
+    const { data, error } = await state.supabaseClient
+        .from('operators')
+        .select('*')
+        .eq('type', 'venue');
+    
+    return data || [];
+}
+```
+
+**Key Rules:**
+1. **Always use `state.supabaseClient`** - never create new clients
+2. **Use views for versioned data** - `normalized_events_latest` not `normalized_events`
+3. **Handle errors gracefully** - return empty arrays/objects, log errors
+4. **Use `.select('*')` explicitly** - don't rely on defaults
+5. **Order results** - use `.order()` for consistent sorting
+
+#### Server-Side Access (Scripts)
+
+**Pattern for Population Scripts:**
+```javascript
+const { createClient } = require('@supabase/supabase-js');
+
+const SUPABASE_URL = 'https://rymcfymmigomaytblqml.supabase.co';
+const SUPABASE_SERVICE_KEY = 'sb_publishable_sk0GTezrQ8me8sPRLsWo4g_8UEQgztQ';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false
+    }
+});
+
+// For RLS bypass (when needed)
+// Use execute_sql RPC function for operations that need to bypass RLS
+async function executeSQL(sql) {
+    const { data, error } = await supabase.rpc('execute_sql', { sql });
+    if (error) throw error;
+    return data;
+}
+```
+
+**When to Use `execute_sql` RPC:**
+- Inserting into `normalized_events` (versioned table with RLS)
+- Complex operations that need to bypass RLS
+- One-time data migrations
+
+**When to Use Direct Client:**
+- Reading data (respects RLS, which is usually fine)
+- Inserting into tables with permissive RLS policies
+- Standard CRUD operations
+
+### Workflow Choices
+
+#### 1. Migration Strategy
+
+**Choice: Supabase CLI over Direct SQL**
+
+**Why:**
+- Version controlled (migrations in `supabase/migrations/`)
+- Applied in correct order automatically
+- Can be reviewed before applying
+- Better for team collaboration
+
+**Workflow:**
+```bash
+# 1. Create migration file
+# File: supabase/migrations/YYYYMMDDHHMMSS_description.sql
+
+# 2. Write SQL with RLS policies
+CREATE TABLE IF NOT EXISTS public.my_table (...);
+ALTER TABLE public.my_table ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "my_table_select" ON public.my_table FOR SELECT USING (true);
+
+# 3. Push migration
+cd /Users/601ere/yDance
+supabase db push --include-all
+
+# 4. Verify in Supabase Dashboard
+# 5. Commit migration file to git
+```
+
+**Resources:**
+- `docs/SUPABASE_OPERATIONS.md` - Complete migration guide
+- Migration files in `supabase/migrations/` - Examples
+
+#### 2. RLS Policy Strategy
+
+**Choice: Permissive SELECT, Service Role Write**
+
+**Pattern:**
+```sql
+-- Always enable RLS
+ALTER TABLE public.my_table ENABLE ROW LEVEL SECURITY;
+
+-- Public read (for frontend)
+CREATE POLICY "my_table_select" ON public.my_table
+    FOR SELECT USING (true);
+
+-- Service role write (for scripts)
+CREATE POLICY "my_table_insert" ON public.my_table
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "my_table_update" ON public.my_table
+    FOR UPDATE USING (true) WITH CHECK (true);
+
+-- Grant permissions
+GRANT SELECT ON public.my_table TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.my_table TO service_role;
+```
+
+**Why:**
+- Frontend needs to read data (public SELECT)
+- Scripts need to write data (service role INSERT/UPDATE)
+- RLS still applies to service role, but policies allow it
+
+#### 3. Versioned Event Storage
+
+**Choice: Versioned table with latest view**
+
+**Structure:**
+- `normalized_events` - stores all versions
+- `normalized_events_latest` - view showing latest version per event_uid
+
+**Why:**
+- Preserves history
+- Easy to query latest
+- Supports updates without losing data
+
+**Access Pattern:**
+- **Read:** Always use `normalized_events_latest` view
+- **Write:** Insert new version with incremented version number
+
+**Example:**
+```javascript
+// Reading (frontend)
+const { data } = await state.supabaseClient
+    .from('normalized_events_latest')
+    .select('*');
+
+// Writing (scripts - needs execute_sql to bypass RLS)
+const sql = `
+    INSERT INTO public.normalized_events (event_uid, version, normalized_json, dedupe_key)
+    VALUES ('${event_uid}', ${newVersion}, '${json}'::jsonb, '${dedupe_key}')
+`;
+await executeSQL(sql);
+```
+
+#### 4. Operator Data Structure
+
+**Choice: Junction table + profiles table**
+
+**Structure:**
+- `event_operators` - links events to operators (many-to-many)
+- `operators` - stores operator profiles (one per operator)
+
+**Why:**
+- Normalized (no data duplication)
+- Operators can have multiple roles/types
+- Easy to query "all operators for event" or "all events for operator"
+
+**Query Patterns:**
+```javascript
+// Get all operators for an event
+const { data } = await state.supabaseClient
+    .from('event_operators')
+    .select('*')
+    .eq('event_uid', eventUid);
+
+// Get operator profile
+const { data } = await state.supabaseClient
+    .from('operators')
+    .select('*')
+    .eq('name', operatorName)
+    .single();
+
+// Get all events for an operator
+const { data } = await state.supabaseClient
+    .from('event_operators')
+    .select('event_uid')
+    .eq('operator_name', operatorName);
+```
+
+### Resources That Informed Approach
+
+1. **`docs/SUPABASE_OPERATIONS.md`**
+   - Complete guide to Supabase operations
+   - Migration patterns
+   - RLS policy examples
+   - Troubleshooting guide
+
+2. **Existing Migration Files**
+   - `20250103000001_create_event_operators.sql` - Junction table pattern
+   - `20250103000002_create_operators.sql` - Profile table pattern
+   - `20250103000003_allow_service_role_inserts.sql` - RLS grant pattern
+   - `20250103000005_create_provider_reviews.sql` - Review table pattern
+
+3. **Population Scripts**
+   - `scripts/populate_rave_operators.js` - Example of data population
+   - Shows use of `execute_sql` for RLS bypass
+   - Demonstrates relationship between tables
+
+4. **Frontend API Module (`script.js` - `api` section)**
+   - Real-world access patterns
+   - Error handling examples
+   - Query optimization patterns
+
+### Key Decisions & Rationale
+
+1. **Single Supabase Client Instance**
+   - **Decision:** Store in `state.supabaseClient`, initialized once
+   - **Why:** Prevents connection leaks, ensures consistent configuration
+
+2. **Use Views for Versioned Data**
+   - **Decision:** Always query `normalized_events_latest` not `normalized_events`
+   - **Why:** Simplifies queries, ensures latest data, hides versioning complexity
+
+3. **Junction Table for Many-to-Many**
+   - **Decision:** `event_operators` links events and operators
+   - **Why:** Normalized structure, supports multiple operators per event, multiple events per operator
+
+4. **RLS with Permissive Policies**
+   - **Decision:** Public SELECT, service role INSERT/UPDATE
+   - **Why:** Security (RLS enabled) but practical (frontend can read, scripts can write)
+
+5. **Migration Files Over Direct SQL**
+   - **Decision:** Always use Supabase CLI migrations
+   - **Why:** Version control, reproducibility, team collaboration
 
 ---
 
@@ -111,6 +454,41 @@ No url found for submodule path 'RAsCrap/ScrappedData/ra-scraper-exploration' in
 
 ## 📚 Key Learnings
 
+### Supabase-Specific Learnings
+
+1. **Service Key Format**
+   - The publishable key (`sb_publishable_sk...`) works for both client and service operations
+   - No separate JWT token needed
+   - Same key used throughout project
+
+2. **RLS Still Applies to Service Role**
+   - Even with service role key, RLS policies must allow operations
+   - Use `execute_sql` RPC for operations that need to bypass RLS
+   - Or ensure RLS policies allow service role operations
+
+3. **Versioned Tables Need Views**
+   - Don't query versioned tables directly
+   - Always use the `_latest` view for current data
+   - Insert new versions, don't update existing ones
+
+4. **Migration File Naming is Strict**
+   - Pattern: `YYYYMMDDHHMMSS_description.sql`
+   - Timestamps determine execution order
+   - Use `--include-all` flag for migrations that predate existing ones
+
+5. **Junction Tables for Many-to-Many**
+   - Use junction tables (`event_operators`) to link entities
+   - Store profiles separately (`operators` table)
+   - Query with `.in()` for multiple values
+
+6. **Error Handling Patterns**
+   - Always check `error` before using `data`
+   - Return empty arrays/objects on error (don't throw)
+   - Log errors for debugging
+   - Use `CONFIG.flags.debug` for verbose logging
+
+### General Learnings
+
 ### 1. Quick Resource Access Patterns
 
 **Git Submodule Issues:**
@@ -174,6 +552,40 @@ No url found for submodule path 'RAsCrap/ScrappedData/ra-scraper-exploration' in
 ---
 
 ## ⚠️ Things to Watch Out For
+
+### Supabase-Specific Warnings
+
+1. **RLS Policy Completeness**
+   - **Risk:** Missing INSERT/UPDATE policies break data population scripts
+   - **Prevention:** Always create SELECT, INSERT, and UPDATE policies when needed
+   - **Check:** Verify policies in Supabase Dashboard → Authentication → Policies
+
+2. **Versioned Table Access**
+   - **Risk:** Querying `normalized_events` directly returns multiple versions
+   - **Prevention:** Always use `normalized_events_latest` view
+   - **Exception:** Only query `normalized_events` when you need version history
+
+3. **Service Role Key Limitations**
+   - **Risk:** Service role still respects RLS policies
+   - **Prevention:** Use `execute_sql` RPC for operations that need RLS bypass
+   - **Alternative:** Ensure RLS policies allow service role operations
+
+4. **Migration Order**
+   - **Risk:** Migrations applied out of order if timestamps wrong
+   - **Prevention:** Use strict timestamp format: `YYYYMMDDHHMMSS`
+   - **Check:** Review migration list: `supabase migration list`
+
+5. **Junction Table Constraints**
+   - **Risk:** Duplicate entries if unique constraint missing
+   - **Prevention:** Always add UNIQUE constraint on junction table
+   - **Example:** `UNIQUE(event_uid, operator_name, operator_type, role)`
+
+6. **JSONB Field Access**
+   - **Risk:** Querying JSONB fields requires special syntax
+   - **Prevention:** Use `.select('field->>key')` for JSONB access
+   - **Alternative:** Store denormalized fields if frequently queried
+
+### General Warnings
 
 ### 1. Git Submodules
 - **Risk:** Broken submodule references break GitHub Pages builds
@@ -252,11 +664,57 @@ No url found for submodule path 'RAsCrap/ScrappedData/ra-scraper-exploration' in
 
 ## 🔄 Next Steps / Follow-ups
 
+### Supabase
+1. Review and optimize RLS policies for performance
+2. Consider adding indexes for frequently queried fields
+3. Document any new table relationships
+4. Test data population scripts after schema changes
+5. Monitor query performance in Supabase Dashboard
+
+### UI
 1. Monitor GitHub Pages deployment to ensure it's working correctly
 2. Test infinite scroll on different screen sizes
 3. Consider adding loading indicators for date generation
 4. Verify all time range selectors work consistently across tabs
 5. Test custom date selection with various date ranges
+
+## 📖 Quick Reference for Next AI Agent
+
+### Supabase Access Checklist
+- [ ] Use `state.supabaseClient` (never create new clients)
+- [ ] Query `normalized_events_latest` view (not `normalized_events` table)
+- [ ] Check for RLS policies before writing data
+- [ ] Use `execute_sql` RPC for RLS bypass operations
+- [ ] Handle errors gracefully (return empty arrays/objects)
+- [ ] Use migrations for schema changes (not direct SQL)
+
+### Common Supabase Patterns
+```javascript
+// Reading data
+const { data, error } = await state.supabaseClient
+    .from('table_name')
+    .select('*')
+    .eq('field', value)
+    .order('created_at', { ascending: false });
+
+// Writing data (with RLS)
+const { data, error } = await state.supabaseClient
+    .from('table_name')
+    .insert({ field: value })
+    .select()
+    .single();
+
+// Writing data (bypass RLS)
+await supabase.rpc('execute_sql', { 
+    sql: `INSERT INTO table_name (...) VALUES (...)` 
+});
+```
+
+### Key Files to Reference
+- `docs/SUPABASE_OPERATIONS.md` - Complete operations guide
+- `supabase/migrations/*.sql` - Schema examples
+- `scripts/populate_rave_operators.js` - Data population example
+- `script.js` (api module) - Frontend access patterns
 
 ---
 
